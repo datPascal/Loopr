@@ -1,0 +1,10 @@
+name: loopr_analytics_parity
+description: Deterministic Dart side of the Loopr analytics parity harness.
+publish_to: none
+environment:
+  sdk: ^3.5.0
+dependencies:
+  openstrap_analytics:
+    path: ../../OpenStrap Code/analytics
+dev_dependencies:
+  test: ^1.26.3

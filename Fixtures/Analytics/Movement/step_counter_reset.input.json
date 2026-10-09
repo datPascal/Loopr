@@ -1,0 +1,1 @@
+{"metric":"stepCounterReconcile","time_zone_identifier":"UTC","readings":[{"timestamp":1704067200,"cumulative_steps":100,"valid":true},{"timestamp":1704070800,"cumulative_steps":150,"valid":true},{"timestamp":1704074400,"cumulative_steps":20,"valid":true},{"timestamp":1704078000,"cumulative_steps":30,"valid":true}]}

@@ -1,0 +1,11 @@
+{
+  "fixture": "SI-vitals-v24-temperature-35c",
+  "classification": "synthetic",
+  "basis": "Clean-room v24 byte layout; offset72 u16le scale 0.1 C. No real health samples.",
+  "raw_hex": "2f180039300000803bb16a0000000000003c00000000000000000000000000000000000000000000000000000000803f0000000000000000000000000000000000000000bc0200005e0100000000000000000000000000000000000000000000",
+  "byte_count": 96,
+  "expected_decode": {
+    "unidentified_68": 700,
+    "skin_temperature_celsius": 35.0
+  }
+}

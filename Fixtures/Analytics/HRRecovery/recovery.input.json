@@ -1,0 +1,1 @@
+{"metric":"hrRecovery","heart_rate":[180,170,165,160,155,150,145,140],"timestamps":[0,10,20,30,40,50,60,70],"end_index":1,"recovery_window_seconds":60,"peak_window_seconds":30}

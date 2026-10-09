@@ -1,0 +1,489 @@
+{
+  "$schema": {
+    "description": "Pinned WHOOP Gen 4 command-family layouts and byte-exact fixtures.",
+    "family_fields": [
+      "status",
+      "generation",
+      "opcode or opcodes",
+      "provenance",
+      "request/response vectors where source proves them"
+    ],
+    "hex_convention": "Lowercase hexadecimal, no separators; padded_inner_hex includes the Gen 4 zero padding before CRC-32."
+  },
+  "profile": "gen4_harvard",
+  "protocol_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+  "edge_sha": "82b094c3c35fc6d159857b379e03b304a412b58d",
+  "battery": {
+    "status": "resolved",
+    "generation": "gen4",
+    "opcode": 26,
+    "opcode_hex": "0x1A",
+    "name": "GET_BATTERY_LEVEL",
+    "request": {
+      "payload_hex": "",
+      "payload_layout": "empty",
+      "padded_inner_hex": "23101a00",
+      "full_frame_hex": "aa0800a823101a006786c83f",
+      "sequence": 16
+    },
+    "response": {
+      "packet_type": "0x24",
+      "layout": "u16 little-endian at command-response inner offsets [5,7), in tenths of a percent; accept only 0.0 through 100.0 and omit invalid values rather than clamp",
+      "vectors": [
+        {
+          "name": "thirty_percent",
+          "inner_hex": "24111a00002c01",
+          "padded_inner_hex": "24111a00002c0100",
+          "full_frame_hex": "aa0c00fc24111a00002c0100878bb653",
+          "expected": {"battery_pct": 30.0}
+        },
+        {
+          "name": "one_hundred_percent",
+          "inner_hex": "24111a0000e803",
+          "padded_inner_hex": "24111a0000e80300",
+          "full_frame_hex": "aa0c00fc24111a0000e8030099d726f7",
+          "expected": {"battery_pct": 100.0}
+        },
+        {
+          "name": "out_of_range_is_absent",
+          "inner_hex": "24111a0000ffff",
+          "expected": {"battery_pct": null}
+        }
+      ]
+    },
+    "provenance": {
+      "protocol": [
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/constants.dart",
+          "lines": "34-58"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/commands.dart",
+          "lines": "65-71"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/control.dart",
+          "lines": "423-433"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/test/decode_guards_test.dart",
+          "lines": "383-401"
+        }
+      ],
+      "edge": [
+        {
+          "commit": "82b094c3c35fc6d159857b379e03b304a412b58d",
+          "path": "OpenStrap Code/edge/lib/ble/ble_engine.dart",
+          "lines": "3006-3009"
+        }
+      ]
+    }
+  },
+  "identity": {
+    "status": "resolved",
+    "generation": "gen4",
+    "opcode": 35,
+    "opcode_hex": "0x23",
+    "name": "GET_HELLO_HARVARD",
+    "request": {
+      "payload_hex": "00",
+      "payload_layout": "revision selector [0x00]",
+      "padded_inner_hex": "23002300",
+      "full_frame_hex": "aa0800a823002300ada86a2d",
+      "sequence": 0
+    },
+    "response": {
+      "packet_type": "0x24",
+      "layout": "body begins after [0x24, sequence, 0x23]; the pinned parser reads the serial as a NUL-terminated printable ASCII token at body offset 16, scans a following hexadecimal commit token, and only accepts a battery candidate in 0.0 through 100.0 percent",
+      "vectors": [
+        {
+          "name": "real_hello_capture",
+          "body_hex": "a001048303000000b196e201b0020000344332323438303932003865323738326237346634303238346333663437363138623062613234373663356431366363303533313862373532316431353635650600000002000000100000002900000011000000060000000000000008060000000000000011000000020000000200000000000000",
+          "inner_hex": "241123a001048303000000b196e201b0020000344332323438303932003865323738326237346634303238346333663437363138623062613234373663356431366363303533313862373532316431353635650600000002000000100000002900000011000000060000000000000008060000000000000011000000020000000200000000000000",
+          "expected": {
+            "battery_pct": 89.9,
+            "serial": "4C2248092",
+            "commit_prefix": "8e2782b7"
+          }
+        }
+      ]
+    },
+    "excluded_variants": [
+      {
+        "opcode": 145,
+        "opcode_hex": "0x91",
+        "payload_hex": "01",
+        "reason": "Edge selects this modern hello only for the Gen 5 branch; it is not a Gen 4 Harvard identity command."
+      }
+    ],
+    "provenance": {
+      "protocol": [
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/constants.dart",
+          "lines": "34-58, 84-88"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/commands.dart",
+          "lines": "54-63, 68-73"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/control.dart",
+          "lines": "272-320, 423-436"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/test/hello_test.dart",
+          "lines": "10-41"
+        }
+      ],
+      "edge": [
+        {
+          "commit": "82b094c3c35fc6d159857b379e03b304a412b58d",
+          "path": "OpenStrap Code/edge/lib/ble/ble_engine.dart",
+          "lines": "3006-3009"
+        }
+      ]
+    }
+  },
+  "rename": {
+    "status": "resolved",
+    "generation": "gen4",
+    "opcode": 77,
+    "opcode_hex": "0x4D",
+    "name": "SET_ADVERTISING_NAME_HARVARD",
+    "request": {
+      "payload_layout": "[0x01][u8 name_length][printable ASCII name bytes][0x00][0x00][0x00][0x00]",
+      "constraints": {
+        "max_name_bytes": 20,
+        "charset": "printable ASCII 0x20-0x7E",
+        "trailing_zero_bytes": 4
+      },
+      "vectors": [
+        {
+          "name": "real_capture_name",
+          "name_text": "Abdul's WHOOP",
+          "payload_hex": "010d416264756c27732057484f4f5000000000",
+          "padded_inner_hex": "23024d010d416264756c27732057484f4f50000000000000",
+          "full_frame_hex": "aa1c00ab23024d010d416264756c27732057484f4f50000000000000bc67719a",
+          "sequence": 2
+        }
+      ]
+    },
+    "readback": {
+      "opcode": 76,
+      "opcode_hex": "0x4C",
+      "payload_hex": "00",
+      "payload_layout": "revision selector [0x00]",
+      "request_padded_inner_hex": "23014c00",
+      "request_full_frame_hex": "aa0800a823014c00f2b5cdce",
+      "response_layout": "body [four-byte header][u8 length at offset 4][ASCII name at offset 5][NUL padding]",
+      "response_vector": {
+        "inner_hex": "24114c010101010e416264756c27732057484f4f50000000",
+        "padded_inner_hex": "24114c010101010e416264756c27732057484f4f50000000",
+        "full_frame_hex": "aa1c00ab24114c010101010e416264756c27732057484f4f50000000b6c44680",
+        "expected_name": "Abdul's WHOOP"
+      }
+    },
+    "provenance": {
+      "protocol": [
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/constants.dart",
+          "lines": "69-75"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/control.dart",
+          "lines": "453-454, 505-540"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/test/hello_test.dart",
+          "lines": "58-80"
+        }
+      ],
+      "edge": [
+        {
+          "commit": "82b094c3c35fc6d159857b379e03b304a412b58d",
+          "path": "OpenStrap Code/edge/lib/ble/ble_engine.dart",
+          "lines": "2990-3004"
+        }
+      ]
+    }
+  },
+  "haptic": {
+    "status": "resolved",
+    "generation": "gen4",
+    "opcode": 79,
+    "opcode_hex": "0x4F",
+    "name": "RUN_HAPTICS_PATTERN",
+    "request": {
+      "payload_layout": "[u8 waveform_effect][0x00][0x00][0x00][0x00]",
+      "constraints": {"waveform_effect": "u8, 0-255; default short pulse is 2"},
+      "vectors": [
+        {
+          "name": "default_short_pulse",
+          "pattern": 2,
+          "payload_hex": "0200000000",
+          "padded_inner_hex": "23034f0200000000",
+          "full_frame_hex": "aa0c00fc23034f0200000000984bfda7",
+          "sequence": 3
+        }
+      ]
+    },
+    "provenance": {
+      "protocol": [
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/constants.dart",
+          "lines": "16-18, 80-85"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/commands.dart",
+          "lines": "161-175"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/test/decode_guards_test.dart",
+          "lines": "425-439"
+        }
+      ],
+      "edge": [
+        {
+          "commit": "82b094c3c35fc6d159857b379e03b304a412b58d",
+          "path": "OpenStrap Code/edge/lib/ble/ble_engine.dart",
+          "lines": "3010-3024"
+        }
+      ]
+    }
+  },
+  "alarm": {
+    "status": "resolved",
+    "generation": "gen4",
+    "opcodes": [
+      {"name": "SET_ALARM_TIME", "opcode": 66, "opcode_hex": "0x42"},
+      {"name": "GET_ALARM_TIME", "opcode": 67, "opcode_hex": "0x43"},
+      {"name": "RUN_ALARM", "opcode": 68, "opcode_hex": "0x44"},
+      {"name": "DISABLE_ALARM", "opcode": 69, "opcode_hex": "0x45"}
+    ],
+    "subfamilies": {
+      "set_simple": {
+        "status": "resolved",
+        "opcode": 66,
+        "opcode_hex": "0x42",
+        "payload_layout": "[0x01][u32 epoch_seconds LE][u16 sub_seconds LE]",
+        "hardware_semantics": "accepted and ACKed, but carries no waveform and does not buzz",
+        "padded_inner_hex": "230a42017856341200400000",
+        "full_frame_hex": "aa100057230a420178563412004000000c0e00b1",
+        "sequence": 10
+      },
+      "set_rich": {
+        "status": "resolved",
+        "opcode": 66,
+        "opcode_hex": "0x42",
+        "payload_layout": "[0x04][u8 alarm_index][u32 epoch_seconds LE][u16 sub_seconds LE][12-byte haptic pattern]",
+        "haptic_pattern_layout": "eight u8 waveform effects, u16 little-endian per-effect loop control, u8 overall loop count, u8 duration seconds",
+        "default_haptic_pattern": "2f980000000000000000071e",
+        "hardware_semantics": "the rich form is the sourced form that actually fires",
+        "padded_inner_hex": "230b4204007856341200402f980000000000000000071e00",
+        "full_frame_hex": "aa1c00ab230b4204007856341200402f980000000000000000071e00e706982b",
+        "sequence": 11
+      },
+      "read": {
+        "status": "resolved",
+        "opcode": 67,
+        "opcode_hex": "0x43",
+        "payload_layout": "revision selector [0x01]",
+        "padded_inner_hex": "23044301",
+        "full_frame_hex": "aa0800a823044301405b9938",
+        "sequence": 4,
+        "response_source": "WHOOP 4.0 hardware capture, 2026-09-21. The reference layout ([form][epoch] at inner offset 3) does not appear on real Gen 4 firmware: inner offset 3 is the echo of the sequence we sent, and the body starts at inner offset 5.",
+        "response_layout": "[0x24][u8 band_counter][0x43][u8 sequence_echo][u8 status][0x01 readback_revision][u8 armed][u8 alarm_index][u32 epoch_seconds LE][u8 unidentified][trailing unidentified bytes]",
+        "response_vectors": [
+          {
+            "name": "armed_rich_alarm_capture",
+            "inner_hex": "24e2436601010100f0b6b16a00040020",
+            "expected": {
+              "armed": true,
+              "alarm_index": 0,
+              "epoch_seconds": 1790031600
+            }
+          },
+          {
+            "name": "second_read_of_the_same_alarm",
+            "inner_hex": "24e3436701010100f0b6b16a00040020",
+            "expected": {
+              "armed": true,
+              "alarm_index": 0,
+              "epoch_seconds": 1790031600
+            }
+          }
+        ],
+        "set_response_vectors": [
+          {
+            "name": "set_alarm_reply_capture",
+            "note": "SET_ALARM_TIME (0x42) reply for the same alarm. Its body is the readback record without the leading revision byte and without the trailing bytes, which is what fixes the record boundary. There is no decoder for it; it is kept as evidence.",
+            "inner_hex": "24dd4262010100f0b6b16a00"
+          }
+        ]
+      },
+      "test": {
+        "status": "resolved",
+        "opcode": 68,
+        "opcode_hex": "0x44",
+        "payload_layout": "revision 1 [0x01]",
+        "padded_inner_hex": "23014401",
+        "full_frame_hex": "aa0800a8230144016c0f1371",
+        "sequence": 1
+      },
+      "disable": {
+        "status": "resolved",
+        "opcode": 69,
+        "opcode_hex": "0x45",
+        "payload_layout": "revision 1 [0x01]",
+        "padded_inner_hex": "23034501",
+        "full_frame_hex": "aa0800a82303450143ea8c6b",
+        "sequence": 3
+      }
+    },
+    "provenance": {
+      "protocol": [
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/constants.dart",
+          "lines": "65-72"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/commands.dart",
+          "lines": "177-306"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/control.dart",
+          "lines": "437-452"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/test/framing_test.dart",
+          "lines": "38-64"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/test/decode_guards_test.dart",
+          "lines": "304-343"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/test/whoop_protocol_update_test.dart",
+          "lines": "198-262"
+        }
+      ],
+      "edge": [
+        {
+          "commit": "82b094c3c35fc6d159857b379e03b304a412b58d",
+          "path": "OpenStrap Code/edge/lib/ble/ble_engine.dart",
+          "lines": "2926-3004"
+        },
+        {
+          "commit": "82b094c3c35fc6d159857b379e03b304a412b58d",
+          "path": "OpenStrap Code/edge/lib/ble/ble_state.dart",
+          "lines": "598-665"
+        }
+      ]
+    }
+  },
+  "gesture": {
+    "status": "open_question",
+    "generation": "gen4",
+    "outgoing": {
+      "status": "unresolved",
+      "encoder": "fail_closed",
+      "opcode": null,
+      "payload_layout": null,
+      "reason": "The pinned Gen-4 protocol and Edge sources expose only an incoming DOUBLE_TAP event (event id 14) and a phone-side action mapping. No outgoing gesture-configuration opcode or payload is present; no bytes are invented."
+    },
+    "incoming_evidence": {
+      "event_name": "DOUBLE_TAP",
+      "event_id": 14,
+      "mapping": "phone-side action mapping only; it is not a band configuration writer"
+    },
+    "provenance": {
+      "protocol": [
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/constants.dart",
+          "lines": "111-127, 169-176"
+        },
+        {
+          "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+          "path": "OpenStrap Code/protocol/lib/src/control.dart",
+          "lines": "386-406"
+        }
+      ],
+      "edge": [
+        {
+          "commit": "82b094c3c35fc6d159857b379e03b304a412b58d",
+          "path": "OpenStrap Code/edge/lib/gestures/gesture_dispatcher.dart",
+          "lines": "32-75"
+        },
+        {
+          "commit": "82b094c3c35fc6d159857b379e03b304a412b58d",
+          "path": "OpenStrap Code/edge/lib/gestures/gesture_settings.dart",
+          "lines": "12-53"
+        }
+      ]
+    }
+  },
+  "heart_rate_sharing": {
+    "status": "resolved-pending-hardware",
+    "provenance": [
+      "NOOP docs/PROTOCOL_COMMANDS.md",
+      "NOOP docs/PROTOCOL_CONFIGURATION.md",
+      "band-link lane brief for Gen 4 payload/no-reply"
+    ],
+    "gen4": {
+      "opcode": 14,
+      "sequence": 9,
+      "enabled_inner_hex": "23090e01",
+      "disabled_inner_hex": "23090e00",
+      "reply": "none"
+    },
+    "gen5": {
+      "write_opcode": 119,
+      "read_opcode": 121,
+      "key": "whoop_live_hr_in_adv_ind_pkt",
+      "key_field_hex": "77686f6f705f6c6976655f68725f696e5f6164765f696e645f706b7400000000",
+      "write_body_length": 65,
+      "read_body_length": 33,
+      "reply_body_length": 65,
+      "value_encoding": "NUL-terminated ASCII 0 or 1 in 32-byte field"
+    },
+    "events": {
+      "battery": 3,
+      "charging_on": 7,
+      "charging_off": 8,
+      "wrist_on": 9,
+      "wrist_off": 10,
+      "extended_battery": 63,
+      "battery_inner_offsets": {
+        "percent_u16_divide_10": 13,
+        "millivolts_u16": 17,
+        "charging_low_bit": 22
+      },
+      "event63_body": "unknown",
+      "provenance": [
+        "NOOP docs/PROTOCOL_TRANSPORT.md",
+        "NOOP docs/BLE_REVERSE_ENGINEERING.md"
+      ]
+    }
+  }
+}

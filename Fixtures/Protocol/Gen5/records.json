@@ -1,0 +1,32 @@
+{
+  "profile": "gen5-fd4b",
+  "source_commit": "c525e29e69ff8b8f0a180b8464d4ccb32ec3e56d",
+  "records": [
+    {
+      "version": 18,
+      "provenance": "real_crc_valid_capture",
+      "frame_hex": "aa01740001003fb12f1280733d8401b69f266a66460066025a0265020000000000007b0a8d656463ff0012163cf6a439bf2924fd3ed763fe3e3200aa000000000000000000f7000901f10b0007010c020c00000000000000000000000000000000000000000000000100656f1e1e0000009d61a7c00000003e862817",
+      "expected": {"record_index_u32": 25443699, "unix": 1780916150, "heart_rate": 102, "rr_ms": [602, 613], "gravity_g": [-0.7252, 0.4944, 0.4969]}
+    },
+    {
+      "version": 20,
+      "provenance": "structural_synthetic",
+      "inner_length": 2128,
+      "header": {"packet_type": 47, "layout_marker": 129, "record_index_u32": 11494060, "unix": 1784054004},
+      "layout": {"body_start": 18, "block_count": 5, "block_length": 422, "active_sample_counts": [25, 0, 0, 25, 25], "candidate_layouts_are_raw_archive_only": true}
+    },
+    {
+      "version": 21,
+      "provenance": "structural_synthetic",
+      "inner_length": 1232,
+      "header": {"packet_type": 47, "layout_marker": 128, "record_index_u32": 42, "unix": 1780000000},
+      "shape_gate": {"count_a_offset": 16, "count_a": 100, "count_b_offset": 622, "count_b": 100, "axis_samples": 100, "raw_archive_only": true}
+    },
+    {
+      "version": 26,
+      "provenance": "real_crc_valid_capture",
+      "frame_hex": "aa015000010035412f1a80ad418401f0a3266aae470100c3c5050068faccfa8dfb46fc8bfd4cfebafedafe6dff56ffd5fffbff37ff6afce5f9d7f8dffa5efc98fddbfe5afe84fe15ff5cff405fb33c50080101006cb67c17",
+      "expected": {"record_index_u16": 16813, "record_index_must_not_be_u32": true, "unix": 1780917232, "burst_index": 1, "ppg_samples": [-1432, -1332, -1139, -954, -629, -436, -326, -294, -147, -170, -43, -5, -201, -918, -1563, -1833, -1313, -930, -616, -293, -422, -380, -235, -164]}
+    }
+  ]
+}

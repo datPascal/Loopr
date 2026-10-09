@@ -1,0 +1,15 @@
+{
+  "schema": "loopr.healthkit.import.v1",
+  "samples": [{
+    "uuid": "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+    "type": "bodyMass",
+    "source": "Fixture Watch",
+    "device": "Watch7,4",
+    "unit": "kg",
+    "value": 72.5,
+    "start": "2023-11-14T22:13:20Z",
+    "end": "2023-11-14T22:13:21Z",
+    "imported_at": "2023-11-14T22:13:30Z",
+    "deleted": false
+  }]
+}

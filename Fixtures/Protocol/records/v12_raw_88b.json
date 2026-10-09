@@ -1,0 +1,45 @@
+{
+  "fixture": "REF-02A.5-v12-raw-88b",
+  "scope": "WHOOP 4 historical record inner bytes; no transport envelope",
+  "version": 12,
+  "classification": "static_literal",
+  "basis": "Exact raw literal from the pinned version-12 regression test; no transport envelope is included.",
+  "raw_hex": "2f0c05ab7c4a019e814e6a300180644001560000000000000000000060c803f2a08df23c5c4b033f29d84b3f5c9f16be007c39c65c4b033f29d84b3f5c9f16be41027b020a047b024601a006010ba2070000009052f20001",
+  "byte_count": 88,
+  "byte_count_basis": "authoritative decoded length of raw_hex",
+  "expected_decode": {
+    "status": "decoded",
+    "fields": {
+      "hist_version": 12,
+      "ts_epoch": 1783529886,
+      "ts_subsec": 304,
+      "counter": 21658795,
+      "hr": 86,
+      "rr_count": 0,
+      "rr_intervals_ms": [],
+      "ppg_green": 968,
+      "ppg_red_ir": 41202,
+      "accel_g": [0.5129, 0.7963, -0.1471],
+      "skin_contact": 198,
+      "spo2_red_raw": 577,
+      "spo2_ir_raw": 635,
+      "skin_temp_raw": 1034,
+      "ambient_raw": 635,
+      "raw_tail": "80644001560000000000000000000060c803f2a08df23c5c4b033f29d84b3f5c9f16be007c39c65c4b033f29d84b3f5c9f16be41027b020a047b024601a006010ba2070000009052f20001"
+    },
+    "basis": "Exact byte reads from the pinned v12 literal using the pinned source map: version[1], counter u32le[3:7], timestamp u32le[7:11], subsec u16le[11:13], HR[17], RR declaration[18] with zero accepted intervals, PPG u16le[29:31]/[31:33], float32le acceleration[36:48] rounded with pinned Math.round-compatible four-decimal policy, skin contact[51], optical u16le fields[64:72], and raw_tail=raw[13:].",
+    "omitted_fields": []
+  },
+  "decoder_strategy": {
+    "name": "FirmwareAwareR24Decoder.short_frame_72b",
+    "support": "supported",
+    "expected_result": "decode succeeds and records detected strategy short_frame_72b for version 12"
+  },
+  "citations": [
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:390-400",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:376-388",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/records.dart:247-298",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/records.dart:407-485"
+  ],
+  "verification": "Dart unavailable; no runtime execution. The literal, 88-byte length, every expected offset value, four-decimal rounding, and raw_tail slice are statically reproduced from the pinned source citation."
+}

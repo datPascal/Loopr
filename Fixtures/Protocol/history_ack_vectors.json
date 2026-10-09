@@ -1,0 +1,68 @@
+{
+  "fixture": "REF-02A.4",
+  "classification": "static_derived",
+  "expected_behavior": {
+    "build": "Build a successful history result as COMMAND, caller sequence, opcode 0x17, revision 0x01, followed by the supplied token; reject tokens that are not exactly eight bytes.",
+    "token_inclusion": "The ACK inner bytes include the exact token bytes at inner[4:12] in source order.",
+    "parser_extraction": "The ACK token is sourced from HISTORY_END inner[13:21]; no token is normalized.",
+    "normalization": "none",
+    "unexported_case": "0908070605040302 has a HISTORY_END extraction fixture but no ACK fixture because the pinned source provides no ACK sequence for that token."
+  },
+  "vectors": [
+    {
+      "id": "history_ack_seq_33_1122334455667788",
+      "sequence": 33,
+      "token_hex": "1122334455667788",
+      "literal_tested_inner_hex": "232117011122334455667788",
+      "classification": "static_literal",
+      "full_frame_hex": "aa100057232117011122334455667788092f5b75",
+      "full_frame_classification": "static_derived",
+      "derivation": "buildHistoryResultOk(0x21, token)",
+      "source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:8-16"
+    },
+    {
+      "id": "history_ack_seq_5_0102030405060708",
+      "sequence": 5,
+      "token_hex": "0102030405060708",
+      "literal_tested_inner_hex": "230517010102030405060708",
+      "classification": "static_literal",
+      "full_frame_hex": "aa1000572305170101020304050607085bbacced",
+      "full_frame_classification": "static_derived",
+      "derivation": "buildBatchAck(5, List<int>.generate(8, (i) => i + 1))",
+      "source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:67-80"
+    },
+    {
+      "id": "history_ack_seq_5_deadbeef11223344",
+      "sequence": 5,
+      "token_hex": "deadbeef11223344",
+      "literal_tested_inner_hex": "23051701deadbeef11223344",
+      "classification": "static_literal",
+      "full_frame_hex": "aa10005723051701deadbeef11223344b15b3d5e",
+      "full_frame_classification": "static_derived",
+      "derivation": "buildBatchAck(5, m.token!) after parseMetadata",
+      "source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:97-126"
+    },
+    {
+      "id": "history_result_failure_seq_34_non_tokenized",
+      "sequence": 34,
+      "result": "failure",
+      "tokenized": false,
+      "literal_tested_inner_hex": "23221700",
+      "classification": "static_literal",
+      "full_frame_hex": "aa0800a823221700d4c989ad",
+      "full_frame_classification": "static_derived",
+      "ack_authorization": "none under Loopr policy; static pinned bytes alone do not authorize an ACK",
+      "policy_source": "docs/IMPLEMENTATION_PLAN.md §10.4",
+      "derivation": "buildHistoryResultFail(0x22)",
+      "source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:19-23"
+    }
+  ],
+  "verification": "Dart unavailable; no runtime execution; static pinned-source expectations and mechanical envelope derivations only. The negative result is non-tokenized and does not authorize an ACK.",
+  "source_citations": [
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/commands.dart:31-52",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:31-53",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:8-16",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:19-23",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:67-126"
+  ]
+}

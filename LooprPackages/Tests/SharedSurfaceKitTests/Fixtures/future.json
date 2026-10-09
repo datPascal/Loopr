@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 99,
+  "generation": 43,
+  "createdAt": 745200000,
+  "sourceDay": "2026-08-23",
+  "syncDate": null,
+  "metrics": {
+    "recovery": null,
+    "sleep": null,
+    "strain": null,
+    "heartRate": null,
+    "sleepMinutes": null
+  },
+  "battery": null,
+  "activeWorkout": null,
+  "staleReasons": [
+    "permissionRevoked"
+  ],
+  "insight": {
+    "headline": null
+  }
+}

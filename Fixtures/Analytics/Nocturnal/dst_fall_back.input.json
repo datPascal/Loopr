@@ -1,0 +1,1 @@
+{"metric":"dailyNocturnalRhr","local_day":"2024-11-03","time_zone":"America/Los_Angeles","window_samples":2,"min_coverage":1,"samples":[{"ts_ms":1730617200000,"bpm":62},{"ts_ms":1730617201000,"bpm":60}]}

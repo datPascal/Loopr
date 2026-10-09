@@ -1,0 +1,58 @@
+{
+  "header_fields": [
+    {
+      "key": "beta_consent_version",
+      "label": "beta consent version"
+    },
+    {
+      "key": "model_firmware_identity_confidence",
+      "label": "model/firmware identity confidence"
+    },
+    {
+      "key": "master_state",
+      "label": "master state"
+    }
+  ],
+  "independent_states": [
+    {
+      "key": "provisioning",
+      "label": "provisioning"
+    },
+    {
+      "key": "connection",
+      "label": "connection"
+    },
+    {
+      "key": "clock",
+      "label": "clock"
+    },
+    {
+      "key": "history",
+      "label": "history"
+    },
+    {
+      "key": "ack",
+      "label": "ACK"
+    },
+    {
+      "key": "records",
+      "label": "records"
+    },
+    {
+      "key": "live_data",
+      "label": "live data"
+    },
+    {
+      "key": "restoration",
+      "label": "restoration"
+    },
+    {
+      "key": "optional_commands",
+      "label": "optional commands"
+    }
+  ],
+  "documentation": {
+    "dec_04_item_4_verbatim": "4. **Tester surface:** Device Center shows the beta consent version, model/firmware identity confidence, master state, and independent states for provisioning, connection, clock, history, ACK, records, live data, restoration, and optional commands. Testers may disable any capability and may enable only capabilities already allowed by the bundled policy. App Store users never see research-only controls.",
+    "tester_rule": "Testers may disable any capability and may enable only capabilities already allowed by the bundled policy. App Store users never see research-only controls."
+  }
+}

@@ -1,0 +1,72 @@
+name: Bug report
+description: Report a reproducible problem in Loopr.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not post health records, location history, Bluetooth identifiers, account details, credentials, or private diagnostics. Report security and privacy vulnerabilities through the private link in SECURITY.md.
+
+  - type: input
+    id: revision
+    attributes:
+      label: Loopr version or commit
+      description: Give the release version or commit hash where the problem occurred.
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Apple environment
+      description: Give the device model and iOS version. Do not include a device identifier.
+      placeholder: iPhone 17, iOS 26.2
+    validations:
+      required: true
+
+  - type: input
+    id: band
+    attributes:
+      label: Band and firmware
+      description: If relevant, give the band generation and firmware version. Do not include a serial number or Bluetooth identifier.
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Give the smallest reliable sequence that triggers the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted evidence
+      description: Attach only synthetic or fully redacted logs and screenshots. Remove health values, names, routes, identifiers, and keys.
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed personal data, device identifiers, account details, and credentials from this report.
+          required: true
+        - label: This is not a security or privacy vulnerability that needs private reporting.
+          required: true
+

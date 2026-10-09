@@ -1,0 +1,50 @@
+[
+  {
+    "algorithm": "CRC-8 poly 0x07",
+    "input_bytes_hex": "0800",
+    "input_encoding_context": "Two-byte declared frame length, UInt16 little-endian; CRC-8 is stored at frame offset 3.",
+    "expected_crc_bytes_hex": "a8",
+    "verification_context": "Static-citation fallback: extracted from the pinned frame golden tests; no standalone CRC test was run.",
+    "source_citation": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/crc.dart:27-34; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:39-50; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24"
+  },
+  {
+    "algorithm": "CRC-32 zlib/IEEE",
+    "input_bytes_hex": "23002300",
+    "input_encoding_context": "Padded inner bytes from explicit INIT frame 0; CRC-32 is computed over the padded inner bytes and stored as UInt32 little-endian at the frame tail.",
+    "expected_crc_bytes_hex": "ada86a2d",
+    "verification_context": "Static-citation fallback: extracted from the pinned frame golden tests; no standalone CRC test was run.",
+    "source_citation": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/crc.dart:51-57; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:39-53; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24"
+  },
+  {
+    "algorithm": "CRC-32 zlib/IEEE",
+    "input_bytes_hex": "23014c00",
+    "input_encoding_context": "Padded inner bytes from explicit INIT frame 1; CRC-32 is computed over the padded inner bytes and stored as UInt32 little-endian at the frame tail.",
+    "expected_crc_bytes_hex": "f2b5cdce",
+    "verification_context": "Static-citation fallback: extracted from the pinned frame golden tests; no standalone CRC test was run.",
+    "source_citation": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/crc.dart:51-57; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:39-53; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24"
+  },
+  {
+    "algorithm": "CRC-32 zlib/IEEE",
+    "input_bytes_hex": "23022200",
+    "input_encoding_context": "Padded inner bytes from explicit INIT frame 2; CRC-32 is computed over the padded inner bytes and stored as UInt32 little-endian at the frame tail.",
+    "expected_crc_bytes_hex": "824df537",
+    "verification_context": "Static-citation fallback: extracted from the pinned frame golden tests; no standalone CRC test was run.",
+    "source_citation": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/crc.dart:51-57; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:39-53; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24"
+  },
+  {
+    "algorithm": "CRC-32 zlib/IEEE",
+    "input_bytes_hex": "23034301",
+    "input_encoding_context": "Padded inner bytes from explicit INIT frame 3; CRC-32 is computed over the padded inner bytes and stored as UInt32 little-endian at the frame tail.",
+    "expected_crc_bytes_hex": "c54dd63d",
+    "verification_context": "Static-citation fallback: extracted from the pinned frame golden tests; no standalone CRC test was run.",
+    "source_citation": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/crc.dart:51-57; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:39-53; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24"
+  },
+  {
+    "algorithm": "CRC-32 zlib/IEEE",
+    "input_bytes_hex": "23041600",
+    "input_encoding_context": "Padded inner bytes from explicit INIT frame 4; CRC-32 is computed over the padded inner bytes and stored as UInt32 little-endian at the frame tail.",
+    "expected_crc_bytes_hex": "c7c25288",
+    "verification_context": "Static-citation fallback: extracted from the pinned frame golden tests; no standalone CRC test was run.",
+    "source_citation": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/crc.dart:51-57; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:39-53; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24"
+  }
+]

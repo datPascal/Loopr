@@ -1,0 +1,120 @@
+// swift-tools-version: 6.2
+
+import PackageDescription
+
+// Swift 6 language mode already enables complete strict-concurrency checking;
+// no redundant StrictConcurrency upcoming-feature setting is added.
+let swift6Settings: [SwiftSetting] = [
+    .swiftLanguageMode(.v6)
+]
+
+let package = Package(
+    name: "LooprPackages",
+    platforms: [
+        .iOS(.v26),
+        .macOS(.v10_15)
+    ],
+    products: [
+        .library(name: "DomainKit", targets: ["DomainKit"]),
+        .library(name: "ProtocolKit", targets: ["ProtocolKit"]),
+        .library(name: "StorageKit", targets: ["StorageKit"]),
+        .library(name: "BluetoothKit", targets: ["BluetoothKit"]),
+        .library(name: "SyncKit", targets: ["SyncKit"]),
+        .library(name: "AnalyticsKit", targets: ["AnalyticsKit"]),
+        .library(name: "HealthKitBridge", targets: ["HealthKitBridge"]),
+        .library(name: "WorkoutKit", targets: ["WorkoutKit"]),
+        .library(name: "NotificationKit", targets: ["NotificationKit"]),
+        .library(name: "SharedSurfaceKit", targets: ["SharedSurfaceKit"]),
+        .library(name: "CoachingKit", targets: ["CoachingKit"]),
+        .library(name: "AIKit", targets: ["AIKit"]),
+        .library(name: "ImportKit", targets: ["ImportKit"]),
+        .library(name: "DeviceActionsKit", targets: ["DeviceActionsKit"]),
+        .library(name: "DesignSystem", targets: ["DesignSystem"]),
+        .library(name: "ProfileKit", targets: ["ProfileKit"]),
+        .library(name: "OnboardingKit", targets: ["OnboardingKit"]),
+        .library(name: "DeviceCenterKit", targets: ["DeviceCenterKit"]),
+        .library(name: "TodayKit", targets: ["TodayKit"]),
+        .library(name: "CoachKit", targets: ["CoachKit"]),
+        .library(name: "SleepKit", targets: ["SleepKit"]),
+        .library(name: "HeartKit", targets: ["HeartKit"]),
+        .library(name: "BodyKit", targets: ["BodyKit"]),
+        .library(name: "RouteKit", targets: ["RouteKit"]),
+        .library(name: "JournalKit", targets: ["JournalKit"]),
+        .library(name: "CycleKit", targets: ["CycleKit"]),
+        .library(name: "RecordsKit", targets: ["RecordsKit"]),
+        .library(name: "StressKit", targets: ["StressKit"]),
+        .library(name: "SettingsKit", targets: ["SettingsKit"]),
+        .library(name: "DataKit", targets: ["DataKit"]),
+        .executable(name: "AnalyticsParityCLI", targets: ["AnalyticsParityCLI"])
+    ],
+    dependencies: [
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.11.1")
+    ],
+    targets: [
+        .target(name: "DomainKit", dependencies: [], swiftSettings: swift6Settings),
+        .target(name: "ProtocolKit", dependencies: [], swiftSettings: swift6Settings),
+        .target(name: "StorageKit", dependencies: [
+            "ProtocolKit",
+            .product(name: "GRDB", package: "grdb.swift")
+        ], swiftSettings: swift6Settings),
+        .target(name: "BluetoothKit", dependencies: ["ProtocolKit"], swiftSettings: swift6Settings),
+        .target(name: "SyncKit", dependencies: ["BluetoothKit", "ProtocolKit", "StorageKit"], swiftSettings: swift6Settings),
+        .target(name: "AnalyticsKit", dependencies: ["DomainKit"], swiftSettings: swift6Settings),
+        .executableTarget(name: "AnalyticsParityCLI", dependencies: ["AnalyticsKit"], swiftSettings: swift6Settings),
+        .target(name: "HealthKitBridge", dependencies: [], swiftSettings: swift6Settings),
+        .target(name: "WorkoutKit", dependencies: ["DomainKit", "BluetoothKit", "AnalyticsKit", "DesignSystem"], swiftSettings: swift6Settings),
+        .target(name: "NotificationKit", dependencies: [], swiftSettings: swift6Settings),
+        .target(name: "SharedSurfaceKit", dependencies: [], swiftSettings: swift6Settings),
+        .target(name: "CoachingKit", dependencies: [], swiftSettings: swift6Settings),
+        .target(name: "AIKit", dependencies: [], swiftSettings: swift6Settings),
+        .target(name: "ImportKit", dependencies: ["StorageKit", "DomainKit", "DesignSystem", "TodayKit", "SleepKit", "WorkoutKit", "JournalKit"], swiftSettings: swift6Settings),
+        .target(name: "DeviceActionsKit", dependencies: [], swiftSettings: swift6Settings),
+        .target(name: "DesignSystem", dependencies: [], swiftSettings: swift6Settings),
+        .target(name: "ProfileKit", dependencies: ["DomainKit", "DesignSystem", "StorageKit"], swiftSettings: swift6Settings),
+        .target(name: "OnboardingKit", dependencies: ["DomainKit", "ProfileKit", "BluetoothKit", "DesignSystem", "DataKit", "AnalyticsKit", "HealthKitBridge", "NotificationKit"], swiftSettings: swift6Settings),
+        .target(name: "DeviceCenterKit", dependencies: ["DomainKit", "ProtocolKit", "BluetoothKit", "SyncKit", "AnalyticsKit", "DesignSystem"], swiftSettings: swift6Settings),
+        .target(name: "TodayKit", dependencies: ["DomainKit", "ProfileKit", "DesignSystem", "AnalyticsKit"], swiftSettings: swift6Settings),
+        .target(name: "CoachKit", dependencies: ["DomainKit", "ProfileKit", "TodayKit", "DesignSystem"], swiftSettings: swift6Settings),
+        .target(name: "SleepKit", dependencies: ["DomainKit", "AnalyticsKit", "CoachKit", "ProfileKit", "DesignSystem"], swiftSettings: swift6Settings),
+        .target(name: "HeartKit", dependencies: ["DomainKit", "AnalyticsKit", "BluetoothKit", "DesignSystem"], swiftSettings: swift6Settings),
+        .target(name: "BodyKit", dependencies: ["DomainKit", "AnalyticsKit", "ProfileKit", "DesignSystem"], swiftSettings: swift6Settings),
+        .target(name: "RouteKit", dependencies: ["WorkoutKit", "DesignSystem"], swiftSettings: swift6Settings),
+        .target(name: "JournalKit", dependencies: ["DomainKit", "AnalyticsKit", "DesignSystem"], swiftSettings: swift6Settings),
+        .target(name: "CycleKit", dependencies: ["JournalKit", "DesignSystem"], swiftSettings: swift6Settings),
+        .target(name: "RecordsKit", dependencies: ["DomainKit", "DesignSystem"], swiftSettings: swift6Settings),
+        .target(name: "StressKit", dependencies: ["HeartKit", "AnalyticsKit", "BluetoothKit", "DesignSystem"], swiftSettings: swift6Settings),
+        .target(name: "SettingsKit", dependencies: ["ProfileKit", "DesignSystem"], swiftSettings: swift6Settings),
+        .target(name: "DataKit", dependencies: ["ImportKit", "StorageKit", "AnalyticsKit", "DesignSystem"], swiftSettings: swift6Settings),
+        .target(name: "TestSupport", dependencies: ["DomainKit", "BluetoothKit"], swiftSettings: swift6Settings),
+        .testTarget(name: "DomainKitTests", dependencies: ["DomainKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "ProtocolKitTests", dependencies: ["ProtocolKit", "TestSupport"], resources: [.copy("Fixtures")], swiftSettings: swift6Settings),
+        .testTarget(name: "StorageKitTests", dependencies: ["StorageKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "BluetoothKitTests", dependencies: ["BluetoothKit", "ProtocolKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "SyncKitTests", dependencies: ["SyncKit", "BluetoothKit", "ProtocolKit", "StorageKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "AnalyticsKitTests", dependencies: ["AnalyticsKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "HealthKitBridgeTests", dependencies: ["HealthKitBridge", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "WorkoutKitTests", dependencies: ["WorkoutKit", "AnalyticsKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "NotificationKitTests", dependencies: ["NotificationKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "SharedSurfaceKitTests", dependencies: ["SharedSurfaceKit", "TestSupport"], resources: [.copy("Fixtures")], swiftSettings: swift6Settings),
+        .testTarget(name: "CoachingKitTests", dependencies: ["CoachingKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "AIKitTests", dependencies: ["AIKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "ImportKitTests", dependencies: ["ImportKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "DeviceActionsKitTests", dependencies: ["DeviceActionsKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"], swiftSettings: swift6Settings),
+        .testTarget(name: "ProfileKitTests", dependencies: ["ProfileKit", "StorageKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "OnboardingKitTests", dependencies: ["OnboardingKit", "ProfileKit", "AnalyticsKit", "HealthKitBridge", "NotificationKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "DeviceCenterKitTests", dependencies: ["DeviceCenterKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "TodayKitTests", dependencies: ["TodayKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "CoachKitTests", dependencies: ["CoachKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "SleepKitTests", dependencies: ["SleepKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "HeartKitTests", dependencies: ["HeartKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "BodyKitTests", dependencies: ["BodyKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "RouteKitTests", dependencies: ["RouteKit", "WorkoutKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "JournalKitTests", dependencies: ["JournalKit", "DomainKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "CycleKitTests", dependencies: ["CycleKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "RecordsKitTests", dependencies: ["RecordsKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "StressKitTests", dependencies: ["StressKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "SettingsKitTests", dependencies: ["SettingsKit", "TestSupport"], swiftSettings: swift6Settings),
+        .testTarget(name: "DataKitTests", dependencies: ["DataKit", "TestSupport"], swiftSettings: swift6Settings)
+    ]
+)

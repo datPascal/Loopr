@@ -1,0 +1,42 @@
+{
+  "raw_retention_days": 3,
+  "telemetry_enabled_stable_1_0": false,
+  "edge_import_milestone": "data-migration-beta",
+  "excluded_metrics": [
+    {
+      "metric": "irregular_rhythm",
+      "restriction": "Do not expose irregular-rhythm screening, alerts, classifications, or claims. RR quality diagnostics may explain rejected data without interpreting it as an arrhythmia. A future feature requires a separate validated method, regulatory assessment, legal review, product decision, and HealthKit policy."
+    },
+    {
+      "metric": "oxygen",
+      "restriction": "Omit oxygen values and oxygen-derived claims from production UI, coaching, notifications, HealthKit, and Loopr Age until calibrated independently for each supported model and firmware. Preserve candidate bytes only as protected unsupported research data where the archive policy allows it."
+    },
+    {
+      "metric": "temperature",
+      "restriction": "Do not expose relative or absolute temperature in the stable product. Candidate fields remain archived and cannot affect metrics, confidence, illness language, notifications, HealthKit, or Loopr Age. A future experimental display requires model/firmware validation and a new recorded decision."
+    }
+  ],
+  "healthkit_exportable_types": [
+    "measured heart rate",
+    "derived resting heart rate",
+    "SDNN HRV",
+    "respiratory rate",
+    "sleep sessions/stages",
+    "quality-qualified estimated steps",
+    "quality-qualified estimated active energy",
+    "completed workouts"
+  ],
+  "healthkit_never_export": [
+    "readiness",
+    "recovery",
+    "strain",
+    "stress",
+    "RMSSD as HealthKit HRV",
+    "Cardio Age",
+    "Loopr Age",
+    "basal energy inferred merely to fill a day",
+    "uncalibrated oxygen",
+    "temperature",
+    "unsupported hardware channels"
+  ]
+}

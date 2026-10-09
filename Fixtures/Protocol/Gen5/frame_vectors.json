@@ -1,0 +1,12 @@
+{
+  "profile": "gen5-fd4b",
+  "source_commit": "c525e29e69ff8b8f0a180b8464d4ccb32ec3e56d",
+  "envelope": {"header_bytes": 8, "declared_length_includes_crc32": true, "padding_multiple": 4, "crc16": "modbus", "crc16_range": "bytes_0_through_5", "crc32": "ieee"},
+  "vectors": [
+    {"name": "client_hello_outbound", "direction_hex": "0001", "header_crc16": 29158, "frame_hex": "aa0108000001e67123019101363e5c8d"},
+    {"name": "realtime_hr_inbound", "direction_hex": "0100", "header_crc16": 57634, "frame_hex": "aa011800010022e128029ea0266aae4762025b024b020000000001005ed515dc"},
+    {"name": "history_ack_outbound", "direction_hex": "0001", "header_crc16": 53728, "frame_hex": "aa0110000001e0d12300170141b6010010000000667da4fb"},
+    {"name": "historical_v18_inbound", "direction_hex": "0100", "header_crc16": 45375, "frame_hex": "aa01740001003fb12f1280733d8401b69f266a66460066025a0265020000000000007b0a8d656463ff0012163cf6a439bf2924fd3ed763fe3e3200aa000000000000000000f7000901f10b0007010c020c00000000000000000000000000000000000000000000000100656f1e1e0000009d61a7c00000003e862817"},
+    {"name": "historical_v26_inbound", "direction_hex": "0100", "header_crc16": 16693, "frame_hex": "aa015000010035412f1a80ad418401f0a3266aae470100c3c5050068faccfa8dfb46fc8bfd4cfebafedafe6dff56ffd5fffbff37ff6afce5f9d7f8dffa5efc98fddbfe5afe84fe15ff5cff405fb33c50080101006cb67c17"}
+  ]
+}

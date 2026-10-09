@@ -1,0 +1,57 @@
+{
+  "fixture": "REF-02A.4",
+  "classification": "static_derived",
+  "expected_behavior": {
+    "set_clock_build": "Encode whole Unix seconds as u32 little-endian, sub-seconds as floor((millis % 1000) * 32768 / 1000) in u16 little-endian, then two zero bytes; frame padding is retained.",
+    "get_clock_build": "Build a payloadless COMMAND with opcode 0x0B; the padded inner is four bytes.",
+    "get_clock_parse": "Scan the response payload for the first plausible Unix u32; no response fixture or clock value is invented here.",
+    "normalization": "none",
+    "timing_ms": "unknown/comment-only; the ~120 ms note applies to INIT pacing, not clock vectors"
+  },
+  "vectors": [
+    {
+      "id": "set_clock_0x12345678_plus_500ms",
+      "command": "SET_CLOCK",
+      "opcode_hex": "0a",
+      "sequence": 9,
+      "input": "DateTime.fromMillisecondsSinceEpoch(0x12345678 * 1000 + 500)",
+        "classification": "static_literal",
+        "literal_tested_inner_hex": "23090a785634120040000000",
+      "full_frame_hex": "aa10005723090a7856341200400000004b800129",
+        "full_frame_classification": "static_derived",
+      "derivation": "buildFrame(literal_tested_inner_hex)",
+      "source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:69-82"
+    },
+    {
+      "id": "set_clock_1750000000_plus_999ms",
+      "command": "SET_CLOCK",
+      "opcode_hex": "0a",
+      "sequence": 0,
+      "input": "DateTime.fromMillisecondsSinceEpoch(1750000000 * 1000 + 999)",
+        "classification": "static_literal",
+        "literal_tested_inner_hex": "23000a80e14e68df7f000000",
+      "full_frame_hex": "aa10005723000a80e14e68df7f0000004fa11de2",
+        "full_frame_classification": "static_derived",
+      "derivation": "buildFrame(literal_tested_inner_hex)",
+      "source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:85-93"
+    },
+    {
+      "id": "get_clock_seq_5",
+      "command": "GET_CLOCK",
+      "opcode_hex": "0b",
+      "sequence": 5,
+        "classification": "static_literal",
+      "literal_tested_inner_hex": "23050b00",
+      "full_frame_hex": "aa0800a823050b00ecc4fc76",
+        "full_frame_classification": "static_derived",
+      "derivation": "buildFrame(literal_tested_inner_hex)",
+      "source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:54-61"
+    }
+  ],
+  "verification": "Dart unavailable; no runtime execution; values are static pinned-source citations and mechanical envelope derivations.",
+  "source_citations": [
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/commands.dart:72-112",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/control.dart:550-559",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:31-53"
+  ]
+}

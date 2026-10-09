@@ -1,0 +1,65 @@
+{
+  "fixture": "REF-02A.5-v25-frame-1",
+  "scope": "WHOOP 4 historical version-25 transport frame and inner record",
+  "version": 25,
+  "classification": "static_derived",
+  "basis": "Transport frame is the exact pinned v25 test literal; test input and canonical inner record are deterministic slices of that frame.",
+  "transport_frame": {
+    "raw_hex": "aa50000c2f1900016800007eff2a6a283e0900a0ad03007a0e880698018bfff5fb61eee9f2a7fa2bfe1af5fdf618fdf0f9c2fb0804510a14046a004dffd0ff6dfdddfd670183014e071a3f9003000000587bbabf",
+    "byte_count": 84,
+    "classification": "static_literal",
+    "basis": "Exact pinned v25 test literal, including 4-byte header, 76-byte inner record, and 4-byte trailing CRC32.",
+    "citation": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/v25_test.dart:10-13"
+  },
+  "pinned_test_input": {
+    "raw_hex": "2f1900016800007eff2a6a283e0900a0ad03007a0e880698018bfff5fb61eee9f2a7fa2bfe1af5fdf618fdf0f9c2fb0804510a14046a004dffd0ff6dfdddfd670183014e071a3f9003000000587bbabf",
+    "byte_count": 80,
+    "classification": "static_derived",
+    "basis": "Mechanically transport_frame.raw_hex[4:] (the exact 80-byte input produced by pinned test/v25_test.dart:10-13 via _innerHex; it intentionally includes the trailing CRC32)."
+  },
+  "inner_record": {
+    "raw_hex": "2f1900016800007eff2a6a283e0900a0ad03007a0e880698018bfff5fb61eee9f2a7fa2bfe1af5fdf618fdf0f9c2fb0804510a14046a004dffd0ff6dfdddfd670183014e071a3f9003000000",
+    "byte_count": 76,
+    "classification": "static_derived",
+    "basis": "Deterministic canonical slice of the pinned full frame: raw[4:-4].",
+    "derivation": "Mechanically slice transport_frame.raw_hex[4:-4]: remove the 4-byte frame header and 4-byte trailing CRC32; canonical inner record is 76 bytes."
+  },
+  "expected_decode": {
+    "status": "decoded_with_unsupported_fields",
+    "fields": {
+      "hist_version": 25,
+      "ts_epoch": 1781202814,
+      "counter": 26625,
+      "accel_g": [0.986, 0.0557, 0.0]
+    },
+    "unsupported_fields": ["hr", "rr_count", "rr_intervals_ms", "spo2_red_raw", "spo2_ir_raw", "ppg_green", "ppg_red_ir", "skin_contact", "skin_temp_raw", "ambient_raw"],
+    "basis": "Loopr missing-data rule: missing input produces an absent metric, not zero, a substitute, or an invented score (docs/IMPLEMENTATION_PLAN.md:107); timestamp, counter, and acceleration remain supported and present.",
+    "omitted_fields": ["hr", "rr_count", "rr_intervals_ms", "spo2_red_raw", "spo2_ir_raw", "ppg_green", "ppg_red_ir", "skin_contact", "skin_temp_raw", "ambient_raw", "ts_subsec", "raw_tail"]
+  },
+  "raw_decoder_output": {
+    "ts_subsec": 0,
+    "hr": 0,
+    "rr_count": 0,
+    "rr_intervals_ms": [],
+    "ppg_green": 0,
+    "ppg_red_ir": 0,
+    "skin_contact": 0,
+    "spo2_red_raw": 0,
+    "spo2_ir_raw": 0,
+    "skin_temp_raw": 0,
+    "ambient_raw": 0
+  },
+  "raw_decoder_output_provenance": "Pinned decoder zero/empty values preserved verbatim from test/v25_test.dart:16-38 and the v25 decoder field map; these are raw decoder output, not measured Loopr semantic values.",
+  "decoder_strategy": {
+    "name": "parseR24.v25_layout",
+    "support": "supported",
+    "expected_result": "v25 auto-routes; timing and gravity decode, while HR, RR, and unsupported optical fields are absent/unsupported in Loopr semantics"
+  },
+  "citations": [
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/v25_test.dart:16-38",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/v25_test.dart:40-47",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/records.dart:171-218",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:1-5"
+  ],
+  "verification": "Dart unavailable; no runtime execution. Full-frame length, raw[4:] test-input length/content, raw[4:-4] canonical slice, offset decodes, and four-decimal acceleration rounding are mechanically validated against pinned v25 test/source behavior."
+}

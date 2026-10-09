@@ -1,0 +1,15 @@
+{
+  "case": "impossible_length",
+  "classification": "invalid_mechanical_corruption",
+  "base_frame_identity": "PRT-02.1 INIT seq0",
+  "base_frame_hex": "aa0800a823002300ada86a2d",
+  "mutation": {
+    "offset": 1,
+    "offset_unit": "zero-based decoded-byte position",
+    "operation": "replace bytes at zero-based decoded-byte half-open range [1:4] with declared length 0x0003 little-endian and its pinned CRC-8 0x3f"
+  },
+  "resulting_hex": "aa03003f23002300ada86a2d",
+  "parser_outcome": "parseFrame returns null: declared length 3 is below the minimum 4-byte trailing CRC-32 requirement",
+  "reassembler_outcome": "FrameReassembler treats declared length 3 as implausible, resynchronizes, and emits no frame",
+  "source_citation": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:57-75,111-122"
+}

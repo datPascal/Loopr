@@ -1,0 +1,15 @@
+{
+  "case": "truncated_frame",
+  "classification": "invalid_mechanical_corruption",
+  "base_frame_identity": "PRT-02.1 INIT seq0",
+  "base_frame_hex": "aa0800a823002300ada86a2d",
+  "mutation": {
+    "offset": 11,
+    "offset_unit": "zero-based decoded-byte position",
+    "operation": "delete the final byte; deterministic prefix truncation at zero-based decoded-byte half-open range [0:11]"
+  },
+  "resulting_hex": "aa0800a823002300ada86a",
+  "parser_outcome": "parseFrame returns null because the input is shorter than the declared total frame length",
+  "reassembler_outcome": "FrameReassembler retains the partial candidate and waits for the missing byte; no complete frame is emitted",
+  "source_citation": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:57-75,123-132; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:142-149"
+}

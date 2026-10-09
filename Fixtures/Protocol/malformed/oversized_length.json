@@ -1,0 +1,15 @@
+{
+  "case": "oversized_length",
+  "classification": "invalid_mechanical_corruption",
+  "base_frame_identity": "PRT-02.1 INIT seq0",
+  "base_frame_hex": "aa0800a823002300ada86a2d",
+  "mutation": {
+    "offset": 1,
+    "offset_unit": "zero-based decoded-byte position",
+    "operation": "replace bytes at zero-based decoded-byte half-open range [1:4] with declared length 0x0fff little-endian and its pinned CRC-8 0xfa"
+  },
+  "resulting_hex": "aaff0ffa23002300ada86a2d",
+  "parser_outcome": "parseFrame returns null because the supplied 12 bytes are shorter than the declared total of 4099 bytes; the parser has no 4096-byte maximum check",
+  "reassembler_outcome": "FrameReassembler treats total length 4099 as oversized (>4096), resynchronizes, and emits no frame",
+  "source_citation": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:57-75,111-122"
+}

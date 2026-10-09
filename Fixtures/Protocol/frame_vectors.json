@@ -1,0 +1,22 @@
+[
+  {
+    "hex": "aa0800a823002300ada86a2d",
+    "source": "docs/IMPLEMENTATION_PLAN.md §9.5; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24"
+  },
+  {
+    "hex": "aa0800a823014c00f2b5cdce",
+    "source": "docs/IMPLEMENTATION_PLAN.md §9.5; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24"
+  },
+  {
+    "hex": "aa0800a823022200824df537",
+    "source": "docs/IMPLEMENTATION_PLAN.md §9.5; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24"
+  },
+  {
+    "hex": "aa0800a823034301c54dd63d",
+    "source": "docs/IMPLEMENTATION_PLAN.md §9.5; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24"
+  },
+  {
+    "hex": "aa0800a823041600c7c25288",
+    "source": "docs/IMPLEMENTATION_PLAN.md §9.5; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24"
+  }
+]

@@ -1,0 +1,55 @@
+# Local reference repositories
+/OpenStrap Code/
+
+# Private development material
+/docs/execution/
+/docs/CRYPTO_DONATION_WALLET_RESEARCH.md
+/docs/OPEN_SOURCE_LEGAL_WORDING_RESEARCH.md
+/docs/WHOOP_BLUETOOTH_PROTOCOL_REVIEW.md
+/docs/WHOOP_JOURNAL_RESEARCH.md
+/docs/design/AGENT_TASK.md
+/design/screenshots/
+/progress.html
+/prompt.md
+
+# Xcode and Swift build output
+DerivedData/
+TestResults/
+build/
+.build/
+.swiftpm/
+*.xcarchive
+*.xcresult
+*.ipa
+*.dSYM
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.env
+*.p12
+*.mobileprovision
+AuthKey_*.p8
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Script caches
+__pycache__/
+*.py[cod]
+
+# Band intro render intermediates
+/design/onboarding-band/frames/
+/design/onboarding-band/.stills/
+/design/onboarding-band/.preview/
+/design/onboarding-band/*.blend1
+/design/onboarding-band/.venv/
+/design/onboarding-band/sound/preview.wav

@@ -1,0 +1,1 @@
+{"metric":"dailyNocturnalRhr","local_day":"2024-03-10","time_zone":"Asia/Tokyo","window_samples":2,"min_coverage":1,"samples":[{"ts_ms":1709996400000,"bpm":65},{"ts_ms":1709996401000,"bpm":64}]}

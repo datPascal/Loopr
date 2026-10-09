@@ -1,0 +1,28 @@
+{
+  "case": "corrupt_tail_crc",
+  "classification": "invalid_mechanical_corruption",
+  "base_frame_identity": "PRT-02.1 INIT seq0",
+  "base_frame_hex": "aa0800a823002300ada86a2d",
+  "mutation": {
+    "offset": 11,
+    "offset_unit": "zero-based decoded-byte position",
+    "operation": "xor final tail CRC-32 byte at zero-based decoded-byte offset 11 with 0x01"
+  },
+  "resulting_hex": "aa0800a823002300ada86a2c",
+  "parser_outcome": "parseFrame returns Frame with crc8Ok=true and crc32Ok=false, therefore valid=false",
+  "reassembler_outcome": {
+    "pinned_upstream": "FrameReassembler emits that parsed Frame with valid=false and removes its declared bytes",
+    "loopr_required": "reject before packet dispatch; recover/resynchronize when followed by valid data; required_unverified_until_PRT_02_PRT_03_tests"
+  },
+  "pinned_upstream_behavior": {
+    "parser": "parseFrame returns Frame with crc8Ok=true and crc32Ok=false, therefore valid=false",
+    "reassembler": "FrameReassembler emits that parsed Frame with valid=false and removes its declared bytes"
+  },
+  "loopr_required_behavior": {
+    "reassembler": "reject before packet dispatch; recover/resynchronize when followed by valid data; required_unverified_until_PRT_02_PRT_03_tests",
+    "source_citation": "docs/IMPLEMENTATION_PLAN.md §9.2 lines 417-426 and §9.3 lines 428-442",
+    "following_valid_frame_hex": "aa0800a823014c00f2b5cdce",
+    "full_stream_hex": "aa0800a823002300ada86a2caa0800a823014c00f2b5cdce"
+  },
+  "source_citation": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:15-19,21,23-28,57-75,123-135"
+}

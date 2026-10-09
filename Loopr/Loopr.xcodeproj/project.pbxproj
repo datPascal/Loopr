@@ -1,0 +1,1397 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		71A500030000000000000001 /* SpaceGrotesk-OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 71A500020000000000000001 /* SpaceGrotesk-OFL.txt */; };
+		71A500010000000000000001 /* SpaceGrotesk-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 71A500000000000000000001 /* SpaceGrotesk-SemiBold.ttf */; };
+		71A400040000000000000001 /* WatchComplicationContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A100000000000000000001 /* WatchComplicationContent.swift */; };
+		71A400030000000000000001 /* DesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000000F /* DesignSystem */; };
+		71A400010000000000000001 /* SharedSurfaceKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000000A /* SharedSurfaceKit */; };
+		71A400020000000000000001 /* SharedSurfaceKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000000A /* SharedSurfaceKit */; };
+		04048D66042D1DADE895587A /* LooprActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAAF1E7565783D1DEAACD0E0 /* LooprActivityAttributes.swift */; };
+		0504C6991467FF33553291F2 /* LooprWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = B8791124784180FA20AF4A28 /* LooprWatch.app */; };
+		08F9D70D3E6862BA04E20A94 /* LooprActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAAF1E7565783D1DEAACD0E0 /* LooprActivityAttributes.swift */; };
+		16862A039770D02A0C392904 /* LooprWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D29018811F4D599784DBFE80 /* LooprWidgets.swift */; };
+		1A625CF8D8B7890E9F6F9EDD /* LooprWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 587E14F3A1D46AA96419589A /* LooprWatchApp.swift */; };
+		1A625CF8D8B7890E9F6F9EED /* Watch PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 587E14F3A1D46AA9641958A /* PrivacyInfo.xcprivacy */; };
+		371E841E444FBC861087D6A4 /* LooprWatchWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = D6BCE63B6515C50352BD6D01 /* LooprWatchWidgets.appex */; };
+		6214D358247B93B5EFE67A14 /* LooprWatchWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5D9C62C0483C0B7E3D5F267 /* LooprWatchWidgets.swift */; };
+		6214D358247B93B5EFE67A15 /* Watch widgets PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F5D9C62C0483C0B7E3D5F268 /* PrivacyInfo.xcprivacy */; };
+		71A100010000000000000001 /* WatchComplicationContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A100000000000000000001 /* WatchComplicationContent.swift */; };
+		71A100020000000000000001 /* WatchComplicationContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A100000000000000000001 /* WatchComplicationContent.swift */; };
+		71A200010000000000000001 /* LooprSurfaceContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A200000000000000000001 /* LooprSurfaceContent.swift */; };
+		71A200020000000000000001 /* LooprSurfaceContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A200000000000000000001 /* LooprSurfaceContent.swift */; };
+		71A300010000000000000001 /* ../../LooprPackages/Sources/SharedSurfaceKit/Placeholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A300000000000000000001 /* ../../LooprPackages/Sources/SharedSurfaceKit/Placeholder.swift */; };
+		71A300020000000000000001 /* ../../LooprPackages/Sources/SharedSurfaceKit/Placeholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A300000000000000000001 /* ../../LooprPackages/Sources/SharedSurfaceKit/Placeholder.swift */; };
+		7A0260030000000000000001 /* DomainKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000001 /* DomainKit */; };
+		7A0260030000000000000002 /* ProtocolKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000002 /* ProtocolKit */; };
+		7A0260030000000000000003 /* StorageKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000003 /* StorageKit */; };
+		7A0260030000000000000004 /* BluetoothKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000004 /* BluetoothKit */; };
+		7A0260030000000000000005 /* SyncKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000005 /* SyncKit */; };
+		7A0260030000000000000006 /* AnalyticsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000006 /* AnalyticsKit */; };
+		7A0260030000000000000007 /* HealthKitBridge in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000007 /* HealthKitBridge */; };
+		7A0260030000000000000008 /* WorkoutKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000008 /* WorkoutKit */; };
+		7A0260030000000000000009 /* NotificationKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000009 /* NotificationKit */; };
+		7A026003000000000000000A /* SharedSurfaceKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000000A /* SharedSurfaceKit */; };
+		7A026003000000000000000B /* CoachingKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000000B /* CoachingKit */; };
+		7A026003000000000000000C /* AIKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000000C /* AIKit */; };
+		7A026003000000000000000D /* ImportKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000000D /* ImportKit */; };
+		7A026003000000000000000E /* DeviceActionsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000000E /* DeviceActionsKit */; };
+		7A026003000000000000000F /* DesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000000F /* DesignSystem */; };
+		7A0260030000000000000010 /* ProfileKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000010 /* ProfileKit */; };
+		7A0260030000000000000011 /* OnboardingKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000011 /* OnboardingKit */; };
+		7A0260030000000000000012 /* DeviceCenterKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000012 /* DeviceCenterKit */; };
+		7A0260030000000000000013 /* TodayKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000013 /* TodayKit */; };
+		7A0260030000000000000014 /* CoachKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000014 /* CoachKit */; };
+		7A0260030000000000000015 /* SleepKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000015 /* SleepKit */; };
+		7A0260030000000000000016 /* HeartKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000016 /* HeartKit */; };
+		7A0260030000000000000017 /* BodyKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000017 /* BodyKit */; };
+		7A0260030000000000000018 /* RouteKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000018 /* RouteKit */; };
+		7A0260030000000000000019 /* JournalKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000019 /* JournalKit */; };
+		7A026003000000000000001A /* CycleKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000001A /* CycleKit */; };
+		7A026003000000000000001B /* RecordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000001B /* RecordsKit */; };
+		7A026003000000000000001C /* StressKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000001C /* StressKit */; };
+		7A026003000000000000001D /* SettingsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000001D /* SettingsKit */; };
+		7A026003000000000000001E /* DataKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000001E /* DataKit */; };
+		A9C3FDDAB3FE3CCB920A98DA /* SharedSurfaceKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000000A /* SharedSurfaceKit */; };
+		E056385B3013C64939548AA3 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3299E9CD1D4ED11B7C97C8DF /* Foundation.framework */; };
+		F7B47A5E0110D65FDF28A729 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97B9459BA0912F6FF8B4AF46 /* Assets.xcassets */; };
+		FD43B0CF0DCF46786ED1CAAE /* LooprWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C47ABB28C6D5DBCA28FA03B7 /* LooprWidgets.appex */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		67E999C13024546E00B672BB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 67E999A73024546C00B672BB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 67E999AE3024546C00B672BB;
+			remoteInfo = Loopr;
+		};
+		67E999CB3024546E00B672BB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 67E999A73024546C00B672BB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 67E999AE3024546C00B672BB;
+			remoteInfo = Loopr;
+		};
+		89B8FD7B00FDF28175D3CA8D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 67E999A73024546C00B672BB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F741FD951EED7868888228B6;
+			remoteInfo = LooprWatchWidgets;
+		};
+		97D335EA35BF5BE75890A21B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 67E999A73024546C00B672BB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 08B7149F3510C7B1884DA4A8;
+			remoteInfo = LooprWatch;
+		};
+		EB1A2037B8A2CB96A2E4AA1B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 67E999A73024546C00B672BB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C766827C99CFDA369BD09952;
+			remoteInfo = LooprWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		331563C07895856F9EB3AFEB /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				FD43B0CF0DCF46786ED1CAAE /* LooprWidgets.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		861BC4BF17B391CE03FBBDEC /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				371E841E444FBC861087D6A4 /* LooprWatchWidgets.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D4628E3B3B8B286DA4C8B7A9 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				0504C6991467FF33553291F2 /* LooprWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		71A500020000000000000001 /* SpaceGrotesk-OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Loopr/Resources/Fonts/SpaceGrotesk/SpaceGrotesk-OFL.txt; sourceTree = SOURCE_ROOT; };
+		71A500000000000000000001 /* SpaceGrotesk-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Loopr/Resources/Fonts/SpaceGrotesk/SpaceGrotesk-SemiBold.ttf; sourceTree = SOURCE_ROOT; };
+		3299E9CD1D4ED11B7C97C8DF /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		587E14F3A1D46AA96419589A /* LooprWatchApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LooprWatchApp.swift; sourceTree = "<group>"; };
+		587E14F3A1D46AA9641958A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		66C0C966643CD960C6CA10FB /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS11.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		67E999AF3024546C00B672BB /* Loopr.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Loopr.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		67E999C03024546E00B672BB /* LooprTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LooprTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		67E999CA3024546E00B672BB /* LooprUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LooprUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		71A100000000000000000001 /* WatchComplicationContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchComplicationContent.swift; sourceTree = "<group>"; };
+		71A200000000000000000001 /* LooprSurfaceContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LooprSurfaceContent.swift; sourceTree = "<group>"; };
+		71A300000000000000000001 /* ../../LooprPackages/Sources/SharedSurfaceKit/Placeholder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ../../LooprPackages/Sources/SharedSurfaceKit/Placeholder.swift; sourceTree = "<group>"; };
+		97B9459BA0912F6FF8B4AF46 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ../LooprWatch/Assets.xcassets; sourceTree = "<group>"; };
+		B8791124784180FA20AF4A28 /* LooprWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LooprWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C47ABB28C6D5DBCA28FA03B7 /* LooprWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LooprWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		CAAF1E7565783D1DEAACD0E0 /* LooprActivityAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LooprActivityAttributes.swift; sourceTree = "<group>"; };
+		D29018811F4D599784DBFE80 /* LooprWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LooprWidgets.swift; sourceTree = "<group>"; };
+		D6BCE63B6515C50352BD6D01 /* LooprWatchWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LooprWatchWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		F5D9C62C0483C0B7E3D5F267 /* LooprWatchWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LooprWatchWidgets.swift; sourceTree = "<group>"; };
+		F5D9C62C0483C0B7E3D5F268 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		67E999D23024546E00B672BB /* Exceptions for "Loopr" folder in "Loopr" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 67E999AE3024546C00B672BB /* Loopr */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		67E999B13024546C00B672BB /* Loopr */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				67E999D23024546E00B672BB /* Exceptions for "Loopr" folder in "Loopr" target */,
+			);
+			path = Loopr;
+			sourceTree = "<group>";
+		};
+		67E999C33024546E00B672BB /* LooprTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = LooprTests;
+			sourceTree = "<group>";
+		};
+		67E999CD3024546E00B672BB /* LooprUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = LooprUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		18CA818C44E743168B5063CD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				71A400010000000000000001 /* SharedSurfaceKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2BFC993D46A18C6EB7A479A8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				71A400020000000000000001 /* SharedSurfaceKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		33A83F433971EB2F9CA847BA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				71A400030000000000000001 /* DesignSystem in Frameworks */,
+				E056385B3013C64939548AA3 /* Foundation.framework in Frameworks */,
+				A9C3FDDAB3FE3CCB920A98DA /* SharedSurfaceKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		67E999AC3024546C00B672BB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A0260030000000000000001 /* DomainKit in Frameworks */,
+				7A0260030000000000000002 /* ProtocolKit in Frameworks */,
+				7A0260030000000000000003 /* StorageKit in Frameworks */,
+				7A0260030000000000000004 /* BluetoothKit in Frameworks */,
+				7A0260030000000000000005 /* SyncKit in Frameworks */,
+				7A0260030000000000000006 /* AnalyticsKit in Frameworks */,
+				7A0260030000000000000007 /* HealthKitBridge in Frameworks */,
+				7A0260030000000000000008 /* WorkoutKit in Frameworks */,
+				7A0260030000000000000009 /* NotificationKit in Frameworks */,
+				7A026003000000000000000A /* SharedSurfaceKit in Frameworks */,
+				7A026003000000000000000B /* CoachingKit in Frameworks */,
+				7A026003000000000000000C /* AIKit in Frameworks */,
+				7A026003000000000000000D /* ImportKit in Frameworks */,
+				7A026003000000000000000E /* DeviceActionsKit in Frameworks */,
+				7A026003000000000000000F /* DesignSystem in Frameworks */,
+				7A0260030000000000000010 /* ProfileKit in Frameworks */,
+				7A0260030000000000000011 /* OnboardingKit in Frameworks */,
+				7A0260030000000000000012 /* DeviceCenterKit in Frameworks */,
+				7A0260030000000000000013 /* TodayKit in Frameworks */,
+				7A0260030000000000000014 /* CoachKit in Frameworks */,
+				7A0260030000000000000015 /* SleepKit in Frameworks */,
+				7A0260030000000000000016 /* HeartKit in Frameworks */,
+				7A0260030000000000000017 /* BodyKit in Frameworks */,
+				7A0260030000000000000018 /* RouteKit in Frameworks */,
+				7A0260030000000000000019 /* JournalKit in Frameworks */,
+				7A026003000000000000001A /* CycleKit in Frameworks */,
+				7A026003000000000000001B /* RecordsKit in Frameworks */,
+				7A026003000000000000001C /* StressKit in Frameworks */,
+				7A026003000000000000001D /* SettingsKit in Frameworks */,
+				7A026003000000000000001E /* DataKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		67E999BD3024546E00B672BB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		67E999C73024546E00B672BB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		056DA0E36C287D09849B8CAA /* SharedAppleSurfaces */ = {
+			isa = PBXGroup;
+			children = (
+				CAAF1E7565783D1DEAACD0E0 /* LooprActivityAttributes.swift */,
+				71A200000000000000000001 /* LooprSurfaceContent.swift */,
+				71A100000000000000000001 /* WatchComplicationContent.swift */,
+				71A300000000000000000001 /* ../../LooprPackages/Sources/SharedSurfaceKit/Placeholder.swift */,
+			);
+			path = SharedAppleSurfaces;
+			sourceTree = "<group>";
+		};
+		268AFAF0691383F350868758 /* watchOS */ = {
+			isa = PBXGroup;
+			children = (
+				66C0C966643CD960C6CA10FB /* Foundation.framework */,
+			);
+			name = watchOS;
+			sourceTree = "<group>";
+		};
+		460075CF8B0A65BECD7CCA3C /* LooprWatchWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				F5D9C62C0483C0B7E3D5F267 /* LooprWatchWidgets.swift */,
+				F5D9C62C0483C0B7E3D5F268 /* PrivacyInfo.xcprivacy */,
+			);
+			name = LooprWatchWidgets;
+			path = ../LooprWatchWidgets;
+			sourceTree = "<group>";
+		};
+		52F2992BE22ED2DABB39E511 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				3299E9CD1D4ED11B7C97C8DF /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		5738DDFD49170E9DF8D4F75F /* Apple Surfaces */ = {
+			isa = PBXGroup;
+			children = (
+				F906447B06C761E286FBA36B /* Widgets */,
+				F43D29DCAC65B54E8B365DF4 /* LooprWatch */,
+				460075CF8B0A65BECD7CCA3C /* LooprWatchWidgets */,
+				056DA0E36C287D09849B8CAA /* SharedAppleSurfaces */,
+			);
+			name = "Apple Surfaces";
+			sourceTree = "<group>";
+		};
+		67E999A63024546C00B672BB = {
+			isa = PBXGroup;
+			children = (
+				67E999B13024546C00B672BB /* Loopr */,
+				67E999C33024546E00B672BB /* LooprTests */,
+				67E999CD3024546E00B672BB /* LooprUITests */,
+				67E999B03024546C00B672BB /* Products */,
+				5738DDFD49170E9DF8D4F75F /* Apple Surfaces */,
+				BD9CEA8EFB6ECAC688AE20DE /* Frameworks */,
+				AAE9E1CE31313BCF4D1CED57 /* LooprWatch */,
+			);
+			sourceTree = "<group>";
+		};
+		67E999B03024546C00B672BB /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				67E999AF3024546C00B672BB /* Loopr.app */,
+				67E999C03024546E00B672BB /* LooprTests.xctest */,
+				67E999CA3024546E00B672BB /* LooprUITests.xctest */,
+				C47ABB28C6D5DBCA28FA03B7 /* LooprWidgets.appex */,
+				B8791124784180FA20AF4A28 /* LooprWatch.app */,
+				D6BCE63B6515C50352BD6D01 /* LooprWatchWidgets.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AAE9E1CE31313BCF4D1CED57 /* LooprWatch */ = {
+			isa = PBXGroup;
+			children = (
+				97B9459BA0912F6FF8B4AF46 /* Assets.xcassets */,
+			);
+			name = LooprWatch;
+			sourceTree = SOURCE_ROOT;
+		};
+		BD9CEA8EFB6ECAC688AE20DE /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				52F2992BE22ED2DABB39E511 /* iOS */,
+				268AFAF0691383F350868758 /* watchOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		F43D29DCAC65B54E8B365DF4 /* LooprWatch */ = {
+			isa = PBXGroup;
+			children = (
+				587E14F3A1D46AA96419589A /* LooprWatchApp.swift */,
+				587E14F3A1D46AA9641958A /* PrivacyInfo.xcprivacy */,
+			);
+			name = LooprWatch;
+			path = ../LooprWatch;
+			sourceTree = "<group>";
+		};
+		F906447B06C761E286FBA36B /* Widgets */ = {
+			isa = PBXGroup;
+			children = (
+				71A500000000000000000001 /* SpaceGrotesk-SemiBold.ttf */,
+				71A500020000000000000001 /* SpaceGrotesk-OFL.txt */,
+				D29018811F4D599784DBFE80 /* LooprWidgets.swift */,
+			);
+			path = Widgets;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		08B7149F3510C7B1884DA4A8 /* LooprWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FD424AEEFDE837AF7EEF097D /* Build configuration list for PBXNativeTarget "LooprWatch" */;
+			buildPhases = (
+				A976844CABF88EFD91536A2E /* Sources */,
+				18CA818C44E743168B5063CD /* Frameworks */,
+				892FC2AF9EEA521C90931999 /* Resources */,
+				861BC4BF17B391CE03FBBDEC /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BF3D024DEF1B6C094043832E /* PBXTargetDependency */,
+			);
+			name = LooprWatch;
+			packageProductDependencies = (7A026002000000000000000A /* SharedSurfaceKit */);
+			productName = LooprWatch;
+			productReference = B8791124784180FA20AF4A28 /* LooprWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
+		67E999AE3024546C00B672BB /* Loopr */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 67E999D33024546E00B672BB /* Build configuration list for PBXNativeTarget "Loopr" */;
+			buildPhases = (
+				67E999AB3024546C00B672BB /* Sources */,
+				67E999AC3024546C00B672BB /* Frameworks */,
+				67E999AD3024546C00B672BB /* Resources */,
+				331563C07895856F9EB3AFEB /* Embed App Extensions */,
+				D4628E3B3B8B286DA4C8B7A9 /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D0738A53EF2FB15F17DC897A /* PBXTargetDependency */,
+				87BC4C5FA99DE8B8E7B439D8 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				67E999B13024546C00B672BB /* Loopr */,
+			);
+			name = Loopr;
+			packageProductDependencies = (
+				7A0260020000000000000001 /* DomainKit */,
+				7A0260020000000000000002 /* ProtocolKit */,
+				7A0260020000000000000003 /* StorageKit */,
+				7A0260020000000000000004 /* BluetoothKit */,
+				7A0260020000000000000005 /* SyncKit */,
+				7A0260020000000000000006 /* AnalyticsKit */,
+				7A0260020000000000000007 /* HealthKitBridge */,
+				7A0260020000000000000008 /* WorkoutKit */,
+				7A0260020000000000000009 /* NotificationKit */,
+				7A026002000000000000000A /* SharedSurfaceKit */,
+				7A026002000000000000000B /* CoachingKit */,
+				7A026002000000000000000C /* AIKit */,
+				7A026002000000000000000D /* ImportKit */,
+				7A026002000000000000000E /* DeviceActionsKit */,
+				7A026002000000000000000F /* DesignSystem */,
+				7A0260020000000000000010 /* ProfileKit */,
+				7A0260020000000000000011 /* OnboardingKit */,
+				7A0260020000000000000012 /* DeviceCenterKit */,
+				7A0260020000000000000013 /* TodayKit */,
+				7A0260020000000000000014 /* CoachKit */,
+				7A0260020000000000000015 /* SleepKit */,
+				7A0260020000000000000016 /* HeartKit */,
+				7A0260020000000000000017 /* BodyKit */,
+				7A0260020000000000000018 /* RouteKit */,
+				7A0260020000000000000019 /* JournalKit */,
+				7A026002000000000000001A /* CycleKit */,
+				7A026002000000000000001B /* RecordsKit */,
+				7A026002000000000000001C /* StressKit */,
+				7A026002000000000000001D /* SettingsKit */,
+				7A026002000000000000001E /* DataKit */,
+			);
+			productName = Loopr;
+			productReference = 67E999AF3024546C00B672BB /* Loopr.app */;
+			productType = "com.apple.product-type.application";
+		};
+		67E999BF3024546E00B672BB /* LooprTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 67E999D83024546E00B672BB /* Build configuration list for PBXNativeTarget "LooprTests" */;
+			buildPhases = (
+				67E999BC3024546E00B672BB /* Sources */,
+				67E999BD3024546E00B672BB /* Frameworks */,
+				67E999BE3024546E00B672BB /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				67E999C23024546E00B672BB /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				67E999C33024546E00B672BB /* LooprTests */,
+			);
+			name = LooprTests;
+			productName = LooprTests;
+			productReference = 67E999C03024546E00B672BB /* LooprTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		67E999C93024546E00B672BB /* LooprUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 67E999DB3024546E00B672BB /* Build configuration list for PBXNativeTarget "LooprUITests" */;
+			buildPhases = (
+				67E999C63024546E00B672BB /* Sources */,
+				67E999C73024546E00B672BB /* Frameworks */,
+				67E999C83024546E00B672BB /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				67E999CC3024546E00B672BB /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				67E999CD3024546E00B672BB /* LooprUITests */,
+			);
+			name = LooprUITests;
+			productName = LooprUITests;
+			productReference = 67E999CA3024546E00B672BB /* LooprUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		C766827C99CFDA369BD09952 /* LooprWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 99E7C4FB4FA6CA142C55FF0D /* Build configuration list for PBXNativeTarget "LooprWidgets" */;
+			buildPhases = (
+				715E439D62FAD9243924559A /* Sources */,
+				33A83F433971EB2F9CA847BA /* Frameworks */,
+				E010B125FB3D906428A9D058 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LooprWidgets;
+			packageProductDependencies = (
+				7A026002000000000000000F /* DesignSystem */,
+				7A026002000000000000000A /* SharedSurfaceKit */,
+			);
+			productName = LooprWidgets;
+			productReference = C47ABB28C6D5DBCA28FA03B7 /* LooprWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		F741FD951EED7868888228B6 /* LooprWatchWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 576EAC8B300942690DAA2E0A /* Build configuration list for PBXNativeTarget "LooprWatchWidgets" */;
+			buildPhases = (
+				52F663CE93C5AC68602B7B4D /* Sources */,
+				2BFC993D46A18C6EB7A479A8 /* Frameworks */,
+				290BA700CE18363CE9018812 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LooprWatchWidgets;
+			packageProductDependencies = (7A026002000000000000000A /* SharedSurfaceKit */);
+			productName = LooprWatchWidgets;
+			productReference = D6BCE63B6515C50352BD6D01 /* LooprWatchWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		67E999A73024546C00B672BB /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					67E999AE3024546C00B672BB = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					67E999BF3024546E00B672BB = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = 67E999AE3024546C00B672BB;
+					};
+					67E999C93024546E00B672BB = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = 67E999AE3024546C00B672BB;
+					};
+				};
+			};
+			buildConfigurationList = 67E999AA3024546C00B672BB /* Build configuration list for PBXProject "Loopr" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 67E999A63024546C00B672BB;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 67E999B03024546C00B672BB /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				67E999AE3024546C00B672BB /* Loopr */,
+				67E999BF3024546E00B672BB /* LooprTests */,
+				67E999C93024546E00B672BB /* LooprUITests */,
+				C766827C99CFDA369BD09952 /* LooprWidgets */,
+				08B7149F3510C7B1884DA4A8 /* LooprWatch */,
+				F741FD951EED7868888228B6 /* LooprWatchWidgets */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		290BA700CE18363CE9018812 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6214D358247B93B5EFE67A15 /* Watch widgets PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		67E999AD3024546C00B672BB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		67E999BE3024546E00B672BB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		67E999C83024546E00B672BB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		892FC2AF9EEA521C90931999 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F7B47A5E0110D65FDF28A729 /* Assets.xcassets in Resources */,
+				1A625CF8D8B7890E9F6F9EED /* Watch PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E010B125FB3D906428A9D058 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				71A500010000000000000001 /* SpaceGrotesk-SemiBold.ttf in Resources */,
+				71A500030000000000000001 /* SpaceGrotesk-OFL.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		52F663CE93C5AC68602B7B4D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6214D358247B93B5EFE67A14 /* LooprWatchWidgets.swift in Sources */,
+				71A100010000000000000001 /* WatchComplicationContent.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		67E999AB3024546C00B672BB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				04048D66042D1DADE895587A /* LooprActivityAttributes.swift in Sources */,
+				71A200010000000000000001 /* LooprSurfaceContent.swift in Sources */,
+				71A400040000000000000001 /* WatchComplicationContent.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		67E999BC3024546E00B672BB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		67E999C63024546E00B672BB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		715E439D62FAD9243924559A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				16862A039770D02A0C392904 /* LooprWidgets.swift in Sources */,
+				08F9D70D3E6862BA04E20A94 /* LooprActivityAttributes.swift in Sources */,
+				71A200020000000000000001 /* LooprSurfaceContent.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A976844CABF88EFD91536A2E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1A625CF8D8B7890E9F6F9EDD /* LooprWatchApp.swift in Sources */,
+				71A100020000000000000001 /* WatchComplicationContent.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		67E999C23024546E00B672BB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 67E999AE3024546C00B672BB /* Loopr */;
+			targetProxy = 67E999C13024546E00B672BB /* PBXContainerItemProxy */;
+		};
+		67E999CC3024546E00B672BB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 67E999AE3024546C00B672BB /* Loopr */;
+			targetProxy = 67E999CB3024546E00B672BB /* PBXContainerItemProxy */;
+		};
+		87BC4C5FA99DE8B8E7B439D8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = LooprWatch;
+			target = 08B7149F3510C7B1884DA4A8 /* LooprWatch */;
+			targetProxy = 97D335EA35BF5BE75890A21B /* PBXContainerItemProxy */;
+		};
+		BF3D024DEF1B6C094043832E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = LooprWatchWidgets;
+			target = F741FD951EED7868888228B6 /* LooprWatchWidgets */;
+			targetProxy = 89B8FD7B00FDF28175D3CA8D /* PBXContainerItemProxy */;
+		};
+		D0738A53EF2FB15F17DC897A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = LooprWidgets;
+			target = C766827C99CFDA369BD09952 /* LooprWidgets */;
+			targetProxy = EB1A2037B8A2CB96A2E4AA1B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		111C794175CCA8918868D3A1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ../LooprWatchWidgets/LooprWatchWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ../LooprWatchWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Loopr;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.loopr.ios.watchkitapp.widgets;
+				PRODUCT_MODULE_NAME = "$(TARGET_NAME:c99extidentifier)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
+		2C3DAD54C17EF8DD309040E0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = Widgets/LooprWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Widgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Loopr;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.loopr.ios.widgets;
+				PRODUCT_MODULE_NAME = "$(TARGET_NAME:c99extidentifier)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		67E999D43024546E00B672BB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Loopr/Loopr.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Loopr/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.loopr.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		67E999D53024546E00B672BB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Loopr/Loopr.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Loopr/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.loopr.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		67E999D63024546E00B672BB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		67E999D73024546E00B672BB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		67E999D93024546E00B672BB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.loopr.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Loopr.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Loopr";
+			};
+			name = Debug;
+		};
+		67E999DA3024546E00B672BB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.loopr.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Loopr.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Loopr";
+			};
+			name = Release;
+		};
+		67E999DC3024546E00B672BB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.loopr.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Loopr;
+			};
+			name = Debug;
+		};
+		67E999DD3024546E00B672BB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.loopr.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Loopr;
+			};
+			name = Release;
+		};
+		97778817E61BF5FF859DFE36 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ../LooprWatch/LooprWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Loopr;
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.loopr.ios;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.loopr.ios.watchkitapp;
+				PRODUCT_MODULE_NAME = "$(TARGET_NAME:c99extidentifier)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
+		B7F2DBF9C8031F5FEA7AF314 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = Widgets/LooprWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Widgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Loopr;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.loopr.ios.widgets;
+				PRODUCT_MODULE_NAME = "$(TARGET_NAME:c99extidentifier)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		BE9333782A05DB5BDBB119AF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ../LooprWatchWidgets/LooprWatchWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ../LooprWatchWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Loopr;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.loopr.ios.watchkitapp.widgets;
+				PRODUCT_MODULE_NAME = "$(TARGET_NAME:c99extidentifier)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		F6C1F14D29889A4D09162F24 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ../LooprWatch/LooprWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = K3M4SYVWJZ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Loopr;
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.loopr.ios;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.loopr.ios.watchkitapp;
+				PRODUCT_MODULE_NAME = "$(TARGET_NAME:c99extidentifier)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		576EAC8B300942690DAA2E0A /* Build configuration list for PBXNativeTarget "LooprWatchWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				111C794175CCA8918868D3A1 /* Release */,
+				BE9333782A05DB5BDBB119AF /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		67E999AA3024546C00B672BB /* Build configuration list for PBXProject "Loopr" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				67E999D63024546E00B672BB /* Debug */,
+				67E999D73024546E00B672BB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		67E999D33024546E00B672BB /* Build configuration list for PBXNativeTarget "Loopr" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				67E999D43024546E00B672BB /* Debug */,
+				67E999D53024546E00B672BB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		67E999D83024546E00B672BB /* Build configuration list for PBXNativeTarget "LooprTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				67E999D93024546E00B672BB /* Debug */,
+				67E999DA3024546E00B672BB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		67E999DB3024546E00B672BB /* Build configuration list for PBXNativeTarget "LooprUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				67E999DC3024546E00B672BB /* Debug */,
+				67E999DD3024546E00B672BB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		99E7C4FB4FA6CA142C55FF0D /* Build configuration list for PBXNativeTarget "LooprWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2C3DAD54C17EF8DD309040E0 /* Release */,
+				B7F2DBF9C8031F5FEA7AF314 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FD424AEEFDE837AF7EEF097D /* Build configuration list for PBXNativeTarget "LooprWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				97778817E61BF5FF859DFE36 /* Release */,
+				F6C1F14D29889A4D09162F24 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../LooprPackages;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		7A0260020000000000000001 /* DomainKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = DomainKit;
+		};
+		7A0260020000000000000002 /* ProtocolKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = ProtocolKit;
+		};
+		7A0260020000000000000003 /* StorageKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = StorageKit;
+		};
+		7A0260020000000000000004 /* BluetoothKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = BluetoothKit;
+		};
+		7A0260020000000000000005 /* SyncKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = SyncKit;
+		};
+		7A0260020000000000000006 /* AnalyticsKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = AnalyticsKit;
+		};
+		7A0260020000000000000007 /* HealthKitBridge */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = HealthKitBridge;
+		};
+		7A0260020000000000000008 /* WorkoutKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = WorkoutKit;
+		};
+		7A0260020000000000000009 /* NotificationKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = NotificationKit;
+		};
+		7A026002000000000000000A /* SharedSurfaceKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = SharedSurfaceKit;
+		};
+		7A026002000000000000000B /* CoachingKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = CoachingKit;
+		};
+		7A026002000000000000000C /* AIKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = AIKit;
+		};
+		7A026002000000000000000D /* ImportKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = ImportKit;
+		};
+		7A026002000000000000000E /* DeviceActionsKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = DeviceActionsKit;
+		};
+		7A026002000000000000000F /* DesignSystem */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = DesignSystem;
+		};
+		7A0260020000000000000010 /* ProfileKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = ProfileKit;
+		};
+		7A0260020000000000000011 /* OnboardingKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = OnboardingKit;
+		};
+		7A0260020000000000000012 /* DeviceCenterKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = DeviceCenterKit;
+		};
+		7A0260020000000000000013 /* TodayKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = TodayKit;
+		};
+		7A0260020000000000000014 /* CoachKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = CoachKit;
+		};
+		7A0260020000000000000015 /* SleepKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = SleepKit;
+		};
+		7A0260020000000000000016 /* HeartKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = HeartKit;
+		};
+		7A0260020000000000000017 /* BodyKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = BodyKit;
+		};
+		7A0260020000000000000018 /* RouteKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = RouteKit;
+		};
+		7A0260020000000000000019 /* JournalKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = JournalKit;
+		};
+		7A026002000000000000001A /* CycleKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = CycleKit;
+		};
+		7A026002000000000000001B /* RecordsKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = RecordsKit;
+		};
+		7A026002000000000000001C /* StressKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = StressKit;
+		};
+		7A026002000000000000001D /* SettingsKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = SettingsKit;
+		};
+		7A026002000000000000001E /* DataKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = DataKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 67E999A73024546C00B672BB /* Project object */;
+}

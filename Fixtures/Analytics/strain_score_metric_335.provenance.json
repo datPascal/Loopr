@@ -1,0 +1,71 @@
+{
+  "fixture": "strain_score_metric_335",
+  "analytics": {
+    "package": "openstrap_analytics",
+    "version": "1.0.0",
+    "version_source": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:pubspec.yaml:1-6",
+    "commit": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+    "tree": "6e588c1e60f0593623a4b64818f7405ebe7686c4",
+    "export_files": 94,
+    "export_content_identity": "PASS",
+    "runtime_dependency_statement": "Pinned pubspec source says pure Dart, zero runtime dependencies; runner performed no pub get and no runtime dependency resolution."
+  },
+  "edge": {
+    "version": "0.9.21+52",
+    "version_source": "d911f60e75d99a6ac0d7ef22a5084a18a7058445:pubspec.yaml:9",
+    "commit": "d911f60e75d99a6ac0d7ef22a5084a18a7058445",
+    "analytics_generation": 54,
+    "generation_source": "d911f60e75d99a6ac0d7ef22a5084a18a7058445:lib/compute/derivation_engine.dart:394-407",
+    "call_site": "d911f60e75d99a6ac0d7ef22a5084a18a7058445:lib/compute/onehz_pipeline.dart:518-520"
+  },
+  "sdk": {
+    "version": "3.5.4",
+    "revision": "88c9758ef131d430d8ce595c6bfb4c90574d3ddd",
+    "architecture": "macos_arm64",
+    "archive_url": "https://storage.googleapis.com/dart-archive/channels/stable/release/3.5.4/sdk/dartsdk-macos-arm64-release.zip",
+    "sha256_url": "https://storage.googleapis.com/dart-archive/channels/stable/release/3.5.4/sdk/dartsdk-macos-arm64-release.zip.sha256sum",
+    "archive_sha256": "c045940e0f5d4caca74e6ebed5a3bf9953383e831bac138e568a60d8b5053c02",
+    "sha256_verification": "PASS"
+  },
+  "runner": {
+    "source_file": "Fixtures/Analytics/strain_score_metric_335_runner.dart",
+    "source_sha256": "fb9ddb80b194f0dcb26250445a566443e513e40721f78f100bd8bd5eded3a3d4",
+    "source_contract": "Imports only dart:convert, dart:io, and the pinned analytics package source; reads the exact input JSON and writes the pinned package's JSON output. No hand-computation, pub get, or runtime dependency resolution.",
+    "pinned_source": "OpenStrap Code/analytics at commit f0d115308aa5e9e3c82ee113c3d52e59756121d4; export tree 6e588c1e60f0593623a4b64818f7405ebe7686c4"
+  },
+  "execution": {
+    "input": "Fixtures/Analytics/strain_score_metric_335.input.json",
+    "output": "Fixtures/Analytics/strain_score_metric_335.output.json",
+    "first": {
+      "command": "DART_SUPPRESS_ANALYTICS=true dart Fixtures/Analytics/strain_score_metric_335_runner.dart Fixtures/Analytics/strain_score_metric_335.input.json > durable-first.stdout 2> durable-first.stderr",
+      "exit_code": 0,
+      "stdout_sha256": "810ef4638b595cf185d4e2e2e8c8f2823b1bff3cd7adef8142032ee9864570e0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "second_rerun": {
+      "command": "DART_SUPPRESS_ANALYTICS=true dart Fixtures/Analytics/strain_score_metric_335_runner.dart Fixtures/Analytics/strain_score_metric_335.input.json > durable-second.stdout 2> durable-second.stderr",
+      "exit_code": 0,
+      "stdout_sha256": "810ef4638b595cf185d4e2e2e8c8f2823b1bff3cd7adef8142032ee9864570e0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "first_second_stdout_byte_identity": "PASS",
+    "fixture_output_vs_first_stdout_byte_identity": "PASS",
+    "output_origin": "runner_stdout_direct_copy",
+    "no_runtime_hand_computation": true,
+    "no_pub_get": true,
+    "no_runtime_dependency_resolution": true
+  },
+  "sha256": {
+    "input": "ae87636b9cc9a8b7000d2a219e57f98209beeadbe7ac06721d544c1077b2d729",
+    "output": "810ef4638b595cf185d4e2e2e8c8f2823b1bff3cd7adef8142032ee9864570e0",
+    "output_bytes": 195
+  },
+  "source_citations": [
+    "f0d115308aa5e9e3c82ee113c3d52e59756121d4:pubspec.yaml:1-6",
+    "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/src/onehz/clinical/load_trimp.dart:68-104",
+    "f0d115308aa5e9e3c82ee113c3d52e59756121d4:test/onehz/clinical_test.dart:583-598",
+    "d911f60e75d99a6ac0d7ef22a5084a18a7058445:pubspec.yaml:9",
+    "d911f60e75d99a6ac0d7ef22a5084a18a7058445:lib/compute/derivation_engine.dart:394-407",
+    "d911f60e75d99a6ac0d7ef22a5084a18a7058445:lib/compute/onehz_pipeline.dart:518-520"
+  ]
+}

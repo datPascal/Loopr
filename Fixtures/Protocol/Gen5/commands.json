@@ -1,0 +1,37 @@
+{
+  "profile": "gen5-fd4b",
+  "source_commit": "c525e29e69ff8b8f0a180b8464d4ccb32ec3e56d",
+  "production_auto_send": false,
+  "commands": [
+    {"name": "client_hello", "opcode": 145, "sequence": 1, "payload_hex": "01", "frame_hex": "aa0108000001e67123019101363e5c8d", "initial_allowlist": true},
+    {"name": "get_data_range", "opcode": 34, "sequence": 2, "payload_hex": "", "initial_allowlist": false},
+    {"name": "send_historical_data", "opcode": 22, "sequence": 3, "payload_hex": "", "initial_allowlist": false},
+    {"name": "history_ack", "opcode": 23, "sequence": 0, "inner_hex": "2300170141b6010010000000", "token_hex": "41b6010010000000", "frame_hex": "aa0110000001e0d12300170141b6010010000000667da4fb", "initial_allowlist": false},
+    {"name": "set_clock_assumed_not_confirmed", "opcode": 146, "sequence": 1, "payload_hex": "80d8d56900000000", "assumption": "Gen4 eight-byte RTC body reused for 2026-01-01T00:00:00Z; never auto-send", "initial_allowlist": false},
+    {"name": "get_clock", "opcode": 147, "sequence": 1, "payload_hex": "", "assumption": "Opcode confirmed; response body remains hardware-unconfirmed", "initial_allowlist": false},
+    {"name": "maverick_haptic", "opcode": 19, "sequence": 1, "payload_hex": "012f98000000000000000007", "initial_allowlist": false}
+  ],
+  "r22_deep_buffer_setup": {
+    "enabled_by_default": false,
+    "opcode": 120,
+    "fixed_revision": 1,
+    "ordered_flags": [
+      ["enable_r22_packets", "2"],
+      ["enable_r22_v2_packets", "2"],
+      ["enable_r22_v3_packets", "2"],
+      ["enable_r22_v4_packets", "1"],
+      ["enable_r22_v5_packets", "2"],
+      ["enable_r22_v6_packets", "2"],
+      ["enable_r22_v8_packets", "2"],
+      ["make_hrfm_visible", "2"],
+      ["disable_pip_r26_packets", "2"],
+      ["wear_detect_bias", "2"],
+      ["hr_ch_switching", "2"],
+      ["ir_hw_switching", "2"],
+      ["enable_passive_strap_fit_gen5", "1"],
+      ["enable_sig11_during_sleep", "2"],
+      ["dorset_inhibit_wpt", "2"],
+      ["enable_sig12", "1"]
+    ]
+  }
+}

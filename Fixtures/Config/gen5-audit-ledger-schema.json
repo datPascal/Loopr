@@ -1,0 +1,16 @@
+{
+  "fields": [
+    "old_state",
+    "new_state",
+    "app_policy_version",
+    "model",
+    "firmware",
+    "evidence_id",
+    "reason",
+    "actor",
+    "timestamp"
+  ],
+  "documentation": {
+    "dec_04_item_3_verbatim": "3. **Audit:** Append every capability transition to a durable audit ledger with old/new state, app policy version, model, firmware, evidence ID, reason, actor, and timestamp. Protocol anomalies automatically transition the affected capability to `suspended`; they never auto-enable a capability. Audit and switch data are included in redacted diagnostics, backup/export, migration, and full deletion tests."
+  }
+}

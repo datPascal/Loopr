@@ -1,0 +1,13 @@
+{
+  "prerequisites": ["Today", "Sleep", "Heart", "Body", "Workouts", "Settings", "data-control"],
+  "secondary_order": [
+    "journal",
+    "records/journey/timeline/recaps",
+    "cycle tracking",
+    "stress/spot-check/breathing",
+    "deterministic local coach",
+    "notifications/reminders",
+    "optional BYOK AI"
+  ],
+  "scope_rule": "This changes sequencing, not full-product scope."
+}

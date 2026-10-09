@@ -1,0 +1,57 @@
+{
+  "$schema": "ANA-01 per-field analytics comparator manifest schema skeleton",
+  "file_owner": "DEC-02",
+  "entry_population_owner": "ANA-01",
+  "purpose": "Defines the exact comparison categories and default numeric tolerances. ANA-01 owns adding fixture-backed per-field entries; fields may not fall back to an unlisted global tolerance.",
+  "categories": {
+    "exact": {
+      "rule": "Values in this category must compare exactly.",
+      "applies_to": [
+        "discrete values",
+        "presence/absence",
+        "labels",
+        "day identity",
+        "stage classes",
+        "counts",
+        "flags",
+        "confidence tiers",
+        "algorithm versions",
+        "byte/protocol values",
+        "storage values"
+      ]
+    },
+    "canonical-rounded": {
+      "rule": "Integer seconds and canonically rounded display values are exact after applying the same rounding rule.",
+      "applies_to": [
+        "integer seconds",
+        "canonically rounded display values"
+      ]
+    },
+    "float-primitive": {
+      "rule": "Floating primitives start with an absolute tolerance.",
+      "absolute": 1e-9
+    },
+    "normalized-score": {
+      "rule": "Normalized scores and ordinary scalar pipelines start with an absolute tolerance.",
+      "absolute": 1e-6
+    },
+    "spectral-iterative": {
+      "rule": "Spectral and iterative outputs start with a relative tolerance and an absolute floor.",
+      "relative": 1e-5,
+      "absolute_floor": 1e-8
+    }
+  },
+  "wider_tolerance_requirements": {
+    "allowed": true,
+    "requirements": [
+      "fixture-backed numerical rationale",
+      "range/units",
+      "approved manifest change"
+    ],
+    "rule": "A field may use a wider tolerance only when all requirements are recorded; otherwise its category default applies."
+  },
+  "real_capture_supplement": {
+    "rule": "Real-capture plausibility ranges supplement but never replace Dart/Swift parity."
+  },
+  "entries": []
+}

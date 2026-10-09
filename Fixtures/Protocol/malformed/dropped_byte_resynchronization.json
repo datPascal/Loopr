@@ -1,0 +1,18 @@
+{
+  "case": "dropped_byte_resynchronization",
+  "classification": "invalid_mechanical_corruption",
+  "base_frame_identity": "pinned framing_test generated frame A followed by generated frame B",
+  "base_frame_hex": [
+    "aa2800062305222222222222222222222222222222222222222222222222222222222222222222001e535c13",
+    "aa0800a8230623001fd4e729"
+  ],
+  "base_stream_hex": "aa2800062305222222222222222222222222222222222222222222222222222222222222222222001e535c13aa0800a8230623001fd4e729",
+  "mutation": {
+    "offset": 2,
+    "offset_unit": "zero-based decoded-byte position",
+    "operation": "delete one byte at zero-based decoded-byte stream offset 2 (the low declared-length byte of frame A)"
+  },
+  "resulting_hex": "aa28062305222222222222222222222222222222222222222222222222222222222222222222001e535c13aa0800a8230623001fd4e729",
+  "expected_outcome": "frame A is lost, resynchronization occurs, and the following intact frame B is emitted valid with seq=6; no later stream data is swallowed",
+  "source_citation": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:169-172,174-175,177-178; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:93-109,111-143"
+}

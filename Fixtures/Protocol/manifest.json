@@ -1,0 +1,292 @@
+{
+  "$schema": {
+    "description": "Documentation for required fields on each future fixture entry.",
+    "entry_fields": {
+      "upstream_sha": "Upstream SHA.",
+      "source_reference": "Source test or capture reference.",
+      "expected_decode": "Expected decode.",
+      "verification_level": "Verification level; must be one of code, test, or hardware.",
+      "hardware": "Hardware, when applicable.",
+      "firmware": "Firmware, when applicable.",
+      "anonymization_method": "Anonymization method.",
+      "checksum": "Checksum."
+    },
+    "verification_level_enum": [
+      "code",
+      "test",
+      "hardware"
+    ]
+  },
+  "entries": [
+    {
+      "upstream_sha": "c525e29e69ff8b8f0a180b8464d4ccb32ec3e56d",
+      "source_reference": "c525e29e69ff8b8f0a180b8464d4ccb32ec3e56d:lib/src/commands.dart:332-515; c525e29e69ff8b8f0a180b8464d4ccb32ec3e56d:test/gen5_test.dart:48-259",
+      "expected_decode": "Gen 5 client hello, empty data-range/history requests, exact token ACK, assumed-not-confirmed clocks, Maverick haptic waveform, and the ordered sixteen-flag R22 setup remain offline with only hello initially allowlisted.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "84fd2b708035240287723d4ff5ee107f6836f3e7c338c3047bd5b24e71da17e8"
+    },
+    {
+      "upstream_sha": "c525e29e69ff8b8f0a180b8464d4ccb32ec3e56d",
+      "source_reference": "c525e29e69ff8b8f0a180b8464d4ccb32ec3e56d:test/gen5_test.dart:20-178; c525e29e69ff8b8f0a180b8464d4ccb32ec3e56d:test/gen5_historical_test.dart:20-174",
+      "expected_decode": "Five CRC-valid fd4b envelope vectors cover outbound and observed inbound direction markers, CRC16-Modbus header integrity, CRC32 tails, canonical hello, token ACK, realtime HR, and real v18/v26 history frames.",
+      "verification_level": "test",
+      "hardware": "unknown_upstream_test_fixture",
+      "firmware": "unknown_upstream_test_fixture",
+      "anonymization_method": "none_upstream_public_fixture",
+      "checksum": "db739a7de8c4f37a7a8e6562c20f9dd7bbb29285005cfd8c7170eb215227b863"
+    },
+    {
+      "upstream_sha": "c525e29e69ff8b8f0a180b8464d4ccb32ec3e56d",
+      "source_reference": "c525e29e69ff8b8f0a180b8464d4ccb32ec3e56d:test/gen5_historical_test.dart:20-283; c525e29e69ff8b8f0a180b8464d4ccb32ec3e56d:lib/src/gen5_records.dart:49-660",
+      "expected_decode": "Real CRC-valid v18 biometric and v26 24-sample PPG records plus structural synthetic v20 optical and v21 IMU shapes; v20/v21 stay raw-archive-only and v26 uses a UInt16 index.",
+      "verification_level": "test",
+      "hardware": "unknown_upstream_test_fixture",
+      "firmware": "unknown_upstream_test_fixture",
+      "anonymization_method": "none_upstream_public_fixture",
+      "checksum": "58909c77fc28c6a314df3042268fab6fe9ba1b02db72c28ba5614379d13ee6e6"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:54-93; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/commands.dart:72-112",
+      "expected_decode": "Three static clock command vectors: SET_CLOCK at 0x12345678 plus 500 ms, SET_CLOCK at 1750000000 plus 999 ms, and payloadless GET_CLOCK sequence 5.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "70f5c2d4c96aaddec321e259763040c0204cba179dee9cdf4acbe960d8340242"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/constants.dart:34-88; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/commands.dart:65-307; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/control.dart:423-540; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:38-64; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/decode_guards_test.dart:304-440; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/hello_test.dart:58-80; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:198-262; 82b094c3c35fc6d159857b379e03b304a412b58d:lib/ble/ble_engine.dart:2926-3024; 82b094c3c35fc6d159857b379e03b304a412b58d:lib/ble/ble_state.dart:598-665; 82b094c3c35fc6d159857b379e03b304a412b58d:lib/gestures/gesture_dispatcher.dart:32-75; 82b094c3c35fc6d159857b379e03b304a412b58d:lib/gestures/gesture_settings.dart:12-53",
+      "expected_decode": "Pinned Gen 4 battery, Harvard identity, advertising-name/rename, haptic, and alarm command-family layouts with byte-exact padded-inner/full-frame vectors; outgoing gesture configuration remains an explicit open question with a fail-closed encoder because only incoming DOUBLE_TAP event 14 is sourced.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "3fb8fd8efb0b4d790f001c67f022daa3cc38a34fdc0249c1349a284c5f805b72"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/crc.dart:27-57; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:39-53; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24",
+      "expected_decode": "One CRC-8 length relationship and five CRC-32 payload relationships matching the five explicit INIT frame vectors.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "fbf1cb475e4533fa9dcaff11edb9c38aaa5ac4471bd76aa26bfff7d8500a3acd"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24",
+      "expected_decode": "Five valid INIT frames with exact hex payloads for sequences 0 through 4 and opcodes 0x23, 0x4c, 0x22, 0x43, and 0x16.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "2ee6b2aeda642d43aa5325db11bfd257b837ae338f30fee7cafc7e5116f98c82"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:8-23; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:67-126; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/commands.dart:31-52",
+      "expected_decode": "Three successful tokenized history ACK frames preserve their exact eight-byte tokens; one non-tokenized history failure is a failure with no ACK authorization.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "d68699f4adce34d0b05c0be5016b89a7aeb0e8651bdf5d2e0c92cf4f0620fee6"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:472-480; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:82-118; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/control.dart:574-618",
+      "expected_decode": "Three HISTORY_END metadata markers extract exact opaque eight-byte tokens and expected packet counts 42, 0, and 0 without normalization.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "5f5b5f881755f68f4be04aa4d1165c9c99b29b917e3f2c3d40c252e6ced7e024"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/commands.dart:54-63",
+      "expected_decode": "Five static INIT command frames: Hello, Advertising name, Data range, Alarm time, and Start historical data.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "345246beee0ba560d2677c2e781bc4513c953714ebcf2884c73bc286c03b95e3"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:152-158,160-164; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:57-75,111-131",
+      "expected_decode": "Mutated length CRC makes the declared length invalid; parseFrame returns null for the short input and FrameReassembler resynchronizes without emitting a frame.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "f32b6660dcb288397fba06086ae67cdc015ca61d70bb5f023ddc2e846097ec9f"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:15-28,57-75,123-135; docs/IMPLEMENTATION_PLAN.md \u00a79.2 lines 417-426 and \u00a79.3 lines 428-442",
+      "expected_decode": "Pinned parser: payload mutation preserves CRC-8 but invalidates CRC-32, so parseFrame returns a frame with valid=false. Pinned reassembler: emits that invalid frame and removes its declared bytes. Loopr reject-before-dispatch/recovery remains required_unverified_until_PRT_02_PRT_03_tests, per docs/IMPLEMENTATION_PLAN.md \u00a79.2 lines 417-426 and \u00a79.3 lines 428-442.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "b0074855aa507c14566b4788045f0ae9bc3e8fbb342fe216c4edb3ae9a26d2a6"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:15-28,57-75,123-135; docs/IMPLEMENTATION_PLAN.md \u00a79.2 lines 417-426 and \u00a79.3 lines 428-442",
+      "expected_decode": "Pinned parser: tail CRC-32 mutation preserves CRC-8 but produces a frame with valid=false. Pinned reassembler: emits that invalid frame and removes its declared bytes. Loopr reject-before-dispatch/recovery remains required_unverified_until_PRT_02_PRT_03_tests, per docs/IMPLEMENTATION_PLAN.md \u00a79.2 lines 417-426 and \u00a79.3 lines 428-442.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "aee6153daf68efb869db73a6c9c6e091db6a1cf1b501efcbe7ddf032687b654c"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:169-178; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:93-109,111-143",
+      "expected_decode": "Deleting one byte from frame A loses frame A, resynchronizes, and emits the following intact frame B with sequence 6 without swallowing later data.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "72d45a3b53f1522827d95388d00fc61a9448cd65e4faa1dd5ce475524251a999"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:57-75,111-122",
+      "expected_decode": "Declared length 3 is below the four-byte trailing CRC-32 minimum; parser returns null and reassembler resynchronizes without emitting a frame.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "89033efe0b7101a81d070734b0153254f17a73d5ca8392aacc5c37be20569d81"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:57-75,111-122",
+      "expected_decode": "Declared length 4099 exceeds the reassembler's 4096-byte bound; parser returns null for the short input and reassembler resynchronizes without emitting a frame.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "8a15ad3398dfcc5ab23d94617039341e3ed86082af06115b05372505c78949c4"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/framing.dart:57-75,123-132; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:142-149",
+      "expected_decode": "Final-byte truncation leaves an incomplete frame; parser returns null and reassembler retains the partial candidate without emitting a complete frame.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "03caae94ed09fd965f83c9cde4e0c7ddf682b1dc256f26179c0dac9826feaeca"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24; Fixtures/Protocol/frame_vectors.json: mechanical chunk rules",
+      "expected_decode": "Five exact pinned INIT frames reassemble validly under giant/coalesced, bytewise, MTU-20, and MTU-23 fragmentation; no bytes are added, removed, reordered, or normalized.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "7dee0ae8fbad66288de92e5ae041329cd513ccae76a817e44462d3fcb2330f0f"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:390-400; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/records.dart:247-298,407-485",
+      "expected_decode": "Supported version-12 88-byte literal decodes as version 12, epoch 1783529886, subsec 304, counter 21658795, HR 86, zero RR count, optical and sensor fields, and the raw tail.",
+      "verification_level": "code",
+      "hardware": "unknown_upstream_test_fixture",
+      "firmware": "unknown_upstream_test_fixture",
+      "anonymization_method": "none_upstream_public_fixture",
+      "checksum": "d7609284fb17674f05527175514fd0b746a0287f4a455cd49e481619647e0a6f"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:311-337; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/records.dart:221-275",
+      "expected_decode": "Supported synthetic version-18 helper decodes as version 18, epoch 287454020, subsec 258, counter 168496141, and HR 60.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "52d8eaa876f670238332d180ac29282a37433ff2e61a51f8c4947b703a2e8d3f"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/decode_guards_test.dart:13-19; 7edcb3e377329968118c62cb03a81d95e2f6db8e:test/decoder_test.dart:49-73; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/records.dart:247-385",
+      "expected_decode": "Supported version-24 96-byte literal decodes as version 24, epoch 1775395266, subsec 18568, counter 32324849, HR 98, RR intervals [728, 501], optical/sensor fields, acceleration, and raw tail. DEC-05 renames offset68 to unidentified_68 and decodes offset72 as 35.0\u00b0C. Raw bytes unchanged.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "e39713ab851baa04a01447183bcbf0e35d81872d95ffec78b1a54ae4a4faa05b"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/v25_test.dart:10-47; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/records.dart:171-218",
+      "expected_decode": "Supported version-25 frame 0 decodes as version 25, epoch 1781202813, counter 26624, and acceleration [0.9427, 0.0557, 0.0]; raw decoder zeros for HR/RR/optical channels are preserved separately, while those Loopr semantic fields are absent/unsupported under docs/IMPLEMENTATION_PLAN.md:107.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "8753dbac3884800ea1e47ecd5dd00580d653f69e85a34b92e4ece0a61b0403be"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/v25_test.dart:10-47; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/records.dart:171-218",
+      "expected_decode": "Supported version-25 frame 1 decodes as version 25, epoch 1781202814, counter 26625, and acceleration [0.986, 0.0557, 0.0]; raw decoder zeros for HR/RR/optical channels are preserved separately, while those Loopr semantic fields are absent/unsupported under docs/IMPLEMENTATION_PLAN.md:107.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "68c784643a662fa7f6e097c76fdc851b092c70dc2afdc977d6835d53ec279962"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/v25_test.dart:10-47; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/records.dart:171-218",
+      "expected_decode": "Supported version-25 frame 2 decodes as version 25, epoch 1781202815, counter 26626, and acceleration [0.9719, 0.0557, 0.0001]; raw decoder zeros for HR/RR/optical channels are preserved separately, while those Loopr semantic fields are absent/unsupported under docs/IMPLEMENTATION_PLAN.md:107.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "f2103f2067e122c2cb3ccf169d407d47ddfdf9784675f8409b2f6d4d4b20ff24"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:311-327; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/records.dart:221-275",
+      "expected_decode": "Supported synthetic version-7 helper decodes as version 7, epoch 287454020, subsec 258, counter 168496141, and HR 60.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "101bd207dcf4ca40f3c621e5bb4f6b43b48c508462d4490f85ebaa1734087863"
+    },
+    {
+      "upstream_sha": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+      "source_reference": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:311-327; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/records.dart:221-275",
+      "expected_decode": "Supported synthetic version-9 helper decodes as version 9, epoch 287454020, subsec 258, counter 168496141, and HR 60.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "dc708bd0f4b7e36fcb0b238842e9f2c9ead9d5f6b05d85f7fade020faa223480"
+    },
+    {
+      "upstream_sha": "not_applicable_clean_room_synthetic",
+      "source_reference": "Fixtures/Protocol/records/v24_synthetic_temperature_35c.json",
+      "expected_decode": "Synthetic v24 record decodes byte 72 as 35.0 degrees Celsius and preserves byte 68 as unidentified value 700.",
+      "verification_level": "test",
+      "hardware": "not_applicable_synthetic",
+      "firmware": "not_applicable_synthetic",
+      "anonymization_method": "synthetic_only_no_health_samples",
+      "checksum": "76c6dd7a508d27102544be09d7ebe4c3d665415598fb4d784a751f4e442e1f45"
+    }
+  ]
+}

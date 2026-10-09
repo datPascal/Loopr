@@ -1,0 +1,47 @@
+[
+  {
+    "sequence": 0,
+    "opcode": "0x23",
+    "purpose": "Hello",
+    "hex": "aa0800a823002300ada86a2d",
+    "source": "docs/IMPLEMENTATION_PLAN.md §9.5",
+    "pinned_source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/commands.dart:54-63",
+    "classification": "static_literal"
+  },
+  {
+    "sequence": 1,
+    "opcode": "0x4C",
+    "purpose": "Advertising name",
+    "hex": "aa0800a823014c00f2b5cdce",
+    "source": "docs/IMPLEMENTATION_PLAN.md §9.5",
+    "pinned_source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/commands.dart:54-63",
+    "classification": "static_literal"
+  },
+  {
+    "sequence": 2,
+    "opcode": "0x22",
+    "purpose": "Data range",
+    "hex": "aa0800a823022200824df537",
+    "source": "docs/IMPLEMENTATION_PLAN.md §9.5",
+    "pinned_source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/commands.dart:54-63",
+    "classification": "static_literal"
+  },
+  {
+    "sequence": 3,
+    "opcode": "0x43",
+    "purpose": "Alarm time",
+    "hex": "aa0800a823034301c54dd63d",
+    "source": "docs/IMPLEMENTATION_PLAN.md §9.5",
+    "pinned_source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/commands.dart:54-63",
+    "classification": "static_literal"
+  },
+  {
+    "sequence": 4,
+    "opcode": "0x16",
+    "purpose": "Start historical data",
+    "hex": "aa0800a823041600c7c25288",
+    "source": "docs/IMPLEMENTATION_PLAN.md §9.5",
+    "pinned_source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24; 7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/commands.dart:54-63",
+    "classification": "static_literal"
+  }
+]

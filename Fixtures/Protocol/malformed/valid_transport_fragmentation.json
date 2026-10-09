@@ -1,0 +1,69 @@
+{
+  "case": "pinned_init_fragmentation_scenarios",
+  "classification": "valid_transport_fragmentation; static_derived",
+  "semantic_status": "valid_transport_fragmentation; directory placement under malformed/ is an artifact-tree constraint, not semantic invalidity",
+  "source_citation": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:12-24; Fixtures/Protocol/frame_vectors.json",
+  "source_derivation": "Concatenate the five exact pinned INIT frame literals from frame_vectors.json, mechanically decode hex to bytes, and partition only at the listed zero-based half-open boundaries.",
+  "full_frame_hex": [
+    "aa0800a823002300ada86a2d",
+    "aa0800a823014c00f2b5cdce",
+    "aa0800a823022200824df537",
+    "aa0800a823034301c54dd63d",
+    "aa0800a823041600c7c25288"
+  ],
+  "source_stream_hex": "aa0800a823002300ada86a2daa0800a823014c00f2b5cdceaa0800a823022200824df537aa0800a823034301c54dd63daa0800a823041600c7c25288",
+  "expected_reassembled_frame_hex": [
+    "aa0800a823002300ada86a2d",
+    "aa0800a823014c00f2b5cdce",
+    "aa0800a823022200824df537",
+    "aa0800a823034301c54dd63d",
+    "aa0800a823041600c7c25288"
+  ],
+  "stream_encoding": {
+    "hex_character_count": 120,
+    "decoded_byte_count": 60,
+    "frame_byte_lengths": [12, 12, 12, 12, 12]
+  },
+  "boundary_unit": "zero-based decoded-byte position",
+  "boundaries_are_decoded_hex_bytes": true,
+  "boundary_semantics": "zero-based decoded-byte positions; fragmentation ranges are half-open [start:end]",
+  "expected_output": {
+    "valid_frame_count": 5,
+    "closed_mode_meaning": "Each ordered chunk sequence concatenates byte-for-byte to the source stream and emits exactly the five pinned INIT frames; no bytes are added, removed, reordered, or normalized."
+  },
+  "chunking_scenarios": [
+    {
+      "mode": "giant_coalesced_stream",
+      "boundaries": [0, 60],
+      "chunks_hex": ["aa0800a823002300ada86a2daa0800a823014c00f2b5cdceaa0800a823022200824df537aa0800a823034301c54dd63daa0800a823041600c7c25288"],
+      "chunk_definition": "decoded_source_stream_bytes[start:end] with half-open ranges",
+      "concatenation_reproduces_source_stream": true
+    },
+    {
+      "mode": "bytewise_chunks",
+      "boundaries": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60],
+      "chunks_hex": ["aa", "08", "00", "a8", "23", "00", "23", "00", "ad", "a8", "6a", "2d", "aa", "08", "00", "a8", "23", "01", "4c", "00", "f2", "b5", "cd", "ce", "aa", "08", "00", "a8", "23", "02", "22", "00", "82", "4d", "f5", "37", "aa", "08", "00", "a8", "23", "03", "43", "01", "c5", "4d", "d6", "3d", "aa", "08", "00", "a8", "23", "04", "16", "00", "c7", "c2", "52", "88"],
+      "chunk_definition": "decoded_source_stream_bytes[start:end] with half-open ranges",
+      "concatenation_reproduces_source_stream": true
+    },
+    {
+      "mode": "mtu_20",
+      "boundaries": [0, 20, 40, 60],
+      "chunks_hex": ["aa0800a823002300ada86a2daa0800a823014c00", "f2b5cdceaa0800a823022200824df537aa0800a8", "23034301c54dd63daa0800a823041600c7c25288"],
+      "chunk_definition": "decoded_source_stream_bytes[start:end] with half-open ranges; each range is at most 20 bytes",
+      "concatenation_reproduces_source_stream": true
+    },
+    {
+      "mode": "mtu_23",
+      "boundaries": [0, 23, 46, 60],
+      "chunks_hex": ["aa0800a823002300ada86a2daa0800a823014c00f2b5cd", "ceaa0800a823022200824df537aa0800a823034301c54d", "d63daa0800a823041600c7c25288"],
+      "chunk_definition": "decoded_source_stream_bytes[start:end] with half-open ranges; each range is at most 23 bytes",
+      "concatenation_reproduces_source_stream": true
+    }
+  ],
+  "mechanical_validation": {
+    "concatenation_matches_source_stream": true,
+    "reassembled_frames_match_expected_exactly": true,
+    "method": "Decode each chunk hex, concatenate, split at the pinned frame byte lengths, and compare exact bytes."
+  }
+}

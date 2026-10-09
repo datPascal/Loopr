@@ -1,0 +1,34 @@
+{
+  "fixture": "compact_live_hr_0x28",
+  "kind": "protocol_decoder_provenance",
+  "upstream": {
+    "repository": "OpenStrap Code/protocol",
+    "commit": "7edcb3e377329968118c62cb03a81d95e2f6db8e",
+    "decoder": "lib/src/control.dart:165-215",
+    "rr_helper": "lib/src/live.dart:151-191",
+    "tests": [
+      "test/decode_guards_test.dart:222-301",
+      "test/whoop_protocol_update_test.dart:483-524"
+    ]
+  },
+  "contract": {
+    "packetType": "0x28",
+    "timestampOffset": 2,
+    "timestampEncoding": "uint32-little-endian",
+    "heartRateOffset": 8,
+    "heartRateRangeBPM": [1, 250],
+    "rrCountOffset": 9,
+    "rrOffsets": [10, 12, 14, 16],
+    "rrEncoding": "uint16-little-endian",
+    "rrRangeMilliseconds": [200, 2500],
+    "wearingOffset": 18,
+    "omittedWearingMeans": "worn",
+    "payloadForms": ["fullInner", "strippedPayload"]
+  },
+  "verification": {
+    "rawBytesStayEphemeral": true,
+    "malformedAndOffWristFailClosed": true,
+    "swiftTest": "CompactLiveHeartRateTests",
+    "sourceConstant": "CompactLiveHeartRateDecoder.upstreamCommit"
+  }
+}

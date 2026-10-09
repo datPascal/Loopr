@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleURLTypes</key>
+    <array><dict><key>CFBundleURLSchemes</key><array><string>loopr</string></array></dict></array>
+    <key>UTExportedTypeDeclarations</key>
+    <array><dict>
+        <key>UTTypeIdentifier</key><string>com.loopr.gpx</string>
+        <key>UTTypeDescription</key><string>Workout route</string>
+        <key>UTTypeConformsTo</key><array><string>public.xml</string></array>
+        <key>UTTypeTagSpecification</key><dict>
+            <key>public.filename-extension</key><array><string>gpx</string></array>
+            <key>public.mime-type</key><string>application/gpx+xml</string>
+        </dict>
+    </dict></array>
+    <key>CFBundleDisplayName</key>
+	<string>Loopr</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.loopr.bluetooth.sync</string>
+		<string>com.loopr.bluetooth.refresh</string>
+	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LooprHabitInsightsStage</key>
+	<string>internalOnly</string>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Loopr sets a backup alarm on this iPhone so you are still woken if your band does not buzz.</string>
+	<key>NSAccessorySetupBluetoothServices</key>
+	<array>
+		<string>61080001-8D6D-82B8-614A-1C8CB0F8DCC6</string>
+		<string>FD4B0001-CCE1-4033-93CE-002D5875F58A</string>
+	</array>
+	<key>NSAccessorySetupKitSupports</key>
+	<array>
+		<string>Bluetooth</string>
+	</array>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Loopr connects to your fitness band over Bluetooth so your health data syncs to this iPhone.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Loopr connects to your fitness band over Bluetooth so your health data syncs to this iPhone.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Loopr reads sleep, heart rate, resting heart rate, heart rate variability (SDNN), respiratory rate, VO₂ max, steps, and active energy from Apple Health for your history and Cardio Age.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Loopr saves heart rate, resting heart rate, heart rate variability (SDNN), respiratory rate, sleep stages, estimated steps and active energy, and completed workouts to Apple Health when you allow them.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>x-apple-health</string>
+	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Loopr uses your location only while you explicitly record an eligible run, cycle, or walk route.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Manrope-400.ttf</string>
+		<string>Manrope-500.ttf</string>
+		<string>Manrope-600.ttf</string>
+		<string>Manrope-700.ttf</string>
+		<string>Manrope-800.ttf</string>
+		<string>BarlowCondensed-Bold.ttf</string>
+		<string>BarlowCondensed-ExtraBold.ttf</string>
+		<string>SpaceGrotesk-Regular.ttf</string>
+		<string>SpaceGrotesk-Medium.ttf</string>
+		<string>SpaceGrotesk-SemiBold.ttf</string>
+		<string>SpaceGrotesk-Bold.ttf</string>
+		<string>IBMPlexMono-Regular.ttf</string>
+		<string>IBMPlexMono-Medium.ttf</string>
+		<string>IBMPlexMono-SemiBold.ttf</string>
+	</array>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+		<string>processing</string>
+		<string>fetch</string>
+	</array>
+</dict>
+</plist>

@@ -1,0 +1,17 @@
+{
+  "$schema": {
+    "description": "Documentation for required fields on each future fixture entry.",
+    "entry_fields": {
+      "upstream_sha": "Upstream SHA.",
+      "source_reference": "Source test or capture reference.",
+      "expected_decode": "Expected decode.",
+      "verification_level": "Verification level; must be one of code, test, or hardware.",
+      "hardware": "Hardware, when applicable.",
+      "firmware": "Firmware, when applicable.",
+      "anonymization_method": "Anonymization method.",
+      "checksum": "Checksum."
+    },
+    "verification_level_enum": ["code", "test", "hardware"]
+  },
+  "entries": []
+}

@@ -1,0 +1,1 @@
+{"metric":"illnessCusum","dates":["2024-01-01","2024-01-02","2024-01-03","2024-01-04","2024-01-05","2024-01-06","2024-01-07","2024-01-08","2024-01-09"],"resting_heart_rate":[60,61,60,61,60,61,60,80,80],"baseline_days":28,"k":0.5,"threshold":4,"persist_days":1,"min_baseline":7,"return_z":0.5,"recover_days":2}

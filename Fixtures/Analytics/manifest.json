@@ -1,0 +1,644 @@
+{
+  "$schema": {
+    "description": "Documentation for required fields on each future fixture entry.",
+    "entry_fields": {
+      "upstream_sha": "Upstream SHA.",
+      "source_reference": "Source test or capture reference.",
+      "expected_decode": "Expected decode.",
+      "verification_level": "Verification level; must be one of code, test, or hardware.",
+      "hardware": "Hardware, when applicable.",
+      "firmware": "Firmware, when applicable.",
+      "anonymization_method": "Anonymization method.",
+      "checksum": "Checksum."
+    },
+    "verification_level_enum": [
+      "code",
+      "test",
+      "hardware"
+    ]
+  },
+  "entries": [
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Baselines/baseline_fold.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "c3d090e5bf11d8030df2e85e76b5055191c31b7e35f334be85af1287af5dd88f"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Baselines/baseline_prior_only.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "8169bc71439fa050538d1fcc1077c13c73ca7fab3f7a608f1fdff1e3369258e4"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Baselines/gap_aware_ewma.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "b28c60f0785bddc6ffa00b3ed71ea0158f79ae15d8691df77c9fdc9d6691e2b4"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Baselines/robust_baseline.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "695518136081ffbc0bc93680433de4b63b1afa234c7dcaf533ef62c2425806ba"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: DayCurves/strict_prior.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "6c1647a5daffc8e45149212b4cee1e39bfca52017508e9dfb697e6dabc819a3c"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: HRRecovery/recovery.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "eba387ec1e0a73d4424b4937d18d47baa04a592f22433a4ebe2bcc1662a6a20c"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: HRVFreq/frequency_domain.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "89d51aea86225e915ac4bac89576c242b21f8034b6c436cbb79495d83b20026f"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: HRVTime/absence.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "0b15064d6912b8ad56dd8ae1a19db5291be00c8d01ddb2714ce5e30692cb0467"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: HRVTime/sleep_session_absence.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "b0fff1d3acbae6968a5061189f54b97875ca89bc3a43e0bdc365469002c00abc"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: HRVTime/time_domain.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "c43762f2191f5eb7641f5826a3ea3eb2c9b8423019efe7fa60e319214ee5fad3"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Hypnogram/aasm_metrics.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "f8ebe0bc86ebe337f78a08853bb4527c0bb5a4c98580ac06308666564af201a9"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Hypnogram/regularity.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "33babc1345ce5b989897ed2d22b1e4450609bd3844018d2b66fb4114b142f388"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Movement/energy_alignment.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "4ba17fafefd3d9772cee00468710b28b073ccebe5f25642dd796e982aa37cffb"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Movement/static_tilt.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "d0b7ca9fd240bad23d56515a408c225c126c3031b7ae81abf4f0d45ec17cb438"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Movement/step_counter_backlog.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "d9043dc33fa1beba90dcd1229ca6371c8e4ec079532982e270488d5925d0b216"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Movement/step_counter_reset.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "3a167ed039f73cefa4e073ffbba9e0935fa69b149b8623979e7cd8e13b15dcb1"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Nocturnal/dst_fall_back.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "4556cdf6798d666d42fd9bace8d216535bd980856948d384e6d20dce0f0d98d9"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Nocturnal/dst_spring_forward.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "3a7a28afa1f65a9f9acbf14e98631ced56617561bd91a0d2fbcaff6d9f9b5170"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Nocturnal/hr_dip_small.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "85a73952f15b659fede7d1cf6d1ae7b04dbb5a22ea70ebea35db8b4903418b2a"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Nocturnal/nocturnal_rhr_small.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "42d75764bbb969e3903950c070053a1d742476f6338871274faae6558f425081"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Nocturnal/timezone_travel_tokyo.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "3651ed9daa7d11235ae9e5806dd9e0f42f8c4d7bcc1fd3151d4465103ad18831"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: RRQuality/clean_rr.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "93e6eee376b711a0e05df7798ad24ef52d19b6f28f7099925f71f62e0d68c49b"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: RRQuality/noisy_rr.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "c051880e04d7a2b85078cd4bc8947e006d68e33bc66b7db5851d60a66c44e18c"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: RRQuality/noisy_rr_gate.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "c26d63ff3312093d4c4894502ebc412673eb6e9a08b865bb97a7db9196252b4a"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: RRQuality/ppg_gate.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "f1b56a628e85e309900423124c7035638afbd5f0efd0fc8e66de60d730749573"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Readiness/anomaly.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "640c3f859d6151e9a4e50b29a5883fa7d7640024298418e564a4b81bf46bfa4d",
+      "algorithm_version": "ana04.anomaly.v2.calendar-small-sample",
+      "behavior_change": "DEC-05: calendar-day baseline and persistence windows, populated three-signal covariance, MIT OpenStrap 27b0ba486234 empirical MAD small-sample inflation. The older pinned Dart v1 result is superseded for this detector; all other parity contracts and tolerances remain unchanged."
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Readiness/changepoint.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "6934d3028743da09d2fe35ba2e175238c2eeb779ece72569b8f6e6e951184133"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Readiness/illness.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "b85b73a0a0c3087385260206fee68bea5161bca47541043d0f0a46af0a77d8f9"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Readiness/typed.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "823afdde93b4fcbc9b03602a6040af733e8b61c7a1a3accd6f4d19d19a252e42"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Respiration/brv.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "7ea55af1cca319aa5f8a20be1ab961109dcbf58da880af349314e1c485e43537"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Respiration/brv_absence.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "7feb7f47580fb2a8ac9621017c24716a167271b511422839b98dda7a36617f8d"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Respiration/riiv_absence.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "110a6ed2cccb13ebeab41d9e71ce70ad1ead70c63f39e55ec4a01eacc2be0961"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Respiration/riiv_positive.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "a74ffe46ef4159d499a808acef8610f29a87ef621dc94d69789845d06f2063e9"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Respiration/rsa_absence.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "d3a1c2b50adca5a8276643dcbe8c608c4fa933fc2603d4d81076605a13bbeec9"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Respiration/rsa_positive.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "0822d5c59fa04e577bca69e68ffd923bd182c7c5b0b77460e9c778b37f9086a4"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Sleep/accounting.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "a07428fdebae04310426c4692ce49aa9f7bd832d6625f6e9a3ede7177cf1af62"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Sleep/cardio_features.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "c3a3b339002712e443a71a830b1f7899475bb4f4d6f2d6bac3ac107542d0b34d"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Sleep/hr_fallback.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "a7d53ff920d22c0f975de396f9f9f32e280b2a2c516540b3025c489f669fb1da"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Sleep/regularity.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "33babc1345ce5b989897ed2d22b1e4450609bd3844018d2b66fb4114b142f388"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: SleepAccounting/accounting.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "fc4568e0a331ec61b58b5e3aab0ac0455af12e6293df6bdc1697ee37f8d89962"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: SleepDayAssignment/fall_back.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "10a3157814070cebb9a0a009fb9ba974890de35e0021fc2672a8507d03da225f"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: SleepDayAssignment/spring_forward.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "165040fb3fef0f6b8a267c9bd19d12ba4cc2b40d35b19ddd91491333fb4971e7"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: SleepDayAssignment/timezone_travel.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "9e625b742e77b95885e9746de127385a8924ec7d48d1b7db46b573a09ee4dda8"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: SleepSegment/no_hr_absence.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "83cfdf12ca575617f4d20dff6f69e038286d87f1e01910ec2c65c335343a08c3"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: SleepStaging/cardio_features.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "c3a3b339002712e443a71a830b1f7899475bb4f4d6f2d6bac3ac107542d0b34d"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: SleepStaging/hr_fallback.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "a7d53ff920d22c0f975de396f9f9f32e280b2a2c516540b3025c489f669fb1da"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Strain/strain_no_workout_day.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "183620ca5c6527ca579ddd86cb59f2d5a8516db2e8a14ed204d79261a0d15651"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Strain/strain_workout_day.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "8cd0d926281c3f902fdc1ca9bc6fd53424561e34909f86daaf39cdde162a6f1c"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Stress/quality_gate.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "16efa5cb9ed618d563b182e5721f292a19706198064db4c952baaa2dd78a2ff8"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "DEC-05.4; independent versioned Dart reference",
+      "expected_decode": "Loopr readiness v2 fixture: Wellness/readiness_typed.input.json. Two usable signals, RHR SD >=1 bpm, guarded dispersion and early-history caution deliberately supersede pinned readiness v1.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "f89ee4ca95d9aebf54cb9343bf3ad33f13d2f8851b90294dcb567a8bd83c4948"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Wellness/stress_quality_gate.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "16efa5cb9ed618d563b182e5721f292a19706198064db4c952baaa2dd78a2ff8"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Workout/bout_calories.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "2c40ccf42855f167aedfec3f8c9b6e4110c6bf5a76bae3ee6c3de03fd24dd5a5"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Workout/daily_energy.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "8bae423bb7a4df53855f6a118a6b599a82046064c7f692d9b7212b773648a43f"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Workout/detect.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "57f3250a050d4c4fa1db1155f76563d67b84faa8d13f24cc34b2730f732ec5ac"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: Workout/no_workout.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "84e6ff104c15a98aa6e2023c6bb69f8bb21938d723d2a518a64f1db10598972b"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: WorkoutDetect/detect.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "b62dddffa595b8f7b8ba219a48fbc68ec052ac33ed0b181c744442949fba822e"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: friend_reference_v1.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "e02a7ac1383e874e529bbec915c9435cc4b54b9c3d3e332788bde20e69fc9e37"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: strain_score_metric_335.input.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "ae87636b9cc9a8b7000d2a219e57f98209beeadbe7ac06721d544c1077b2d729"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: strain_score_metric_335.output.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "810ef4638b595cf185d4e2e2e8c8f2823b1bff3cd7adef8142032ee9864570e0"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: strain_score_metric_335.provenance.json.",
+      "verification_level": "test",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "4819ea03c507a0620bd68d7c3bfc25b080a4ebc5a2c4e219873d7c44bd3cb496"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: strain_score_metric_335_runner.dart.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "fb9ddb80b194f0dcb26250445a566443e513e40721f78f100bd8bd5eded3a3d4"
+    },
+    {
+      "upstream_sha": "f0d115308aa5e9e3c82ee113c3d52e59756121d4",
+      "source_reference": "f0d115308aa5e9e3c82ee113c3d52e59756121d4:lib/onehz.dart:1",
+      "expected_decode": "Canonical source-derived analytics parity fixture: tolerance-manifest.json.",
+      "verification_level": "code",
+      "hardware": "not_applicable_source_derived",
+      "firmware": "not_applicable_source_derived",
+      "anonymization_method": "n/a",
+      "checksum": "9b852b3c6232298e653976794fdf627913e7c59839d49d480cb1372805dd8d5b"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "fixture": "REF-02A.4",
+  "classification": "static_derived",
+  "expected_behavior": {
+    "parse": "Recognize METADATA subtype 0x02 as HISTORY_END; read expected packet count at inner offset 9 when present and the opaque token at inner[13:21] only when 21 inner bytes are present.",
+    "extraction": "Extract exactly eight bytes in source order; preserve every byte verbatim and do not normalize, decode, reverse, or synthesize a token.",
+    "build": "The full frame hex is mechanically derived with buildFrame from the recorded inner bytes; it is not an independently observed wire capture.",
+    "normalization": "none"
+  },
+  "markers": [
+    {
+      "id": "history_end_1122334455667788",
+      "subtype_hex": "02",
+      "token_hex": "1122334455667788",
+      "expected_packet_count": 42,
+      "inner_hex": "3100020000000000002a0000001122334455667788",
+        "classification": "static_literal",
+        "full_frame_hex": "aa1c00ab3100020000000000002a0000001122334455667788000000f2d42730",
+        "full_frame_classification": "static_derived",
+      "source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:472-480"
+    },
+    {
+      "id": "history_end_0908070605040302",
+      "subtype_hex": "02",
+      "token_hex": "0908070605040302",
+      "expected_packet_count": 0,
+      "inner_hex": "310002000000000000000000000908070605040302",
+      "classification": "static_literal",
+      "full_frame_hex": "aa1c00ab31000200000000000000000000090807060504030200000015229d63",
+      "full_frame_classification": "static_derived",
+      "source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:82-94"
+    },
+    {
+      "id": "history_end_deadbeef11223344",
+      "subtype_hex": "02",
+      "token_hex": "deadbeef11223344",
+      "expected_packet_count": 0,
+      "inner_hex": "31070200000000000000000000deadbeef11223344",
+      "classification": "static_literal",
+      "full_frame_hex": "aa1c00ab31070200000000000000000000deadbeef112233440000000b2f5359",
+      "full_frame_classification": "static_derived",
+      "source": "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:97-118"
+    }
+  ],
+  "verification": "Dart unavailable; no runtime execution; token slices and frame envelopes are statically cited or mechanically derived.",
+  "source_citations": [
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/constants.dart:104-116",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/control.dart:590-618",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/whoop_protocol_update_test.dart:472-480",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/framing_test.dart:82-118"
+  ]
+}

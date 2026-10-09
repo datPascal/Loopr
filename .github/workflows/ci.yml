@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: iOS unit tests
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Select an available iPhone simulator
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json
+          import subprocess
+
+          devices = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "devices", "available", "-j"], text=True
+          ))["devices"]
+          iphones = [device for runtime in devices.values() for device in runtime
+                     if device["name"].startswith("iPhone") and device["isAvailable"]]
+          if not iphones:
+              raise SystemExit("No available iPhone simulator")
+          print(f"SIM_DESTINATION=platform=iOS Simulator,id={iphones[0]['udid']}")
+          PY
+      - name: Run unit tests
+        run: |
+          xcodebuild test \
+            -project Loopr/Loopr.xcodeproj \
+            -scheme Loopr \
+            -destination "$SIM_DESTINATION" \
+            -only-testing:LooprTests \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Run package tests
+        working-directory: LooprPackages
+        run: |
+          xcodebuild test \
+            -scheme LooprPackages-Package \
+            -destination "$SIM_DESTINATION" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            CODE_SIGNING_ALLOWED=NO
+
+  app-build:
+    name: Unsigned iOS build
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Compile the app
+        run: |
+          xcodebuild build \
+            -project Loopr/Loopr.xcodeproj \
+            -scheme Loopr \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    timeout-minutes: 10
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"

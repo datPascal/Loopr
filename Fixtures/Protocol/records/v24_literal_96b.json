@@ -1,0 +1,53 @@
+{
+  "fixture": "REF-02A.5-v24-literal-96b",
+  "scope": "WHOOP 4 historical record inner bytes; no transport envelope",
+  "version": 24,
+  "classification": "static_literal",
+  "basis": "Exact raw literal from the pinned decoder golden test; no transport envelope is included.",
+  "raw_hex": "2f1805f13ced01c261d2698848805454016202d802f5010000000000609f0fff80de233d3dda19be5c87a9be7b14803f0020dc463dda19be5c87a9be7b14803f16028402bc0286025e01000b010c020c0000000000370001510c000000000000",
+  "byte_count": 96,
+  "byte_count_basis": "authoritative decoded length of raw_hex",
+  "expected_decode": {
+    "status": "decoded",
+    "fields": {
+      "hist_version": 24,
+      "ts_epoch": 1775395266,
+      "ts_subsec": 18568,
+      "counter": 32324849,
+      "hr": 98,
+      "rr_count": 2,
+      "rr_intervals_ms": [
+        728,
+        501
+      ],
+      "ppg_green": 3999,
+      "ppg_red_ir": 33023,
+      "accel_g": [
+        -0.1502,
+        -0.3311,
+        1.0006
+      ],
+      "skin_contact": 70,
+      "spo2_red_raw": 534,
+      "spo2_ir_raw": 644,
+      "ambient_raw": 646,
+      "raw_tail": "805454016202d802f5010000000000609f0fff80de233d3dda19be5c87a9be7b14803f0020dc463dda19be5c87a9be7b14803f16028402bc0286025e01000b010c020c0000000000370001510c000000000000",
+      "unidentified_68": 700,
+      "skin_temperature_celsius": 35.0
+    },
+    "basis": "Pinned source field map and exact literal offsets: version[1], counter u32le[3:7], timestamp u32le[7:11], subsec u16le[11:13], HR[17], accepted RR values at [19:23], PPG u16le[29:33], float32le acceleration[36:48] rounded to four decimals, skin contact[51], optical u16le fields[64:72], and raw_tail=raw[13:]. Temperature u16le[72:74]/10 follows DEC-05; offset68 is unidentified.",
+    "omitted_fields": []
+  },
+  "decoder_strategy": {
+    "name": "parseR24.legacy_89b",
+    "support": "supported",
+    "expected_result": "trusted v24 field map decodes without the plausibility gate"
+  },
+  "citations": [
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/decode_guards_test.dart:13-19",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:test/decoder_test.dart:49-73",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/records.dart:247-275",
+    "7edcb3e377329968118c62cb03a81d95e2f6db8e:lib/src/records.dart:307-385"
+  ],
+  "verification": "Dart unavailable; no runtime execution. The literal, byte count, every expected offset value, four-decimal rounding, and raw_tail slice are statically reproduced from the pinned test/source citations."
+}

@@ -1,0 +1,15 @@
+{
+  "allowlist": [],
+  "tuple_schema": {
+    "fields": [
+      "model_identity",
+      "firmware_version",
+      "capability"
+    ]
+  },
+  "schema_note": "no version ranges or 'newer than' matching is permitted; each entry names one exact firmware version.",
+  "documentation": {
+    "dec_04_item_2_verbatim": "2. **Capability persistence:** Store beta capability state in a dedicated SQLite policy table, separate from sync cursors and user consent. The effective state is the intersection of a compile-time production allowlist, a bundled versioned policy, exact hardware evidence, the durable local master switch, per-capability local switches, current identity/firmware match, and current-session health. No persisted setting can expand beyond the bundled allowlist.",
+    "implementation_timing": "Actual SQLite policy-table creation is deferred to a later STO/G5 implementation because StorageKit does not exist yet; this file records the requirement only and does not implement the table."
+  }
+}

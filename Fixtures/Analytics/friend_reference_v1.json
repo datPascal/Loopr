@@ -1,0 +1,12 @@
+{
+  "referenceVersion": 1,
+  "unit": "mL/kg/min",
+  "points": [
+    { "calculationAge": 25, "femaleMedian": 37.6, "maleMedian": 48.0 },
+    { "calculationAge": 35, "femaleMedian": 30.2, "maleMedian": 42.4 },
+    { "calculationAge": 45, "femaleMedian": 26.7, "maleMedian": 37.8 },
+    { "calculationAge": 55, "femaleMedian": 23.4, "maleMedian": 32.6 },
+    { "calculationAge": 65, "femaleMedian": 20.0, "maleMedian": 28.2 },
+    { "calculationAge": 75, "femaleMedian": 18.3, "maleMedian": 24.4 }
+  ]
+}

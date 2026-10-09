@@ -1,0 +1,5 @@
+{
+  "route_eligible": ["run", "cycle", "walk"],
+  "route_ineligible": ["strength", "swim", "cardio", "yoga", "hiit", "other", "manual", "imported", "auto_detected"],
+  "rule": "a detected session may gain a route only if the user confirms it while a live eligible session can still be recorded; Loopr never reconstructs a route after the fact."
+}

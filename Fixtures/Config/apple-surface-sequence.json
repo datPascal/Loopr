@@ -1,0 +1,12 @@
+{
+  "ordered_sequence": [
+    "shared snapshot",
+    "Today and battery widgets",
+    "workout Live Activity with the durable workout slice",
+    "breathing Live Activity with breathing",
+    "read-only metric/navigation App Intents",
+    "confirmation-gated idempotent actions after their domain actions exist",
+    "read-only Watch app and complications"
+  ],
+  "constraint": "No surface may introduce a second Bluetooth owner or read the primary database directly."
+}

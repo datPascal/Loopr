@@ -1,0 +1,218 @@
+{
+  "cardio_age_available": false,
+  "loopr_owned_vo2max_available": false,
+  "composite_loopr_age_available": false,
+  "schema_note": "Availability flags are root-level and named objects hold cited evidence.",
+  "cardio_age": {
+    "required_evidence": [
+    {
+      "quote": "Cardio Age may ship only with an eligible `VO2max` source and the FRIEND reference behavior in `LOOPR_AGE.md`: source provenance, 42-day median and sample coverage rules or a fresh CPET, exact interpolation/boundary fixtures, published-reference verification, supported reference-curve selection, uncertainty/absence behavior, non-medical language, and privacy/legal review. Resting-HR-only `VO2max` estimates are prohibited.",
+      "source": "docs/PRODUCT_DECISIONS.md, DEC-02 item 10"
+    },
+    {
+      "quote": "Select `VO2max` sources in this order:\n\n1. A recent supervised CPET result explicitly entered as measured.\n2. Authorized HealthKit `VO2max` samples from a compatible source.\n3. A Loopr exercise-based estimate only after it passes the validation gate below.\n\nFor recurring estimates, use the median of valid samples over 42 days and require at least three eligible samples on distinct days spanning at least 14 days. A measured CPET may stand alone for 180 days. Do not estimate `VO2max` from resting HR or HRV alone; a Loopr estimate requires an observable workload such as GPS pace, treadmill speed/grade, cycling power, or a defined field-test protocol.",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 2. Cardio Age, lines 99-105"
+    },
+    {
+      "quote": "Version 1 uses the FRIEND treadmill CPET medians. Represent each published decade group at its rounded midpoint:",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 2. Cardio Age, line 107"
+    },
+    {
+      "quote": "Cardio Age reproduces every FRIEND fixture and interpolation boundary.",
+      "source": "docs/LOOPR_AGE.md, §Acceptance Criteria, bullet 2"
+    },
+    {
+      "quote": "Values are `mL/kg/min`. Ask the user which published physiological reference curve to use; do not infer it from gender identity or presentation. If the user is outside the supported population or declines a reference curve, Cardio Age is unavailable.",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 2. Cardio Age, line 118"
+    },
+    {
+      "quote": "For `VO2max` value `v`, invert the monotone median curve. Between calculation ages `a1` and `a2`, where `M1 >= v >= M2`:\n\n```text\nCardio Age = a1 + (M1 - v) / (M1 - M2) * (a2 - a1)\n```\n\nRound only for display. Show `25 or younger` or `75 or older` at the evidence boundaries rather than extrapolating.",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 2. Cardio Age, lines 120-126"
+    },
+    {
+      "quote": "Ship versioned FRIEND fixtures, Cardio Age interpolation, source selection, and boundary tests.",
+      "source": "docs/LOOPR_AGE.md, §Build Plan, Stage A, bullet 3"
+    },
+    {
+      "quote": "Confidence reflects input quality, coverage, model applicability, and uncertainty:\n\n- **Established:** at least 180 days, strong coverage, validated model variant, supported population.\n- **Provisional:** 90-179 days with all required domains and adequate coverage.\n- **Low confidence:** shown only in detail when inputs pass minimum gates but uncertainty is material.\n- **Unavailable:** missing required domain, unsupported population/condition, stale data, failed quality, or no matching model variant.\n\nDo not invent an uncertainty range. Derive intervals through validated model uncertainty and input error propagation, especially `VO2max` error.",
+      "source": "docs/LOOPR_AGE.md, §Missing Data and Confidence, lines 187-194"
+    },
+    {
+      "quote": "Product and App Store language must call it an estimated fitness/healthspan age and must not imply that Loopr measures whole-body biological aging.",
+      "source": "docs/LOOPR_AGE.md, §Product Definition, line 11"
+    },
+     {
+       "quote": "Complete independent scientific, clinical-language, privacy, and legal review.",
+        "source": "docs/LOOPR_AGE.md, §Build Plan, Stage C, bullet 5"
+     },
+     {
+       "quote": "OpenStrap already emits a `fitness_age` result from `analytics/lib/src/onehz/human/coaching.dart`, but that implementation must not ship as Loopr Age.",
+       "source": "docs/LOOPR_AGE.md, §OpenStrap Assessment, line 37"
+     },
+     {
+       "quote": "It estimates `VO2max` as:\n\n```text\nVO2max = 15.3 * (HRmax / restingHR)\n```",
+       "source": "docs/LOOPR_AGE.md, §OpenStrap Assessment, lines 39-43"
+     },
+     {
+       "quote": "It then starts at chronological age and applies hand-authored year adjustments for `VO2max`, resting HR, RMSSD, sleep duration, sleep efficiency, and steps. The thresholds and year conversions are not fitted as an age or outcome model, correlated inputs are counted independently, missing inputs alter the meaning, and the implementation reports only `0.15-0.35` confidence.",
+       "source": "docs/LOOPR_AGE.md, §OpenStrap Assessment, line 45"
+     },
+     {
+       "quote": "Keep this code only as a reference prototype. Do not port its constants or publish its output. Loopr requires a versioned model with documented training data, outcome, calibration, missing-data variants, error, and subgroup performance.",
+       "source": "docs/LOOPR_AGE.md, §OpenStrap Assessment, line 47"
+     }
+    ]
+  },
+  "loopr_owned_vo2max": {
+    "required_evidence": [
+    {
+      "quote": "Keep unavailable until the prospective CPET comparison and subgroup validation gate in `LOOPR_AGE.md` passes. Another consumer wearable is not validation evidence.",
+      "source": "docs/PRODUCT_DECISIONS.md, DEC-02 item 11"
+    },
+    {
+      "quote": "1. Pre-register eligible workout protocols, exclusions, target population, and estimator.",
+      "source": "docs/LOOPR_AGE.md, §Loopr-Owned `VO2max` Validation Gate, item 1"
+    },
+    {
+      "quote": "2. Compare against same-period laboratory CPET, not another consumer wearable.",
+      "source": "docs/LOOPR_AGE.md, §Loopr-Owned `VO2max` Validation Gate, item 2"
+    },
+    {
+      "quote": "3. Validate on a held-out cohort across age, reference group, skin tone, fitness level, body size, terrain, and supported hardware.",
+      "source": "docs/LOOPR_AGE.md, §Loopr-Owned `VO2max` Validation Gate, item 3"
+    },
+    {
+      "quote": "4. Report mean bias, mean absolute error, limits of agreement, test-retest reliability, failure rate, and subgroup results.",
+      "source": "docs/LOOPR_AGE.md, §Loopr-Owned `VO2max` Validation Gate, item 4"
+    },
+    {
+      "quote": "5. Set thresholds before seeing holdout results and disable unsupported conditions.",
+      "source": "docs/LOOPR_AGE.md, §Loopr-Owned `VO2max` Validation Gate, item 5"
+    },
+    {
+      "quote": "6. Version every model and preserve historical provenance.",
+      "source": "docs/LOOPR_AGE.md, §Loopr-Owned `VO2max` Validation Gate, item 6"
+    },
+    {
+      "quote": "Until this gate passes, Cardio Age and composite Loopr Age require measured or independently validated `VO2max` input.",
+      "source": "docs/LOOPR_AGE.md, §Loopr-Owned `VO2max` Validation Gate, line 281"
+    }
+    ]
+  },
+  "composite_loopr_age": {
+    "required_evidence": [
+    {
+      "quote": "Keep unavailable until a legally usable longitudinal cohort, pre-registered model, holdout calibration, uncertainty, subgroup, stability, model-card, scientific, privacy, and legal gates in `LOOPR_AGE.md` pass. Contributor trends and Cardio Age may ship independently; no heuristic fallback is permitted.",
+      "source": "docs/PRODUCT_DECISIONS.md, DEC-02 item 12"
+    },
+    {
+      "quote": "- Select and document the model outcome, horizon, target population, and reference profile.",
+      "source": "docs/LOOPR_AGE.md, §Build Plan, Stage B, bullet 1, line 248"
+    },
+    {
+      "quote": "- use non-linear functions where published dose-response relationships are non-linear;",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 4. Calibrated Composite, line 159"
+    },
+    {
+      "quote": "- model interaction and covariance among `VO2max`, RHR, steps, and zone time;",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 4. Calibrated Composite, line 160"
+    },
+    {
+      "quote": "- include age and reference group during fitting without training a trivial chronological-age predictor;",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 4. Calibrated Composite, line 161"
+    },
+    {
+      "quote": "- Fit non-linear effects and correlation-aware contributor terms.",
+      "source": "docs/LOOPR_AGE.md, §Build Plan, Stage B, bullet 4, line 251"
+    },
+    {
+      "quote": "- Produce an internal score and contributor effects without exposing an age to users.",
+      "source": "docs/LOOPR_AGE.md, §Build Plan, Stage B, bullet 5, line 252"
+    },
+    {
+      "quote": "- require at least 90 days of eligible history before the first Loopr Age;",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 3. Contributor Snapshots, line 132"
+    },
+    {
+      "quote": "- require valid data on at least 70% of days/nights for continuous metrics;",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 3. Contributor Snapshots, line 133"
+    },
+    {
+      "quote": "- aggregate steps, RHR, and sleep duration with robust medians and retain distributions;",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 3. Contributor Snapshots, line 134"
+    },
+    {
+      "quote": "- calculate sleep consistency from actual timing rather than average duration;",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 3. Contributor Snapshots, line 135"
+    },
+    {
+      "quote": "- aggregate activity as weekly minutes to avoid rewarding isolated extreme sessions;",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 3. Contributor Snapshots, line 136"
+    },
+    {
+      "quote": "- separate zones 1-3, zones 4-5, and strength duration;",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 3. Contributor Snapshots, line 137"
+    },
+    {
+      "quote": "- mark the result established after 180 days and provisional from days 90-179;",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 3. Contributor Snapshots, line 138"
+    },
+    {
+      "quote": "- exclude low-wear, failed-quality, acute illness, and explicitly unsupported medication periods according to pre-registered rules.",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 3. Contributor Snapshots, line 139"
+    },
+    {
+      "quote": "Core launch requirements are valid cardio fitness, activity, resting HR, and sleep domains. Body composition may be optional only if a separately fitted and validated no-body-composition model exists.",
+      "source": "docs/LOOPR_AGE.md, §Missing Data and Confidence, line 185"
+    },
+    {
+      "quote": "- **Unavailable:** missing required domain, unsupported population/condition, stale data, failed quality, or no matching model variant.",
+      "source": "docs/LOOPR_AGE.md, §Missing Data and Confidence, line 192"
+    },
+    {
+      "quote": "After model calibration, convert the user's modeled risk to an age-equivalent reference value:",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 5. Convert Risk to Loopr Age, line 170"
+    },
+    {
+      "quote": "Loopr Age = age a where\nreferenceRisk(a, reference-profile contributors)\nequals\nmodeledRisk(realAge, user contributors)",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 5. Convert Risk to Loopr Age, lines 173-176"
+    },
+    {
+      "quote": "The reference profile and outcome horizon must be fixed and published in the model card. This conversion gives the age unit a defined meaning. It is preferable to assigning arbitrary year penalties such as “poor sleep adds two years.”",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 5. Convert Risk to Loopr Age, line 179"
+    },
+    {
+      "quote": "Clamp only to the validated age range and show an explicit boundary. Preserve the unrounded value, confidence interval, model/reference versions, and contributor effects. Publish at most weekly; never move Loopr Age from one night's data.",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 5. Convert Risk to Loopr Age, line 181"
+    },
+    {
+      "quote": "Do not average the contributors or create nine independent mini-ages. Fit a model against an external longitudinal cohort with compatible inputs and a declared long-term health outcome.",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 4. Calibrated Composite, line 145"
+    },
+    {
+      "quote": "- Obtain a legally usable external cohort with compatible longitudinal inputs and outcomes.",
+      "source": "docs/LOOPR_AGE.md, §Build Plan, Stage B, bullet 2, line 249"
+    },
+    {
+      "quote": "- Define model variants before holdout evaluation.",
+      "source": "docs/LOOPR_AGE.md, §Build Plan, Stage B, bullet 3, line 250"
+    },
+    {
+      "quote": "- calibrate against held-out outcomes, not against another wearable age;\n- predefine model variants for unavailable body composition or `VO2max`;\n- never renormalize weights dynamically when data is missing;\n- reject a result when no validated model variant matches available inputs;\n- preserve coefficients, transforms, reference population, and model card with each version.",
+      "source": "docs/LOOPR_AGE.md, §Calculation, 4. Calibrated Composite, requirements 162-166"
+    },
+    {
+      "quote": "- Validate discrimination, calibration, uncertainty, stability, and missing-data behavior on held-out data.\n- Report subgroup performance across age, reference group, skin tone where sensor inputs matter, fitness level, body size, conditions, and supported devices.\n- Validate the age-equivalent conversion and ensure it adds understandable information beyond Cardio Age alone.\n- Set launch thresholds and unsupported states before final evaluation.\n- Complete independent scientific, clinical-language, privacy, and legal review.",
+      "source": "docs/LOOPR_AGE.md, §Build Plan, Stage C, bullets 1-5"
+    },
+     {
+       "quote": "Publish a model card and in-app method sheet.",
+       "source": "docs/LOOPR_AGE.md, §Build Plan, Stage D, bullet 4"
+     },
+     {
+       "quote": "The production build contains no path from OpenStrap's heuristic `physiologicalAge` to the UI.",
+       "source": "docs/LOOPR_AGE.md, §Acceptance Criteria, line 288"
+     }
+    ]
+  }
+}

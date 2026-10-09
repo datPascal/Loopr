@@ -1,0 +1,1 @@
+{"value":14.346761394845831,"confidence":0.6,"tier":"ESTIMATE","inputs_used":["trimp"],"note":"headline 0–21 strain = log-squash of raw TRIMP (min(21, ln(trimp+1)/ln(1.5))); wrist-HR estimate"}

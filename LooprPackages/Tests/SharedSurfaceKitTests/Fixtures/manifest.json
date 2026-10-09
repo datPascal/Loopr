@@ -1,0 +1,15 @@
+{
+  "schema": "loopr.surface-fixtures.v1",
+  "fixtures": [
+    {
+      "file": "current.json",
+      "schema_version": 1,
+      "sha256": "620e2bf3b0c14a28bd7ac23b37ed464bd26357280ba37f2e90ab44359ebc43ed"
+    },
+    {
+      "file": "future.json",
+      "schema_version": 99,
+      "sha256": "fde4b8f2c1ae7bc925cabd3435598b902492675dc8544201b2b42375e07d12fb"
+    }
+  ]
+}
