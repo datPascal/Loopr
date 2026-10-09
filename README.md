@@ -25,11 +25,11 @@ There is no public TestFlight. To run Loopr on your own iPhone, follow the steps
 These screens use deterministic test data, not personal health records.
 
 <p align="center">
-  <img src="docs/screenshots/today.png" width="19%" alt="Loopr Today screen">
-  <img src="docs/screenshots/sleep.png" width="19%" alt="Loopr Sleep tab with sleep stages timeline">
-  <img src="docs/screenshots/heart.png" width="19%" alt="Loopr Heart screen">
-  <img src="docs/screenshots/body.png" width="19%" alt="Loopr Body screen">
-  <img src="docs/screenshots/workouts.png" width="19%" alt="Loopr Workouts screen">
+  <img src="docs/screenshots/today-dark.png" width="19%" alt="Loopr Today screen">
+  <img src="docs/screenshots/sleep-dark.png" width="19%" alt="Loopr Sleep tab with sleep stages timeline">
+  <img src="docs/screenshots/heart-dark.png" width="19%" alt="Loopr Heart screen">
+  <img src="docs/screenshots/body-dark.png" width="19%" alt="Loopr Body screen">
+  <img src="docs/screenshots/workouts-dark.png" width="19%" alt="Loopr Workouts screen">
 </p>
 
 ## Privacy model
