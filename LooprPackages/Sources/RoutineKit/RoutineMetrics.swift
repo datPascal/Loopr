@@ -305,7 +305,10 @@ public struct RoutineDayClock: Sendable {
     public func minutes(of date: Date) -> Double {
         let offset = calendar.dateComponents([.day], from: start, to: calendar.startOfDay(for: date)).day ?? 0
         let parts = calendar.dateComponents([.hour, .minute, .second], from: date)
-        return Double(offset * 1_440 + (parts.hour ?? 0) * 60 + (parts.minute ?? 0)) + Double(parts.second ?? 0) / 60
+        // Split up: one expression with the three optionals timed out the type checker on the CI runner.
+        let hour: Int = parts.hour ?? 0, minute: Int = parts.minute ?? 0, second: Int = parts.second ?? 0
+        let wholeMinutes: Int = offset * 1_440 + hour * 60 + minute
+        return Double(wholeMinutes) + Double(second) / 60
     }
 
     /// The whole minute `date` falls in, which is what a time metric stores.
