@@ -59,7 +59,7 @@ final class ProtocolPatternLineTests: XCTestCase {
         let sleep = try XCTUnwrap(ProtocolPatternFinding.make(pattern(title: "Training day", predicate: .trainingDay,
             metric: .sleepDuration, difference: 24)))
         XCTAssertEqual(sleep.headline, "Training day, 24 min more sleep.")
-        let same = try XCTUnwrap(ProtocolPatternFinding.make(pattern(difference: 0)))
+        let same = try XCTUnwrap(ProtocolPatternFinding.make(pattern(difference: 0), locale: Fixture.locale))
         XCTAssertEqual(same.headline, "Last meal after 21:00, deep sleep about the same.")
         let long = try XCTUnwrap(ProtocolPatternFinding.make(pattern(candidate: "journal.y",
             title: "Took a long walk with the dog after dinner", predicate: .journalAnswer(name: "Walk"), difference: 12)))
@@ -115,8 +115,9 @@ final class ProtocolPatternLineTests: XCTestCase {
 
     /// The line follows the stored pattern: new nights give a new sentence on the next load.
     func testTheLineChangesWhenTheStoredPatternDoes() throws {
-        let before = try XCTUnwrap(ProtocolPatternFinding.make(pattern(with: 9, without: 20)))
-        let after = try XCTUnwrap(ProtocolPatternFinding.make(pattern(difference: -17, with: 10, without: 20)))
+        let before = try XCTUnwrap(ProtocolPatternFinding.make(pattern(with: 9, without: 20), locale: Fixture.locale))
+        let after = try XCTUnwrap(ProtocolPatternFinding.make(pattern(difference: -17, with: 10, without: 20),
+                                                                   locale: Fixture.locale))
         XCTAssertNotEqual(before, after)
         XCTAssertEqual(after.sentence,
                        "On the 10 nights you ate after 21:00, you had 17 minutes less deep sleep than on the other 20.")
