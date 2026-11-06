@@ -17,15 +17,17 @@ public struct HabitInsightEngine: Sendable {
     @discardableResult
     public func recalculateAll(
         store: any HabitStore,
-        calculatedAt: Date
+        calculatedAt: Date,
+        endingOn: DayIdentity? = nil
     ) async throws -> [HabitImpactEstimate] {
+        try Task.checkCancellation()
         let definitions = try await store.definitions(includeArchived: true)
         let records = try await store.dayRecords()
-        let outcomes = try await store.outcomes()
+        let outcomes = JournalMoodOutcomes.merge(records: records, outcomes: try await store.outcomes(), builtAt: calculatedAt)
         let outcomeExclusions = Dictionary(uniqueKeysWithValues: try await store.outcomeExclusions().map { ($0.behaviorDay, $0.reason) })
         let previous = Dictionary(uniqueKeysWithValues: try await store.estimates().map { ($0.habitID, $0) })
         let sourceDays = outcomes.map(\.behaviorDay) + records.map(\.behaviorDay)
-        guard let latest = sourceDays.max(by: { $0.habitKey < $1.habitKey }) else {
+        guard let latest = endingOn ?? sourceDays.max(by: { $0.habitKey < $1.habitKey }) else {
             let day = DayBoundaryCalculator.boundary(
                 containing: calculatedAt,
                 calendar: calendarProvider,
@@ -44,7 +46,7 @@ public struct HabitInsightEngine: Sendable {
                     calculatedAt: calculatedAt
                 )
             }
-            for estimate in estimates { try await store.saveEstimate(estimate) }
+            for estimate in estimates { try Task.checkCancellation(); try await store.saveEstimate(estimate) }
             return estimates
         }
         let start = addDays(-(policy.windowDays - 1), to: latest) ?? latest
@@ -67,7 +69,7 @@ public struct HabitInsightEngine: Sendable {
                 calculatedAt: calculatedAt
             )
         }
-        for estimate in result { try await store.saveEstimate(estimate) }
+        for estimate in result { try Task.checkCancellation(); try await store.saveEstimate(estimate) }
         return result
     }
 
@@ -126,7 +128,7 @@ public struct HabitInsightEngine: Sendable {
             target: definition.id,
             candidates: activeDefinitions.map(\.id).filter { $0 != definition.id },
             records: records,
-            outcomes: outcomeByDay
+            outcomes: outcomeByDay, metric: .recoveryScore
         )
         let mature = yesCount >= policy.maturePerGroup
             && noCount >= policy.maturePerGroup
@@ -140,11 +142,18 @@ public struct HabitInsightEngine: Sendable {
             }
             let metricYes = pairs.filter { $0.0.answer == .yes }.count
             let metricNo = pairs.filter { $0.0.answer == .no }.count
+            let metricOverlap = overlap(target: definition.id,
+                candidates: activeDefinitions.map(\.id).filter { $0 != definition.id },
+                records: records, outcomes: outcomeByDay, metric: metricID)
+            let sample = HabitMetricSample(yesCount: metricYes, noCount: metricNo,
+                status: pairs.isEmpty ? .unavailable : .collecting,
+                overlappingHabitID: metricOverlap, validThrough: windowEnd,
+                excludedDayCount: records.filter { $0.response(for: definition.id) != nil }.count - pairs.count)
             metricMaturity[metricID] = metricYes >= policy.maturePerGroup
                 && metricNo >= policy.maturePerGroup
                 && pairs.count >= policy.matureEligibleDays
             guard metricYes > 0, metricNo > 0 else {
-                metricEstimates.append(.init(metricID: metricID, yesMean: nil, noMean: nil, rawDifference: nil, adjustedDifference: nil, intervalLower: nil, intervalUpper: nil))
+                metricEstimates.append(.init(metricID: metricID, yesMean: nil, noMean: nil, rawDifference: nil, adjustedDifference: nil, intervalLower: nil, intervalUpper: nil, sample: sample))
                 continue
             }
             let rows = pairs.compactMap { response, outcome, value -> BinaryExposureRow? in
@@ -172,7 +181,7 @@ public struct HabitInsightEngine: Sendable {
                 baselineWindowDays: policy.trailingBaselineDays,
                 minimumBaselineValues: policy.minimumBaselineDays,
                 ridgeLambda: policy.ridgeLambda,
-                bootstrapReplicates: metricMaturity[metricID] == true && overlapping == nil
+                bootstrapReplicates: metricMaturity[metricID] == true && metricOverlap == nil
                     ? policy.bootstrapReplicates : 0,
                 blockLength: policy.bootstrapBlockDays
             )
@@ -200,7 +209,8 @@ public struct HabitInsightEngine: Sendable {
                 intervalLower: result?.intervalLower,
                 intervalUpper: result?.intervalUpper,
                 bootstrapPValue: result?.twoSidedPValue,
-                adjustedRowCount: result?.adjustedRowCount ?? 0
+                adjustedRowCount: result?.adjustedRowCount ?? 0,
+                sample: sample
             ))
         }
 
@@ -211,14 +221,16 @@ public struct HabitInsightEngine: Sendable {
             metricEstimates[index] = withClassification(
                 estimate,
                 adjustedPValue: adjustedP[offset],
-                mature: metricMaturity[estimate.metricID] == true
+                mature: metricMaturity[estimate.metricID] == true,
+                previous: previous?.metric(estimate.metricID)
             )
         }
         if let recoveryIndex = metricEstimates.firstIndex(where: { $0.metricID == .recoveryScore }) {
             metricEstimates[recoveryIndex] = withClassification(
                 metricEstimates[recoveryIndex],
                 adjustedPValue: nil,
-                mature: metricMaturity[.recoveryScore] == true
+                mature: metricMaturity[.recoveryScore] == true,
+                previous: previous?.metric(.recoveryScore)
             )
         }
 
@@ -261,7 +273,8 @@ public struct HabitInsightEngine: Sendable {
     private func withClassification(
         _ estimate: HabitMetricEstimate,
         adjustedPValue: Double?,
-        mature: Bool
+        mature: Bool,
+        previous: HabitMetricEstimate?
     ) -> HabitMetricEstimate {
         let threshold = policy.practicalThresholds[estimate.metricID] ?? .infinity
         let practical = abs(estimate.adjustedDifference ?? 0) >= threshold
@@ -273,18 +286,33 @@ public struct HabitInsightEngine: Sendable {
         } else {
             clear = mature && enoughAdjustedRows && practical && (adjustedPValue ?? 1) < 0.05
         }
+        let counts = estimate.sample!
+        let status: HabitInsightStatus
+        if counts.overlappingHabitID != nil { status = .cannotSeparate }
+        else if counts.yesCount + counts.noCount == 0 { status = .unavailable }
+        else if counts.yesCount < policy.earlyPerGroup || counts.noCount < policy.earlyPerGroup { status = .collecting }
+        else if !mature || !enoughAdjustedRows { status = .earlySignal }
+        else { status = clear ? .clearAssociation : .noClearAssociation }
+        let stale = [.collecting, .earlySignal, .unavailable].contains(status)
+            && previous?.sample.map { [.clearAssociation, .noClearAssociation, .stale].contains($0.status) } == true
+        let displayed = stale ? previous! : estimate
+        let sample = HabitMetricSample(yesCount: counts.yesCount, noCount: counts.noCount,
+            status: stale ? .stale : status, overlappingHabitID: counts.overlappingHabitID,
+            validThrough: stale ? previous!.sample!.validThrough : counts.validThrough,
+            excludedDayCount: counts.excludedDayCount)
         return HabitMetricEstimate(
             metricID: estimate.metricID,
-            yesMean: estimate.yesMean,
-            noMean: estimate.noMean,
-            rawDifference: estimate.rawDifference,
-            adjustedDifference: estimate.adjustedDifference,
-            intervalLower: estimate.intervalLower,
-            intervalUpper: estimate.intervalUpper,
-            bootstrapPValue: estimate.bootstrapPValue,
-            adjustedPValue: adjustedPValue,
-            adjustedRowCount: estimate.adjustedRowCount,
-            isClear: clear
+            yesMean: displayed.yesMean,
+            noMean: displayed.noMean,
+            rawDifference: displayed.rawDifference,
+            adjustedDifference: displayed.adjustedDifference,
+            intervalLower: displayed.intervalLower,
+            intervalUpper: displayed.intervalUpper,
+            bootstrapPValue: displayed.bootstrapPValue,
+            adjustedPValue: stale ? displayed.adjustedPValue : adjustedPValue,
+            adjustedRowCount: displayed.adjustedRowCount,
+            isClear: clear && status == .clearAssociation && !stale,
+            sample: sample
         )
     }
 
@@ -297,12 +325,13 @@ public struct HabitInsightEngine: Sendable {
         target: HabitID,
         candidates: [HabitID],
         records: [HabitDayRecord],
-        outcomes: [DayIdentity: HabitOutcomeSnapshot]
+        outcomes: [DayIdentity: HabitOutcomeSnapshot],
+        metric: HabitOutcomeMetricID
     ) -> HabitID? {
         for candidate in candidates.sorted() {
             var targetValues: [Bool] = []
             var otherValues: [Bool] = []
-            for record in records where outcomes[record.behaviorDay]?.metrics[.recoveryScore] != nil {
+            for record in records where outcomes[record.behaviorDay]?.metrics[metric] != nil {
                 guard let lhs = record.response(for: target), let rhs = record.response(for: candidate),
                       HabitEligibility.isEligible(lhs, calendar: calendarProvider),
                       HabitEligibility.isEligible(rhs, calendar: calendarProvider),

@@ -110,10 +110,10 @@ struct MetricValueFormatTests {
         #expect(MetricValueFormat.duration.axisString(480) == "8 h")
         #expect(MetricValueFormat.grouped.axisString(12000) == "12k")
         #expect(MetricValueFormat.grouped.string(8240) == "8,240")
-        #expect(MetricValueFormat.grouped.delta(-1250) == "-1,250")
-        #expect(MetricValueFormat.whole.delta(-3.2) == "-3")
+        #expect(MetricValueFormat.grouped.delta(-1250) == "\u{2212}1,250")
+        #expect(MetricValueFormat.whole.delta(-3.2) == "\u{2212}3")
         #expect(MetricValueFormat.duration.delta(35) == "+35 min")
-        #expect(MetricValueFormat.duration.delta(-65) == "-1 h 5 m")
+        #expect(MetricValueFormat.duration.delta(-65) == "\u{2212}1 h 5 m")
         #expect(MetricValueFormat.duration.delta(0.2) == "0 min")
     }
 }

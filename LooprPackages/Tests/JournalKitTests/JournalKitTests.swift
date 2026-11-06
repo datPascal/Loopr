@@ -137,6 +137,27 @@ final class JournalKitTests: XCTestCase {
         XCTAssertEqual(HabitEligibility.exclusion(for: edited), .skipped)
     }
 
+    func testConcurrentCheckInsPreserveEveryHabitAnswer() async throws {
+        let habits = (0..<10).map { index in
+            HabitDefinition(id: HabitID(rawValue: UUID()), source: .custom,
+                name: "Habit \(index)", question: "Done?", sortOrder: index, createdAt: .now)
+        }
+        let base = InMemoryHabitStore(definitions: habits)
+        let store = OverlappingHabitStore(base: base, readers: habits.count)
+        let day = DayIdentity(year: 2026, month: 10, day: 11)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for habit in habits {
+                group.addTask {
+                    try await HabitCheckInService(store: store).answer(habitID: habit.id, day: day,
+                        timeZoneID: "Asia/Makassar", answer: .yes, source: .sameDay)
+                }
+            }
+            try await group.waitForAll()
+        }
+        let result = await base.dayRecord(for: day)
+        XCTAssertEqual(Set(result?.responses.map(\.habitID) ?? []), Set(habits.map(\.id)))
+    }
+
     func testHabitPrivacyRequiresExplicitHabitAndDaySelection() {
         let definition = HabitFixtures.definition
         let response = HabitResponse(

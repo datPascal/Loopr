@@ -213,8 +213,8 @@ public struct CoachScreen: View {
             LooprInlineMessage("Evidence for this action is not listed.", tone: .warning)
         } else {
             VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
-                LooprText("EVIDENCE", style: .sectionLabel, color: .inkSecondary)
-                LooprText(labels.joined(separator: " · ").uppercased(), style: .confidence, color: .inkSecondary)
+                LooprText("Evidence", style: .sectionLabel, color: .inkSecondary)
+                LooprText(labels.joined(separator: " · ").looprLabelCased, style: .confidence, color: .inkSecondary)
             }
         }
     }
@@ -347,7 +347,7 @@ public struct CoachScreen: View {
     }
 
     private func confidenceLabel(_ confidence: Double) -> String {
-        guard confidence.isFinite else { return "CONFIDENCE UNAVAILABLE" }
+        guard confidence.isFinite else { return "Confidence unavailable" }
         let percentage = Int((min(max(confidence, 0), 1) * 100).rounded())
         return "\(percentage)% CONFIDENCE"
     }

@@ -18,15 +18,7 @@ public enum SleepClock {
 
     /// "23:05" or "11:05 PM", following the locale, for a noon-based minute.
     public static func text(minutesAfterNoon minutes: Double, timeZone: TimeZone = .current, locale: Locale = .current) -> String {
-        let whole = Int(minutes.rounded())
-        let clock = ((whole + 720) % 1_440 + 1_440) % 1_440
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timeZone
-        let reference = calendar.date(from: DateComponents(year: 2001, month: 1, day: 1, hour: clock / 60, minute: clock % 60)) ?? Date()
-        var style = Date.FormatStyle(date: .omitted, time: .shortened)
-        style.timeZone = timeZone
-        style.locale = locale
-        return reference.formatted(style)
+        LooprClockFormat.text(minuteOfDay: Int(minutes.rounded()) + 720, locale: locale)
     }
 }
 

@@ -25,6 +25,7 @@ nonisolated protocol LooprDeviceCenterRuntime: LooprHeartLiveRuntime, Sendable {
     func buzzBand(effect: UInt8, expectedGeneration: UInt64) async throws
     func setBandAlarm(fireDate: Date) async throws
     func readBandAlarm() async throws -> Date?
+    func readBandAlarmStatus() async throws -> BandAlarmStatus
     func testBandAlarm() async throws
     func disableBandAlarm() async throws
     func bandEvents() async -> AsyncStream<BandEventEnvelope>
@@ -76,6 +77,10 @@ extension LooprDeviceCenterRuntime {
 
     func readBandAlarm() async throws -> Date? {
         throw LooprDeviceRuntimeCommandError.unavailable
+    }
+
+    func readBandAlarmStatus() async throws -> BandAlarmStatus {
+        try await readBandAlarm().map(BandAlarmStatus.armed) ?? .unknown
     }
 
     func testBandAlarm() async throws {

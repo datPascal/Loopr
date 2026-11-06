@@ -12,6 +12,8 @@ import DataKit
 import HeartKit
 import HealthKitBridge
 import JournalKit
+import FoodKit
+import TrainKit
 import CycleKit
 import RecordsKit
 import RouteKit
@@ -42,10 +44,39 @@ nonisolated enum ProductRepositoryKeys {
         UserDefaultsBetaConsentStore.key,
         LooprAISettingsRuntime.endpointKey,
         LooprAISettingsRuntime.modelKey,
+        LooprAISettingsRuntime.providersKey,
+        LooprAISettingsRuntime.selectedKey,
         LaunchOnboardingFlagStore.key,
         TodayLaunchSnapshotStore.key,
         LooprDayHintStore.key,
-        TodayPreferencesStore.key
+        TodayPreferencesStore.key,
+        AgentAccessPreferences.key,
+        FilesBackupPreferences.bookmarkKey,
+        FilesBackupPreferences.enabledKey,
+        FilesBackupPreferences.lastSuccessKey,
+        FilesBackupPreferences.folderNameKey,
+        MainTab.selectionKey,
+        HealthMetricPins.key,
+        LooprGestureMappingStore.doubleTapKey,
+        LooprPhoneAlarmPreference.key,
+        PhoneAlarmFallback.outcomeKey,
+        LooprStrapAlarmArmRecord.fireDateKey,
+        LooprStrapAlarmArmRecord.generationKey,
+        LooprStrapAlarmArmRecord.armedAtKey,
+        LooprStrapAlarmArmRecord.verifiedAtKey,
+        LooprStrapAlarmArmRecord.readbackKey,
+        LooprStrapAlarmArmRecord.readbackAtKey,
+        LooprStrapAlarmArmRecord.confirmedKey,
+        LooprStrapAlarmArmRecord.writeFailedKey,
+        LooprStrapAlarmArmRecord.sessionKey,
+        LooprStrapAlarmArmRecord.pendingDisableKey,
+        LooprStrapAlarmArmRecord.firedDateKey,
+        UserDefaultsWeeklyProposalDecisionStore.key,
+        WeeklyReviewSeenStore.key,
+        TodayFirstEveningStore.defaultsKey,
+        TodayBandBannerPreference.hiddenKey,
+        WhatsNewGate.key,
+        LooprLaunchAppearance.key
     ]
 }
 
@@ -631,7 +662,7 @@ actor SQLiteSettingsRepository: SettingsRepository {
 
     func update(_ snapshot: SettingsSnapshot) throws {
         if let goal = snapshot.goals.stepGoal, goal <= 0 { throw SettingsError.invalidGoal }
-        if let age = snapshot.profile.age, !(0...130).contains(age) { throw SettingsError.invalidProfile }
+        if let year = snapshot.profile.birthYear, !((ProfileSettings.currentYear() - 130)...ProfileSettings.currentYear()).contains(year) { throw SettingsError.invalidProfile }
         try store.write(snapshot, key: "snapshot")
     }
 
@@ -643,19 +674,21 @@ actor SQLiteSettingsRepository: SettingsRepository {
     }
 
     func resetAll() async { try? store.removeAll() }
-    func resetProfileChecked() throws {
+    func resetProfileChecked() async throws {
         var value = try store.read(SettingsSnapshot.self, key: "snapshot") ?? SettingsSnapshot()
         value.profile = ProfileSettings()
         value.goals = GoalSettings()
         try store.write(value, key: "snapshot")
     }
 
-    func resetAllChecked() throws { try store.removeAll() }
+    func resetAllChecked() async throws { try store.removeAll() }
     func deleteAll() throws { try store.removeAll() }
 }
 
 actor SQLiteDataRepository: CheckedDataStore {
     private let store: StorageDocumentStore
+    private let food: FoodStore
+    private let train: TrainStore
     private let healthSampleDeletionClient: (any HealthSampleDeletionClient)?
 
     init(
@@ -663,43 +696,55 @@ actor SQLiteDataRepository: CheckedDataStore {
         healthSampleDeletionClient: (any HealthSampleDeletionClient)? = nil
     ) throws {
         store = try StorageDocumentStore(database: database, namespace: "data")
+        food = FoodStore(database: database)
+        train = TrainStore(database: database)
         self.healthSampleDeletionClient = healthSampleDeletionClient
     }
 
     func records() -> [DataRecord] {
-        (try? store.read(DataBackup.self, key: "records"))?.records ?? []
+        (try? readRecords()) ?? []
     }
 
-    func recordsChecked() throws -> [DataRecord] {
-        try store.read(DataBackup.self, key: "records")?.records ?? []
+    func recordsChecked() async throws -> [DataRecord] { try readRecords() }
+
+    // Synchronous actor-local helpers keep read/modify/write operations
+    // together. Explicit async protocol witnesses avoid selecting defaults
+    // that route checked calls through a non-throwing compatibility method.
+    private func readRecords() throws -> [DataRecord] {
+        guard let backup = try store.read(DataBackup.self, key: "records") else { return [] }
+        try backup.validate()
+        return backup.records
     }
 
     func insert(_ record: DataRecord) throws {
         guard Self.isValidDay(record.day) else { throw DataError.invalidDay }
-        var values = Dictionary(uniqueKeysWithValues: records().map { ($0.id, $0) })
+        var values = Dictionary(uniqueKeysWithValues: try readRecords().map { ($0.id, $0) })
         values[record.id] = record
         try saveRecords(values.values)
     }
 
-    func exportBackup() -> DataBackup { DataBackup(records: records()) }
+    func exportBackup() -> DataBackup {
+        do { return DataBackup(records: try readRecords(), food: try food.exportArchive(), train: try train.exportArchive()) }
+        catch { return DataBackup(schemaVersion: 0, records: []) }
+    }
 
-    func exportBackupChecked() throws -> DataBackup { DataBackup(records: try recordsChecked()) }
+    func exportBackupChecked() async throws -> DataBackup { DataBackup(records: try readRecords(), food: try food.exportArchive(), train: try train.exportArchive()) }
 
     func exportJSON() throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        return try encoder.encode(exportBackup())
+        return try encoder.encode(DataBackup(records: readRecords(), food: food.exportArchive(), train: train.exportArchive()))
     }
 
-    func exportJSONChecked() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        return try encoder.encode(try exportBackupChecked())
+    func exportJSONChecked() async throws -> Data { try exportJSON() }
+
+    func validatedPreviewChecked(source: ImportSource, incoming: [DataRecord]) async throws -> ImportPreview {
+        try makeValidatedPreview(source: source, incoming: incoming)
     }
 
-    func validatedPreviewChecked(source: ImportSource, incoming: [DataRecord]) throws -> ImportPreview {
+    private func makeValidatedPreview(source: ImportSource, incoming: [DataRecord]) throws -> ImportPreview {
         try Self.validateImport(source: source, incoming: incoming)
-        let existing = Dictionary(uniqueKeysWithValues: try recordsChecked().map { ($0.id, $0) })
+        let existing = Dictionary(uniqueKeysWithValues: try readRecords().map { ($0.id, $0) })
         var additions: [DataRecord] = []
         var updates: [DataRecord] = []
         var conflicts: [ImportConflict] = []
@@ -719,16 +764,13 @@ actor SQLiteDataRepository: CheckedDataStore {
         return ImportPreview(source: source, additions: additions, updates: updates, conflicts: conflicts)
     }
 
-    func restoreChecked(_ backup: DataBackup) throws {
-        guard backup.schemaVersion == 1 else { throw DataError.invalidBackup }
-        try saveRecords(backup.records)
-    }
+    func restoreChecked(_ backup: DataBackup) async throws { try restore(backup) }
 
     func preview(source: ImportSource, incoming: [DataRecord]) -> ImportPreview {
         var additions: [DataRecord] = []
         var updates: [DataRecord] = []
         var conflicts: [ImportConflict] = []
-        let existing = Dictionary(uniqueKeysWithValues: records().map { ($0.id, $0) })
+        let existing = Dictionary(records().map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for record in incoming {
             let normalized = Self.withProvenance(record, source: source)
             guard let current = existing[record.id] else {
@@ -746,17 +788,20 @@ actor SQLiteDataRepository: CheckedDataStore {
     }
 
     func validatedPreview(source: ImportSource, incoming: [DataRecord]) throws -> ImportPreview {
-        try Self.validateImport(source: source, incoming: incoming)
-        return preview(source: source, incoming: incoming)
+        try makeValidatedPreview(source: source, incoming: incoming)
     }
 
     func beginImport(_ preview: ImportPreview) throws -> ImportReceipt {
         guard preview.conflicts.isEmpty else { throw DataError.conflictRequiresResolution }
+        try DataBackup(records: preview.additions + preview.updates).validate()
         let receipt = ImportReceipt(preview: preview)
-        try store.write(try exportBackupChecked(), key: "receipt.\(receipt.token.uuidString)")
-        var values = Dictionary(uniqueKeysWithValues: try recordsChecked().map { ($0.id, $0) })
+        let backup = DataBackup(records: try readRecords())
+        var values = Dictionary(uniqueKeysWithValues: backup.records.map { ($0.id, $0) })
         for record in preview.additions + preview.updates { values[record.id] = record }
-        try saveRecords(values.values)
+        try store.mutate([
+            .write(backup, key: "receipt.\(receipt.token.uuidString)"),
+            .write(DataBackup(records: Array(values.values)), key: "records")
+        ])
         return receipt
     }
 
@@ -764,32 +809,49 @@ actor SQLiteDataRepository: CheckedDataStore {
         guard let backup = try store.read(DataBackup.self, key: "receipt.\(receipt.token.uuidString)") else {
             throw DataError.unknownReceipt
         }
-        try saveRecords(backup.records)
-        try store.remove(key: "receipt.\(receipt.token.uuidString)")
+        try backup.validate()
+        try store.mutate([
+            .write(backup, key: "records"),
+            .remove(key: "receipt.\(receipt.token.uuidString)")
+        ])
     }
 
     func restore(_ backup: DataBackup) throws {
-        guard backup.schemaVersion == 1 else { throw DataError.invalidBackup }
-        try saveRecords(backup.records)
+        try backup.validate()
+        try store.mutate([.write(DataBackup(records: backup.records), key: "records")], additionalChanges: { db in
+            if let food = backup.food { try FoodStore.restore(food, in: db) }
+            if let train = backup.train { try TrainStore.restore(train, in: db) }
+        })
     }
 
     func exportDay(_ day: String) -> DataBackup {
-        DataBackup(records: records().filter { $0.day == day })
+        do { return DataBackup(records: try readRecords().filter { $0.day == day }, food: try food.exportArchive(localDay: day), train: try train.exportArchive(localDay: day)) }
+        catch { return DataBackup(schemaVersion: 0, records: []) }
     }
 
-    func exportDayChecked(_ day: String) throws -> DataBackup {
-        DataBackup(records: try recordsChecked().filter { $0.day == day })
+    func exportDayChecked(_ day: String) async throws -> DataBackup {
+        DataBackup(records: try readRecords().filter { $0.day == day }, food: try food.exportArchive(localDay: day), train: try train.exportArchive(localDay: day))
     }
 
     func deleteDay(_ day: String) {
-        try? deleteDayChecked(day)
+        try? deleteDayRecords(day)
     }
 
-    func deleteDayChecked(_ day: String) throws {
-        let values = try recordsChecked().filter { $0.day != day }
-        try saveRecords(values)
+    func deleteDayChecked(_ day: String) async throws { try deleteDayRecords(day) }
+
+    private func deleteDayRecords(_ day: String) throws {
+        let values = try readRecords().filter { $0.day != day }
         let statuses = try store.read([ReanalysisStatus].self, key: "reanalysis") ?? []
-        try store.write(statuses.filter { $0.day != day }, key: "reanalysis")
+        try store.mutate([
+            .write(DataBackup(records: values), key: "records"),
+            .write(statuses.filter { $0.day != day }, key: "reanalysis")
+        ], additionalChanges: { db in
+            try FoodStore.deleteDay(day, in: db)
+            try TrainStore.deleteDay(day, in: db)
+            // The patterns that counted this day are hidden in the same save.
+            try SQLitePatternStore.hideFoundPatterns(affectedBy: .day(day), in: db)
+        })
+        PatternSourceDeletions.committed(.day(day))
     }
 
     func reanalyze(day: String, algorithmVersion: Int) async -> ReanalysisStatus {
@@ -798,7 +860,7 @@ actor SQLiteDataRepository: CheckedDataStore {
     }
 
     func reanalyzeChecked(day: String, algorithmVersion: Int) async throws -> ReanalysisStatus {
-        var values = try await recordsChecked()
+        var values = try readRecords()
         for index in values.indices where values[index].day == day {
             values[index].algorithmVersion = algorithmVersion
         }
@@ -816,7 +878,7 @@ actor SQLiteDataRepository: CheckedDataStore {
     }
 
     func reanalyzeAllChecked(algorithmVersion: Int) async throws -> [ReanalysisStatus] {
-        var values = try await recordsChecked()
+        var values = try readRecords()
         for index in values.indices { values[index].algorithmVersion = algorithmVersion }
         try saveRecords(values)
         let statuses = Array(Set(values.map(\.day))).sorted().map {
@@ -830,7 +892,7 @@ actor SQLiteDataRepository: CheckedDataStore {
         ((try? store.read([ReanalysisStatus].self, key: "reanalysis")) ?? []).sorted { $0.day < $1.day }
     }
 
-    func reanalysisStatusChecked() throws -> [ReanalysisStatus] {
+    func reanalysisStatusChecked() async throws -> [ReanalysisStatus] {
         try (store.read([ReanalysisStatus].self, key: "reanalysis") ?? []).sorted { $0.day < $1.day }
     }
 
@@ -840,7 +902,7 @@ actor SQLiteDataRepository: CheckedDataStore {
 
     func setInventoryChecked(_ value: DataStoreInventory) async throws {
         var updated = value
-        updated.sqliteRows = records().count
+        updated.sqliteRows = try readRecords().count
         try store.write(updated, key: "inventory")
     }
 
@@ -850,9 +912,9 @@ actor SQLiteDataRepository: CheckedDataStore {
         return value
     }
 
-    func inventorySnapshotChecked() throws -> DataStoreInventory {
+    func inventorySnapshotChecked() async throws -> DataStoreInventory {
         var value = try store.read(DataStoreInventory.self, key: "inventory") ?? DataStoreInventory()
-        value.sqliteRows = try recordsChecked().count
+        value.sqliteRows = try readRecords().count
         return value
     }
 
@@ -861,7 +923,10 @@ actor SQLiteDataRepository: CheckedDataStore {
     }
 
     func completeDeletionChecked() async throws {
-        try store.removeAll()
+        try store.mutate(store.keys().map { .remove(key: $0) }, additionalChanges: { db in
+            try FoodStore.deleteAll(in: db)
+            try TrainStore.deleteAll(in: db)
+        })
     }
 
     /// Set when the non-throwing `removeHealthKitSamples()` fails, so the
@@ -911,7 +976,7 @@ actor SQLiteDataRepository: CheckedDataStore {
         }
         try Self.validateImport(source: .legacyCloud, incoming: imported)
         let migrated = imported.map { Self.withProvenance($0, source: .legacyCloud) }
-        var values = Dictionary(uniqueKeysWithValues: records().map { ($0.id, $0) })
+        var values = Dictionary(uniqueKeysWithValues: try readRecords().map { ($0.id, $0) })
         for value in migrated { values[value.id] = value }
         try saveRecords(values.values)
         try store.write(LegacyMigrationState.completed, key: "legacy-state")
@@ -923,7 +988,9 @@ actor SQLiteDataRepository: CheckedDataStore {
     }
 
     private func saveRecords<S: Sequence>(_ values: S) throws where S.Element == DataRecord {
-        try store.write(DataBackup(records: Array(values)), key: "records")
+        let backup = DataBackup(records: Array(values))
+        try backup.validate()
+        try store.write(backup, key: "records")
     }
 
     private func awaitState() -> LegacyMigrationState {
@@ -949,6 +1016,7 @@ actor SQLiteDataRepository: CheckedDataStore {
             guard isValidDay(row.day) else { throw DataError.invalidDay }
             if source == .noopRaw && row.payload.isEmpty { throw DataError.invalidImport }
         }
+        try DataBackup(records: incoming).validate()
     }
 
     private static func isValidDay(_ day: String) -> Bool {
@@ -1115,12 +1183,16 @@ actor SQLiteHabitRepository: HabitStore {
         ]
         for key in try keys(withPrefix: "habit.day.") {
             guard var record = try store.read(HabitDayRecord.self, key: key) else { continue }
-            let oldCount = record.responses.count
+            let original = record
             record.responses.removeAll { $0.habitID == id }
-            guard record.responses.count != oldCount else { continue }
+            record.userOverrideHabitIDs?.remove(id)
+            guard record != original else { continue }
             mutations.append(try .write(record, key: key))
         }
-        try store.mutate(mutations)
+        try store.mutate(mutations, additionalChanges: { db in
+            try SQLitePatternStore.hideFoundPatterns(affectedBy: .habit(id), in: db)
+        })
+        PatternSourceDeletions.committed(.habit(id))
     }
 
     func dayRecord(for day: DayIdentity) throws -> HabitDayRecord? {
@@ -1136,7 +1208,22 @@ actor SQLiteHabitRepository: HabitStore {
     func saveDayRecord(_ record: HabitDayRecord) throws {
         let definitionsByID = Dictionary(uniqueKeysWithValues: try definitions().map { ($0.id, $0) })
         try HabitStoreValidator.validate(record: record, definitions: definitionsByID)
-        try store.write(record, key: dayKey(record.behaviorDay))
+        // An answer that was there and is gone is a deletion, so the patterns that counted it are hidden in the same save.
+        let kept = Set(record.responses.map(\.habitID))
+        let removed = try dayRecord(for: record.behaviorDay)?.responses.map(\.habitID).filter { !kept.contains($0) } ?? []
+        let day = record.behaviorDay.habitKey
+        try store.mutate([try .write(record, key: dayKey(record.behaviorDay))], additionalChanges: { db in
+            for habit in Set(removed) {
+                try SQLitePatternStore.hideFoundPatterns(affectedBy: .answer(habit: habit, day: day), in: db)
+            }
+        })
+        for habit in Set(removed) { PatternSourceDeletions.committed(.answer(habit: habit, day: day)) }
+    }
+
+    func updateDayRecord(for day: DayIdentity, _ update: @Sendable (HabitDayRecord?) throws -> HabitDayRecord?) throws {
+        guard let record = try update(dayRecord(for: day)) else { return }
+        guard record.behaviorDay == day else { throw HabitStoreError.responseDayMismatch }
+        try saveDayRecord(record)
     }
 
     func outcome(for day: DayIdentity) throws -> HabitOutcomeSnapshot? {
@@ -1434,23 +1521,7 @@ actor SQLiteCycleRepository: CycleStore {
 
     private func calculateEstimate(_ value: PersistedCycleState, today: String?) -> CycleEstimate {
         guard value.enabled, !value.disabled else { return CycleEstimate(phase: .unknown, confidence: 0, uncertainty: "Cycle tracking is not enabled.", sampleSize: 0) }
-        let starts = value.entries.filter { $0.kind == .periodStart }.map(\.day).compactMap(CycleDate.parse).sorted()
-        guard let latest = starts.last else { return CycleEstimate(phase: .unknown, confidence: 0, uncertainty: "Log a period start to begin; no phase is inferred.", sampleSize: 0) }
-        let lengths = zip(starts, starts.dropFirst()).map { CycleDate.days(from: $0, to: $1) }.filter { $0 > 0 }
-        let typical = lengths.isEmpty ? 28.0 : Double(lengths.sorted()[lengths.count / 2])
-        let variation = lengths.isEmpty ? 0 : lengths.map { abs(Double($0) - typical) }.reduce(0, +) / Double(lengths.count)
-        let irregular = variation > 5 || lengths.contains(where: { $0 < 15 || $0 > 60 })
-        let sampleSize = starts.count
-        let confidence = (irregular ? 0.45 : 1) * min(1, Double(sampleSize) / 3)
-        let reference = today.flatMap(CycleDate.parse) ?? latest
-        let cycleDay = max(0, CycleDate.days(from: latest, to: reference)) + 1
-        let phase: CyclePhase = switch cycleDay { case 1...5: .menstrual; case 6...13: .follicular; case 14...16: .ovulatory; default: .luteal }
-        let length = Int(typical.rounded())
-        let next = CycleDate.adding(days: length, to: latest)
-        let ovulation = CycleDate.adding(days: max(1, length - 14), to: latest)
-        let fertileStart = CycleDate.adding(days: max(1, length - 18), to: latest)
-        let fertileEnd = CycleDate.adding(days: max(1, length - 12), to: latest)
-        return CycleEstimate(phase: phase, nextPeriodDay: next, fertileWindow: fertileStart...fertileEnd, ovulationDay: ovulation, confidence: confidence, uncertainty: irregular ? "Irregular history; dates are broad estimates, not a medical prediction." : "Estimate from logged period starts; dates may vary.", sampleSize: sampleSize)
+        return CycleEstimation.estimate(entries: value.entries, today: today)
     }
 }
 
@@ -1513,6 +1584,15 @@ actor SQLiteWorkoutStore: WorkoutStore, DetectedWorkoutRepository, LooprDetected
         try store.write(workout, key: key)
         if previous != next, previous?.interval != nil || next.interval != nil { HourlyStressWorkoutMask.changed() }
     }
+    func cacheHeartRateRecovery(_ value: TimedHeartRateRecovery, workoutID: UUID, startedAt: Date, endedAt: Date) async throws {
+        // No actor suspension between the conditional read and write. A
+        // missing native row stays missing, including after deletion.
+        guard var current = try store.read(WorkoutRecord.self, key: "workout.\(workoutID.uuidString)"),
+              current.state == .completed, current.startedAt == startedAt, current.endedAt == endedAt else { return }
+        current.heartRateRecovery = value
+        try save(current)
+    }
+
     func workout(id: UUID) async -> WorkoutRecord? {
         if let stored = try? store.read(WorkoutRecord.self, key: "workout.\(id.uuidString)") { return stored }
         return await all().first { $0.id == id }
@@ -1520,14 +1600,23 @@ actor SQLiteWorkoutStore: WorkoutStore, DetectedWorkoutRepository, LooprDetected
     func workout(identity: WorkoutIdentity) async -> WorkoutRecord? { await all().first { $0.identity == identity } }
     func all() async -> [WorkoutRecord] {
         let native = (try? store.keys().filter { $0.hasPrefix("workout.") }.compactMap { try store.read(WorkoutRecord.self, key: $0) }) ?? []
-        return WHOOPImportResolution.workouts(native: native, imported: (try? accountImport?.workouts()) ?? [])
+        return HealthWorkoutDeduplication.visible(WHOOPImportResolution.workouts(native: native, imported: (try? accountImport?.workouts()) ?? []))
     }
     func savedWorkouts() async -> [WorkoutRecord] { await all() }
+    /// Auto-fill must distinguish a failed read from a deleted source.
+    func journalAutoFillRecords() throws -> [WorkoutRecord] {
+        let native = try store.keys().filter { $0.hasPrefix("workout.") }.compactMap { key -> WorkoutRecord? in
+            guard let payload = try store.readData(key: key) else { return nil }
+            return try JSONDecoder().decode(WorkoutListingRowDocument.self, from: payload).row
+        }
+        return WHOOPImportResolution.workouts(native: native, imported: try accountImport?.workouts() ?? [])
+    }
     /// List rows without the per-second samples. See `WorkoutListingRowDocument`.
     func listingRows(_ query: WorkoutLogQuery) async -> [WorkoutRecord] {
         let lower = query.range == .all ? nil : query.calendar.date(byAdding: .month, value: -3, to: query.now)
         let imported = (try? accountImport?.workouts(from: lower, through: query.now)) ?? []
-        return WHOOPImportResolution.workouts(native: allListingRows(), imported: imported).filter { query.contains($0.startedAt ?? $0.createdAt) }
+        return HealthWorkoutDeduplication.visible(WHOOPImportResolution.workouts(native: allListingRows(), imported: imported))
+            .filter { query.contains($0.startedAt ?? $0.createdAt) }
     }
     private func allListingRows() -> [WorkoutRecord] {
         let keys = (try? store.keys().filter { $0.hasPrefix("workout.") }) ?? []
@@ -1536,12 +1625,19 @@ actor SQLiteWorkoutStore: WorkoutStore, DetectedWorkoutRepository, LooprDetected
             return try? JSONDecoder().decode(WorkoutListingRowDocument.self, from: payload).row
         }
     }
-    func remove(id: UUID) async {
-        do {
-            try store.remove(key: "workout.\(id.uuidString)")
-            HourlyStressWorkoutMask.changed()
-        } catch { /* The existing store API has no throwing removal seam. */ }
-        try? accountImport?.removeWorkout(id: id)
+    func remove(id: UUID) async { try? await removeChecked(id: id) }
+    func removeChecked(id: UUID) async throws {
+        // Read the day first. After the delete there is nothing to read it from.
+        let record = await workout(id: id)
+        let change: PatternSourceChange = (record?.startedAt ?? record?.createdAt)
+            .flatMap { PatternDays.key(at: $0, timeZoneID: TimeZone.current.identifier) }
+            .map(PatternSourceChange.day) ?? .anything
+        try accountImport?.removeWorkout(id: id)
+        try store.mutate([.remove(key: "workout.\(id.uuidString)")], additionalChanges: { db in
+            try SQLitePatternStore.hideFoundPatterns(affectedBy: change, in: db)
+        })
+        PatternSourceDeletions.committed(change)
+        HourlyStressWorkoutMask.changed()
     }
     func save(_ detection: WorkoutKit.DetectedWorkout) throws { try store.write(detection, key: "detected.\(detection.detectionID)") }
     func allDetections() async -> [WorkoutKit.DetectedWorkout] {
@@ -1617,6 +1713,7 @@ struct PersistentOnboardingDataEffects: @unchecked Sendable, OnboardingDataEffec
     /// The Bluetooth application model owns runtime stop/release. This phase
     /// must finish before any SQLite/history deletion can begin, otherwise an
     /// in-flight commit can repopulate a file after it was cleared.
+    let coachDataDeleter: (any PersistentDataDeletionDeleter)?
     let derivationDataDeleter: (any PersistentDataDeletionDeleter)?
     let runtimeDataDeleter: (any PersistentDataDeletionDeleter)?
     let externalDeleters: [any PersistentDataDeletionDeleter]
@@ -1631,6 +1728,7 @@ struct PersistentOnboardingDataEffects: @unchecked Sendable, OnboardingDataEffec
         productStores: [NamedProductStore],
         runtimeDataDeleter: (any PersistentDataDeletionDeleter)? = nil,
         derivationDataDeleter: (any PersistentDataDeletionDeleter)? = nil,
+        coachDataDeleter: (any PersistentDataDeletionDeleter)? = nil,
         externalDeleters: [any PersistentDataDeletionDeleter] = []
     ) {
         self.profile = profile
@@ -1643,6 +1741,7 @@ struct PersistentOnboardingDataEffects: @unchecked Sendable, OnboardingDataEffec
         self.productStores = productStores
         self.runtimeDataDeleter = runtimeDataDeleter
         self.derivationDataDeleter = derivationDataDeleter
+        self.coachDataDeleter = coachDataDeleter
         self.externalDeleters = externalDeleters
     }
 
@@ -1666,6 +1765,7 @@ struct PersistentOnboardingDataEffects: @unchecked Sendable, OnboardingDataEffec
     /// The throwing protocol method above only reports success when every
     /// injected store has confirmed deletion.
     func deleteAllDataWithReceipt() async -> PersistentDataDeletionReceipt {
+        await YourDataBackupCoordinator.shared.stopForDeletion()
         var clearedStores: [String] = []
         var failures: [PersistentDataDeletionFailure] = []
 
@@ -1687,6 +1787,13 @@ struct PersistentOnboardingDataEffects: @unchecked Sendable, OnboardingDataEffec
         if let derivationDataDeleter {
             await record(name: derivationDataDeleter.storeName,
                 operation: { try await derivationDataDeleter.deleteAll() },
+                clearedStores: &clearedStores, failures: &failures)
+            if !failures.isEmpty { return PersistentDataDeletionReceipt(clearedStores: clearedStores, failures: failures) }
+        }
+
+        if let coachDataDeleter {
+            await record(name: coachDataDeleter.storeName,
+                operation: { try await coachDataDeleter.deleteAll() },
                 clearedStores: &clearedStores, failures: &failures)
             if !failures.isEmpty { return PersistentDataDeletionReceipt(clearedStores: clearedStores, failures: failures) }
         }
@@ -1792,6 +1899,8 @@ struct PersistentProductRepositories {
     let data: SQLiteDataRepository
     let accountImport: WHOOPImportStore
     let journal: SQLiteJournalRepository
+    let food: FoodStore
+    let train: TrainStore
     let habits: SQLiteHabitRepository
     let habitReminderScheduler: any HabitReminderScheduling
     let cycle: SQLiteCycleRepository
@@ -1893,7 +2002,8 @@ struct PersistentProductRepositories {
             NamedProductStore(name: "cycle", store: try StorageDocumentStore(database: database, namespace: "cycle")),
             NamedProductStore(name: "records", store: try StorageDocumentStore(database: database, namespace: "records")),
             NamedProductStore(name: "route", store: try StorageDocumentStore(database: database, namespace: "route")),
-            NamedProductStore(name: "workouts", store: try StorageDocumentStore(database: database, namespace: "workouts"))
+            NamedProductStore(name: "workouts", store: try StorageDocumentStore(database: database, namespace: "workouts")),
+            NamedProductStore(name: "patterns", store: try StorageDocumentStore(database: database, namespace: SQLitePatternStore.namespace))
         ]
         let derivedData = LooprDerivedDataPublisher(
             analytics: analytics,
@@ -1964,6 +2074,8 @@ struct PersistentProductRepositories {
         self.cycleReminderScheduler = CentralNotificationCycleReminderScheduler()
         self.records = records
         self.workouts = workouts
+        self.food = FoodStore(database: database)
+        self.train = TrainStore(database: database)
         self.historyDatabase = historyDatabase
         self.accountImport = try WHOOPImportStore(database: historyDatabase)
         self.routes = routes
@@ -1984,6 +2096,7 @@ struct PersistentProductRepositories {
             LooprAppGroupDataDeletionDeleter() as any PersistentDataDeletionDeleter,
             LooprWatchSnapshotDataDeletionDeleter() as any PersistentDataDeletionDeleter,
             LooprNotificationDataDeletionDeleter() as any PersistentDataDeletionDeleter,
+            LooprAlarmDataDeletionDeleter() as any PersistentDataDeletionDeleter,
             LooprLiveActivityDataDeletionDeleter() as any PersistentDataDeletionDeleter,
             LooprHeartAlertsDataDeletionDeleter() as any PersistentDataDeletionDeleter
         ])
@@ -1999,6 +2112,7 @@ struct PersistentProductRepositories {
             derivationDataDeleter: ProductDerivationDeletionGroup(
                 analytics: analytics, healthSync: healthSync, derivedData: derivedData
             ),
+            coachDataDeleter: LooprCoachDataDeletionDeleter(),
             externalDeleters: externalDeleters
         )
         // The Live Activity runtime is a singleton with no owner, so the

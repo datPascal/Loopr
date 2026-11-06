@@ -22,25 +22,38 @@ public struct HeartScreen: View {
     @State private var snapshotRevision = 0
     @State private var advancedExpanded = false
     private let route: (HeartRoute) -> Void
+    private let layout: HeartScreenLayout
 
-    public init(viewModel: HeartViewModel, route: @escaping (HeartRoute) -> Void = { _ in }) {
+    public init(viewModel: HeartViewModel, layout: HeartScreenLayout = HeartScreenLayout(), route: @escaping (HeartRoute) -> Void = { _ in }) {
         self.viewModel = viewModel
         _dayState = StateObject(wrappedValue: HeartDayPresentation(model: viewModel))
+        self.layout = layout
         self.route = route
+    }
+
+    private var liveSection: some View {
+        HeartLiveTabSection(model: viewModel, zones: services?.zones,
+                            storedReading: tabModel.lastReading, bandConnected: bandConnected,
+                            pinnedNow: dayNavigation?.now, open: { route(.live) })
+            .padding(.horizontal, LooprSpacing.screenGutter)
     }
 
     public var body: some View {
         LooprTabScaffold(header: header, glow: .heart, identifier: "heart-screen") {
             VStack(alignment: .leading, spacing: 0) {
-                HeartLiveTabSection(model: viewModel, zones: services?.zones,
-                                    storedReading: tabModel.lastReading, bandConnected: bandConnected,
-                                    pinnedNow: dayNavigation?.now, open: { route(.live) })
-                    .padding(.horizontal, LooprSpacing.screenGutter)
-                    .padding(.top, LooprSpacing.tabContentTop)
+                if !layout.liveAtBottom {
+                    liveSection
+                        .padding(.top, LooprSpacing.tabContentTop)
+                }
                 LooprPhaseContainer(phase: phase) {
                     VStack(alignment: .leading, spacing: 0) {
                         phaseContent
                     }
+                }
+                // On Data the live reading follows the night: Recovery is about last night, live heart rate is a tool.
+                if layout.liveAtBottom {
+                    liveSection
+                        .padding(.top, LooprSpacing.lg)
                 }
             }
         }
@@ -114,9 +127,15 @@ public struct HeartScreen: View {
     private var content: some View {
         if let snapshot = dayState.snapshot {
             VStack(alignment: .leading, spacing: LooprSpacing.sm) {
-                HeartOvernightSection(snapshot: snapshot, title: nightTitle)
-                    .padding(.horizontal, LooprSpacing.screenGutter)
-                    .padding(.top, LooprSpacing.md)
+                Group {
+                    if let overnight = layout.overnight {
+                        overnight
+                    } else {
+                        HeartOvernightSection(snapshot: snapshot, title: nightTitle)
+                    }
+                }
+                .padding(.horizontal, LooprSpacing.screenGutter)
+                .padding(.top, LooprSpacing.md)
 
                 if tabModel.timeline != .unavailable {
                     LooprSectionHeader("Heart rate through the day", detail: dayDetail)
@@ -130,7 +149,7 @@ public struct HeartScreen: View {
                     HeartAdvancedSection(snapshot: snapshot)
                         .padding(.top, LooprSpacing.sm)
                 } label: {
-                    LooprText("Advanced", style: .rowTitle)
+                    LooprText(layout.advancedTitle, style: .rowTitle)
                 }
                 .tint(Color.loopr(.heart))
                 .padding(.horizontal, LooprSpacing.screenGutter)
@@ -174,8 +193,10 @@ public struct HeartScreen: View {
     /// Stress and a spot check, without a second home for metric history.
     private func navigationGroup() -> some View {
         var rows: [HeartNavigationItem] = []
-        rows.append(HeartNavigationItem(title: "Stress", subtitle: "See stress through the day",
-                                        route: .stress, identifier: "heart-stress-route"))
+        if layout.showsStressLink {
+            rows.append(HeartNavigationItem(title: "Stress", subtitle: "See stress through the day",
+                                            route: .stress, identifier: "heart-stress-route"))
+        }
         rows.append(HeartNavigationItem(title: "60-second spot check", subtitle: "Measure heart rate and HRV now",
                                         route: .spotCheck, identifier: "heart-spot-check-route"))
         return HeartNavigationGroup(items: rows, route: route)
@@ -196,7 +217,7 @@ public struct HeartScreen: View {
 
     private var header: LooprTabHeaderContent {
         LooprTabHeaderContent(
-            title: "Heart",
+            title: layout.title,
             accent: .heart,
             dayPhrase: dayNavigation.map(LooprHeaderMeta.dayPhrase) ?? headerMeta,
             freshness: dayState.loadState == .live
@@ -218,7 +239,7 @@ public struct HeartScreen: View {
         guard let day = dayState.snapshot?.day else { return nil }
         let today = LooprDay(date: Date(), calendar: .autoupdatingCurrent)
         let shown = LooprDay(year: day.year, month: day.month, day: day.day)
-        return LooprDayLabel.date(for: shown, today: today, calendar: .autoupdatingCurrent).uppercased()
+        return LooprDayLabel.date(for: shown, today: today, calendar: .autoupdatingCurrent).looprLabelCased
     }
 
 }
@@ -384,4 +405,26 @@ public struct HeartTrendsScreen: View {
         .navigationTitle("Metric history")
         .accessibilityIdentifier("heart-trends-screen")
     }
+}
+
+/// How a host lays out the Heart page. Data shows it as Recovery: last night's numbers from the app's metric history
+/// first, the live reading last, and no link to Stress, which has its own place on Data (Data ICP R1).
+public struct HeartScreenLayout {
+    public var title: String
+    /// Replaces the built-in "Last night" card, so the page reads the same usual range as every other Data screen.
+    public var overnight: AnyView?
+    public var liveAtBottom: Bool
+    public var showsStressLink: Bool
+    public var advancedTitle: String
+
+    public init(title: String = "Heart", overnight: AnyView? = nil, liveAtBottom: Bool = false,
+                showsStressLink: Bool = true, advancedTitle: String = "Advanced") {
+        self.title = title
+        self.overnight = overnight
+        self.liveAtBottom = liveAtBottom
+        self.showsStressLink = showsStressLink
+        self.advancedTitle = advancedTitle
+    }
+
+    @MainActor public static var standard: HeartScreenLayout { HeartScreenLayout() }
 }

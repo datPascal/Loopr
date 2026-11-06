@@ -1,0 +1,51 @@
+{
+  "createdAt": "2026-11-03T00:00:00Z",
+  "format": "loopr-protocol",
+  "name": "A gentle start",
+  "rules": [
+    {
+      "evening": true,
+      "evidence": "The American Academy of Sleep Medicine and the Sleep Research Society say adults need 7 to 9 hours of sleep a night, in a 2015 consensus. No study sets a bedtime. The template's 22:30 leaves room for that before a 06:30 to 07:30 wake-up.",
+      "group": "sleep",
+      "key": "in-bed",
+      "source": "band",
+      "target": {
+        "kind": "atMost",
+        "metric": "in_bed_time",
+        "unit": "min",
+        "value": 1350
+      },
+      "timeOfDay": "21:45",
+      "title": "In bed by 22:30",
+      "why": "A steady bedtime leaves room for the 7 to 9 hours of sleep adults need."
+    },
+    {
+      "evidence": "In a 2022 analysis of 15 studies in Lancet Public Health, more daily steps went with a lower risk of dying early. The benefit levelled off at about 6,000 to 8,000 steps a day for adults 60 and over. For adults under 60 it levelled off later, at about 8,000 to 10,000. Your iPhone counts steps without a watch.",
+      "group": "fitness",
+      "key": "steps",
+      "source": "appleHealth",
+      "target": {
+        "kind": "atLeast",
+        "metric": "steps",
+        "unit": "steps",
+        "value": 6000
+      },
+      "title": "Walk 6,000 steps",
+      "why": "People who walk more each day tend to live longer."
+    },
+    {
+      "evening": true,
+      "evidence": "A 2013 review in Alcoholism: Clinical and Experimental Research found that alcohol before bed breaks up sleep in the second half of the night. US dietary guidelines for 2020 to 2025 set a limit of 1 drink a day for women and 2 for men. The WHO says no amount of alcohol is free of risk.",
+      "group": "food",
+      "key": "alcohol",
+      "source": "manual",
+      "target": {
+        "kind": "done"
+      },
+      "title": "One drink at most",
+      "why": "Fewer drinks usually means better sleep."
+    }
+  ],
+  "schemaVersion": 1,
+  "version": 1
+}

@@ -139,6 +139,9 @@ public actor BackgroundCoordinator {
     private let makeID: @Sendable () -> UUID
     private let cancellationGraceNanoseconds: UInt64
     private var activeRun: ActiveRun?
+    /// Cleanup still owns the connection even if its work task has returned.
+    private var cleanupRunID: UUID?
+    private var cleanupWaiters: [CheckedContinuation<Void, Never>] = []
     private var foregroundActive = false
     private var state: BackgroundCoordinatorState = .idle
 
@@ -162,7 +165,7 @@ public actor BackgroundCoordinator {
         completion: BackgroundTaskCompletion = BackgroundTaskCompletion(),
         work: @escaping @Sendable () async -> Void
     ) -> BackgroundTaskHandle? {
-        guard activeRun == nil, !foregroundActive else { return nil }
+        guard activeRun == nil, cleanupRunID == nil, !foregroundActive else { return nil }
 
         let runID = id ?? makeID()
         activeRun = ActiveRun(id: runID, kind: kind, completion: completion, task: nil)
@@ -190,6 +193,12 @@ public actor BackgroundCoordinator {
     public func runForeground<T: Sendable>(
         operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {
+        try Task.checkCancellation()
+        guard !foregroundActive else { throw BackgroundCoordinatorError.busy }
+        while cleanupRunID != nil {
+            await withCheckedContinuation { cleanupWaiters.append($0) }
+            try Task.checkCancellation()
+        }
         guard !foregroundActive else { throw BackgroundCoordinatorError.busy }
         foregroundActive = true
         state = .foreground
@@ -203,6 +212,7 @@ public actor BackgroundCoordinator {
             await active.task?.value
             finishBackground(id: active.id, success: false)
         }
+        try Task.checkCancellation()
         return try await operation()
     }
 
@@ -213,7 +223,9 @@ public actor BackgroundCoordinator {
     public func expireActive(
         driver: any BackgroundWorkDriver
     ) async -> Bool {
-        guard let active = activeRun else { return false }
+        guard let active = activeRun, cleanupRunID == nil, !foregroundActive else { return false }
+        cleanupRunID = active.id
+        defer { finishCleanup() }
 
         active.task?.cancel()
         await driver.performExpiration(.completeOrRollbackTransaction)
@@ -239,7 +251,10 @@ public actor BackgroundCoordinator {
 
     @discardableResult
     public func cancelBackground(id: UUID) async -> Bool {
-        guard let active = activeRun, active.id == id else { return false }
+        guard let active = activeRun, active.id == id,
+              cleanupRunID == nil, !foregroundActive else { return false }
+        cleanupRunID = id
+        defer { finishCleanup() }
         active.task?.cancel()
         await active.task?.value
         activeRun = nil
@@ -250,9 +265,17 @@ public actor BackgroundCoordinator {
 
     private func finishBackground(id: UUID, success: Bool) {
         guard let active = activeRun, active.id == id else { return }
+        guard cleanupRunID != id else { return }
         activeRun = nil
-        state = success ? .idle : .stale
+        state = foregroundActive ? .foreground : (success ? .idle : .stale)
         _ = active.completion.complete(success: success)
+    }
+
+    private func finishCleanup() {
+        cleanupRunID = nil
+        let waiters = cleanupWaiters
+        cleanupWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
     }
 
     /// Waits at most the configured grace period.  The watcher awaiting the

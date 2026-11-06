@@ -19,21 +19,18 @@ public final class TodayViewModel: ObservableObject {
     /// History, the recovery split and tonight's inputs for the loaded day.
     /// Nil until loaded, or when the app supplies no context repository.
     @Published public private(set) var context: TodayDayContext? { didSet { dashboardRevision &+= 1 } }
-    /// Pinned numbers and the dismissed heads-up day.
-    @Published public private(set) var preferences: TodayPreferences { didSet { dashboardRevision &+= 1 } }
 
     private let repository: any TodayRepository
     private let goalsRepository: (any TodayGoalsRepository)?
     private let coachPlanRepository: (any TodayCoachPlanRepository)?
     private let contextRepository: (any TodayContextRepository)?
-    private let preferencesStore: TodayPreferencesStore?
     /// The day the newest `load(day:)` asked for.
     private var requestedDay: DayIdentity?
     /// The summary the current context was loaded for. A refresh that reads
     /// the same summary keeps the context instead of reading history again.
     private var contextBasis: TodaySummary?
     private var dashboardMemo: (key: DashboardKey, value: TodayDashboard)?
-    /// Bumped by every assignment to `summary`, `context` or `preferences`.
+    /// Bumped by every assignment to `summary` or `context`.
     /// The load path assigns only when a value changed, so equal reloads
     /// keep the memo.
     private var dashboardRevision: UInt64 = 0
@@ -47,15 +44,12 @@ public final class TodayViewModel: ObservableObject {
         coachPlanRepository: (any TodayCoachPlanRepository)? = nil,
         lastKnownSummary: TodaySummary? = nil,
         day: DayIdentity? = nil,
-        contextRepository: (any TodayContextRepository)? = nil,
-        preferencesStore: TodayPreferencesStore? = nil
+        contextRepository: (any TodayContextRepository)? = nil
     ) {
         self.repository = repository
         self.goalsRepository = goalsRepository
         self.coachPlanRepository = coachPlanRepository
         self.contextRepository = contextRepository
-        self.preferencesStore = preferencesStore
-        self.preferences = preferencesStore?.load() ?? TodayPreferences()
     }
 
     public func load(day: DayIdentity) async {
@@ -243,7 +237,7 @@ public final class TodayViewModel: ObservableObject {
         loadState = .idle
     }
 
-    // MARK: Dashboard and preferences
+    // MARK: Dashboard
 
     private struct DashboardKey: Equatable {
         let revision: UInt64
@@ -251,7 +245,7 @@ public final class TodayViewModel: ObservableObject {
     }
 
     /// The screen's presentation for the loaded day. Built once per change of
-    /// summary, context or preferences, not per render. The memo compares a
+    /// summary or context, not per render. The memo compares a
     /// revision counter rather than the summary and context themselves, which
     /// carry per-metric history arrays and were compared on every body pass.
     public func dashboard(isToday: Bool) -> TodayDashboard? {
@@ -261,27 +255,9 @@ public final class TodayViewModel: ObservableObject {
         let value = TodayDashboard(
             summary: summary,
             context: context,
-            pinned: preferences.pinned,
-            isToday: isToday,
-            headsUpDismissed: preferences.isHeadsUpDismissed(on: summary.day)
+            isToday: isToday
         )
         dashboardMemo = (key, value)
         return value
-    }
-
-    public func setPinned(_ metrics: [TodayTrackedMetric]) {
-        var next = preferences
-        next.setPinned(metrics)
-        guard next != preferences else { return }
-        preferences = next
-        preferencesStore?.save(next)
-    }
-
-    public func dismissHeadsUp(for day: DayIdentity) {
-        var next = preferences
-        next.dismissHeadsUp(for: day)
-        guard next != preferences else { return }
-        preferences = next
-        preferencesStore?.save(next)
     }
 }

@@ -15,19 +15,37 @@ public struct SleepScreen: View {
     /// day's night and carries the day navigator.
     @Environment(\.looprDayNavigation) private var dayNavigation
     @Environment(\.looprMetricLink) private var metricLink
+    @Environment(\.bandPaired) private var bandPaired
     @ObservedObject private var viewModel: SleepViewModel
     /// The stage lit up in the timeline, shared with the stage rows.
     @State private var highlightedStage: SleepStage?
+    /// The night, or one of the trend ranges, picked at the top of the page (Data ICP R1: one Sleep page).
+    @State private var scope: SleepPageScope = .night
+    /// Days of sleep history behind the range pills, so 6M and longer wait for that much history (Data ICP R4-SW-01).
+    @State private var historyDays: Int?
     private let route: (SleepRoute) -> Void
     /// A card the app places under the night's numbers, such as the wake
     /// alarm. When present it replaces the suggested alarm row, because the
     /// card already offers the suggestion.
     private let accessory: AnyView?
+    private let tonightAccessory: AnyView?
+    /// The "What was different" card the app places between Stages and Tonight. SleepKit does not know what it
+    /// reads, it only gives it a spot. The app passes nil, or a view that draws nothing, when there is no comparison.
+    private let differenceAccessory: AnyView?
+    private let showsNightDetails: Bool
+    /// The page's last row, such as Data's "How sleep is worked out" (Data ICP R3-VET).
+    private let footer: AnyView?
 
-    public init(viewModel: SleepViewModel, route: @escaping (SleepRoute) -> Void = { _ in }, accessory: AnyView? = nil) {
+    public init(viewModel: SleepViewModel, route: @escaping (SleepRoute) -> Void = { _ in }, accessory: AnyView? = nil,
+                tonightAccessory: AnyView? = nil, differenceAccessory: AnyView? = nil, showsNightDetails: Bool = false,
+                footer: AnyView? = nil) {
         self.viewModel = viewModel
         self.route = route
         self.accessory = accessory
+        self.tonightAccessory = tonightAccessory
+        self.differenceAccessory = differenceAccessory
+        self.showsNightDetails = showsNightDetails
+        self.footer = footer
     }
 
     public var body: some View {
@@ -38,7 +56,26 @@ public struct SleepScreen: View {
                 }
             }
         }
-        .navigationTitle("")
+        .navigationTitle("Sleep")
+    }
+
+    /// Days from the first recorded night to this one, from the stored history and the snapshot's own nights.
+    static func historyDays(_ snapshot: SleepDaySnapshot, history: [LooprChartPoint]) -> Int {
+        let end = SleepCivilDay(snapshot.day)?.noon(in: .current) ?? Date()
+        return LooprChartRange.historyDays(SleepTrendsScreen.trendPoints(snapshot.trend, key: nil) + history, endingOn: end)
+    }
+
+    private func loadHistoryDays(_ snapshot: SleepDaySnapshot) async {
+        var history: [LooprChartPoint] = []
+        if let metricLink, metricLink.supports(LooprMetricLinkID.sleepDuration) {
+            history = await metricLink.history(LooprMetricLinkID.sleepDuration, LooprChartRange.longestDayCount)
+        }
+        guard !Task.isCancelled else { return }
+        let days = Self.historyDays(snapshot, history: history)
+        historyDays = days
+        if case .range(let range) = scope, SleepPageScope.locked(historyDays: days).contains(.range(range)) {
+            scope = .range(LooprChartRange.resolved(range, available: LooprChartRange.unlocked(historyDays: days)))
+        }
     }
 
     private var phase: LooprLoadPhase {
@@ -62,7 +99,7 @@ public struct SleepScreen: View {
             if let dayNavigation, viewModel.loadState == .loaded, dayNavigation.status == .noData {
                 // A night with nothing recorded reads as one plain card, not
                 // a list of empty rows.
-                LooprDayEmptyState(dayNavigation, accent: .sleep)
+                LooprDayEmptyState(dayNavigation, accent: .sleep, todayCopy: Self.emptyTodayCopy(bandPaired: bandPaired))
                     .padding(.horizontal, LooprSpacing.screenGutter)
                     .padding(.top, LooprSpacing.lg)
                 accessoryCard
@@ -93,6 +130,42 @@ public struct SleepScreen: View {
 
     @ViewBuilder
     private func content(_ snapshot: SleepDaySnapshot) -> some View {
+        // Which night this is, with arrows to the nights before (Data ICP R2-SW-01, R2-DES-03). A main sleep that
+        // starts in the morning is named a day sleep, for shift workers.
+        if showsNightDetails, scope == .night, let dayNavigation {
+            LooprDayNavigator(dayNavigation, style: .bar(title: dayNavigation.nightTitle,
+                                                         subtitle: snapshot.mainSleep.map(Self.sleepSpan)), accent: .sleep)
+                .padding(.horizontal, LooprSpacing.screenGutter)
+                .padding(.top, LooprSpacing.xs)
+                .accessibilityIdentifier("sleep-night-navigator")
+        }
+        if showsNightDetails, snapshot.mainSleep != nil, !snapshot.trend.isEmpty {
+            LooprPillPicker(selection: $scope, options: SleepPageScope.options, accent: .sleep, identifier: "sleep-scope",
+                            locked: SleepPageScope.locked(historyDays: historyDays ?? Self.historyDays(snapshot, history: [])))
+                .padding(.horizontal, LooprSpacing.screenGutter)
+                .padding(.top, LooprSpacing.xs)
+                .task(id: snapshot.day) { await loadHistoryDays(snapshot) }
+        }
+        if case .range(let range) = scope, showsNightDetails {
+            VStack(alignment: .leading, spacing: LooprSpacing.sm) {
+                SleepTrendsContent(snapshot: snapshot, range: Binding(get: { range }, set: { scope = .range($0) }),
+                                   insights: viewModel.insights)
+            }
+            .padding(.horizontal, LooprSpacing.screenGutter)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("sleep-trends-screen")
+        } else {
+            nightPage(snapshot)
+        }
+        if showsNightDetails, let footer {
+            footer
+                .padding(.horizontal, LooprSpacing.screenGutter)
+                .padding(.top, LooprSpacing.md)
+        }
+    }
+
+    @ViewBuilder
+    private func nightPage(_ snapshot: SleepDaySnapshot) -> some View {
         if let main = snapshot.mainSleep {
             nightContent(snapshot, main: main)
         } else {
@@ -103,19 +176,27 @@ public struct SleepScreen: View {
 
         // The derivation finds daytime naps and they were never shown, so a
         // two-hour afternoon sleep looked like nothing happened.
-        if !snapshot.naps.isEmpty {
+        if showsNightDetails, !snapshot.naps.isEmpty {
             SleepNapList(naps: snapshot.naps)
+                .padding(.horizontal, LooprSpacing.screenGutter)
+                .padding(.top, LooprSpacing.md)
+        }
+
+        if !showsNightDetails, let differenceAccessory, snapshot.mainSleep != nil {
+            differenceAccessory
                 .padding(.horizontal, LooprSpacing.screenGutter)
                 .padding(.top, LooprSpacing.md)
         }
 
         tonightSection
 
-        SleepHairlineList(navigationItems(for: snapshot)) { item in
-            SleepNavigationRow(item: item)
+        if showsNightDetails {
+            SleepHairlineList(navigationItems(for: snapshot)) { item in
+                SleepNavigationRow(item: item)
+            }
+            .padding(.horizontal, LooprSpacing.screenGutter)
+            .padding(.top, LooprSpacing.md)
         }
-        .padding(.horizontal, LooprSpacing.screenGutter)
-        .padding(.top, LooprSpacing.md)
     }
 
     /// Hero, stages, debt, timing and the remaining numbers for a night with
@@ -124,28 +205,52 @@ public struct SleepScreen: View {
     private func nightContent(_ snapshot: SleepDaySnapshot, main: SleepSessionSummary) -> some View {
         let insights = viewModel.insights
         SleepNightHero(main: main, insights: insights, score: snapshot.metric("score"),
-                       open: openMetric(LooprMetricLinkID.sleepDuration))
+                       open: openMetric(LooprMetricLinkID.sleepDuration), compact: showsNightDetails)
             .padding(.top, LooprSpacing.xs)
+
 
         if let insights {
             if !snapshot.hypnogram.isEmpty || !insights.stages.isEmpty {
-                section("Stages", detail: SleepNightInsights.learningNote(insights.stages.map(\.usual))
+                section("Stages", detail: showsNightDetails ? Self.stagesDetail(insights) : SleepNightInsights.learningNote(insights.stages.map(\.usual))
                         ?? (insights.stages.contains { $0.usual.range != nil } ? "Usual is the middle half of your nights in the last month" : nil)) {
-                    SleepStagesCard(snapshot: snapshot, main: main, stages: insights.stages,
-                                    heartRate: viewModel.heartRate, highlighted: $highlightedStage)
+                    if showsNightDetails {
+                        SleepStagesCard(snapshot: snapshot, main: main, stages: insights.stages,
+                                        heartRate: viewModel.heartRate, highlighted: $highlightedStage)
+                    } else {
+                        Button { route(.day) } label: {
+                            LooprCard {
+                                LooprStageTimeline(segments: snapshot.hypnogram, start: main.start,
+                                    identifier: "sleep-stage-timeline", showsReadout: false)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                        .buttonStyle(.looprPressableCard)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Sleep stages")
+                        .accessibilityHint("Opens stage totals, overnight heart rate and night details")
+                        .accessibilityIdentifier("sleep-stages-card")
+                    }
                 }
             }
-            if insights.ledger.measuredNights > 0 {
-                section("Sleep debt") {
+            // What was different follows the stages: the stages are why people open the night (Data ICP R2-SW-02).
+            if showsNightDetails, let differenceAccessory {
+                differenceAccessory
+                    .padding(.horizontal, LooprSpacing.screenGutter)
+                    .padding(.top, LooprSpacing.md)
+            }
+            // Debt and bedtime cover many nights, so with the range picker they live under 7D to 1Y, not on one night
+            // (Data ICP R2-DES-02).
+            if showsNightDetails, !hasRangePicker(snapshot), insights.ledger.measuredNights > 0 {
+                section(insights.target.sectionTitle) {
                     SleepDebtCard(ledger: insights.ledger, target: insights.target)
                 }
             }
-            if !insights.consistency.measured.isEmpty {
+            if showsNightDetails, !hasRangePicker(snapshot), !insights.consistency.measured.isEmpty {
                 section("Bedtime and wake time") {
                     SleepTimingCard(consistency: insights.consistency, regularity: snapshot.metric("regularity"))
                 }
             }
-            if !insights.rows.isEmpty {
+            if showsNightDetails, !insights.rows.isEmpty {
                 section("Night details", detail: SleepNightInsights.learningNote(insights.rows.compactMap(\.usual))) {
                     SleepDetailRows(rows: insights.rows)
                 }
@@ -173,11 +278,33 @@ public struct SleepScreen: View {
                 VStack(alignment: .leading, spacing: LooprSpacing.xs) {
                     LooprSectionHeader("Tonight", accent: .sleep)
                         .padding(.horizontal, LooprSpacing.screenGutter)
-                    if let plan {
+                    if !showsNightDetails, let tonightAccessory {
+                        LooprCard {
+                            VStack(spacing: 0) {
+                                if let plan {
+                                    Button { route(.day) } label: {
+                                        LooprRow(title: "Bedtime", subtitle: "For \(LooprUnitFormatter.duration(minutes: plan.sleepMinutes) ?? "") of sleep", symbol: nil) {
+                                            HStack(spacing: LooprSpacing.sm) {
+                                                LooprValueText(plan.bedtimeText)
+                                                LooprChevron()
+                                            }
+                                        }
+                                    }
+                                    .buttonStyle(.looprPressableRow)
+                                    .accessibilityIdentifier("sleep-tonight-bedtime")
+                                    LooprHairline()
+                                }
+                                tonightAccessory
+                            }
+                        }
+                        .padding(.horizontal, LooprSpacing.screenGutter)
+                    } else {
+                      if let plan {
                         SleepTonightCard(plan: plan)
                             .padding(.horizontal, LooprSpacing.screenGutter)
+                      }
+                      accessoryCard
                     }
-                    accessoryCard
                 }
                 .padding(.top, LooprSpacing.md)
             }
@@ -198,7 +325,8 @@ public struct SleepScreen: View {
     private func navigationItems(for snapshot: SleepDaySnapshot) -> [SleepNavigationItem] {
         var items: [SleepNavigationItem] = []
 
-        if !snapshot.trend.isEmpty {
+        // The page's own range picker shows the trends; the row stays only where there is no picker.
+        if !snapshot.trend.isEmpty, snapshot.mainSleep == nil {
             items.append(trendsItem)
         }
 
@@ -216,19 +344,16 @@ public struct SleepScreen: View {
             items.append(correctionsItem)
         }
 
-        if let coach = snapshot.coachLink {
-            items.append(coachItem(coach))
-        }
-
+        // The coach is the Ask button in the header, so the page no longer repeats it as a row (Data ICP R1-DES-24).
         return items
     }
 
     private var hypnogramItem: SleepNavigationItem {
         SleepNavigationItem(
             id: "sleep-hypnogram-route",
-            title: "Sleep stages",
-            detail: "Every stage change with its clock time",
-            accessibilityLabel: "Sleep stages, every stage change with its clock time",
+            title: "Stage changes",
+            detail: "Every change of stage with its clock time",
+            accessibilityLabel: "Stage changes, every change of stage with its clock time",
             action: { route(.hypnogram) }
         )
     }
@@ -276,6 +401,31 @@ public struct SleepScreen: View {
         )
     }
 
+    private func hasRangePicker(_ snapshot: SleepDaySnapshot) -> Bool {
+        showsNightDetails && snapshot.mainSleep != nil && !snapshot.trend.isEmpty
+    }
+
+    /// "10:30 PM to 6:58 AM", or "Day sleep, 8:10 AM to 3:40 PM" when the main sleep starts between 6 AM and 4 PM.
+    nonisolated static func sleepSpan(_ main: SleepSessionSummary) -> String {
+        let span = "\(main.start.formatted(date: .omitted, time: .shortened)) to \(main.end.formatted(date: .omitted, time: .shortened))"
+        let hour = Calendar.current.component(.hour, from: main.start)
+        return (6..<16).contains(hour) ? "Day sleep, \(span)" : span
+    }
+
+    /// The stages section says what kind of number it is: an estimate from a wrist band (Data ICP R2-VET-04).
+    nonisolated static func stagesDetail(_ insights: SleepNightInsights) -> String {
+        let usual = SleepNightInsights.learningNote(insights.stages.map(\.usual))
+            ?? (insights.stages.contains { $0.usual.range != nil } ? "Usual is the middle half of your nights in the last month." : nil)
+        return ["Estimated from your band, not a sleep study.", usual].compactMap { $0 }.joined(separator: " ")
+    }
+
+    /// Sleep's own words for a today with no night, instead of the shared "Log a meal" card (Data ICP R1-NEW-04).
+    nonisolated static func emptyTodayCopy(bandPaired: Bool) -> (title: String, detail: String) {
+        bandPaired
+            ? ("No sleep recorded yet", "Wear your band tonight and open Loopr after you wake up. Your night shows here.")
+            : ("No sleep recorded yet", "Pair a band and wear it tonight. Your first night shows here in the morning.")
+    }
+
     private var header: LooprTabHeaderContent {
         LooprTabHeaderContent(
             title: "Sleep",
@@ -288,7 +438,7 @@ public struct SleepScreen: View {
     }
 
     private var headerMeta: String {
-        viewModel.snapshot.map { SleepDateFormatting.nightMeta(for: $0) } ?? "LAST NIGHT"
+        viewModel.snapshot.map { SleepDateFormatting.nightMeta(for: $0) } ?? "Last night"
     }
 
     /// A chip only when there is something to do about it.
@@ -371,8 +521,7 @@ public struct SleepHypnogramScreen: View {
         }
         .background(Color.loopr(.background).ignoresSafeArea())
         .navigationTitle("Sleep stages")
-        .toolbarBackground(Color.loopr(.background), for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarTitleDisplayMode(.inlineLarge)
         .accessibilityIdentifier("sleep-hypnogram-screen")
     }
 
@@ -457,10 +606,8 @@ public struct SleepHypnogramScreen: View {
 }
 
 public struct SleepTrendsScreen: View {
-    @Environment(\.looprMetricLink) private var metricLink
     public let snapshot: SleepDaySnapshot
     @State private var range: LooprChartRange
-    @State private var loaded: [String: [LooprChartPoint]] = [:]
 
     public init(snapshot: SleepDaySnapshot) {
         self.snapshot = snapshot
@@ -482,56 +629,15 @@ public struct SleepTrendsScreen: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: LooprSpacing.sm) {
                 LooprRangePicker(selection: $range, accent: .sleep, identifier: "sleep-trends-range")
-
-                ForEach(Self.charts, id: \.id) { chart in
-                    let points = points(for: chart.id, trendKey: chart.trendKey)
-                    LooprSectionHeader(chart.title, accent: .sleep)
-                        .padding(.top, LooprSpacing.sm)
-                    LooprMetricTrendCard(
-                        title: chart.title,
-                        points: points,
-                        endingOn: endingOn,
-                        range: $range,
-                        kind: chart.kind,
-                        accent: .sleep,
-                        unit: chart.id == LooprMetricLinkID.sleepEfficiency ? "%" : "",
-                        valueFormat: chart.id == LooprMetricLinkID.sleepEfficiency ? Self.percentText : Self.durationText,
-                        axisFormat: chart.id == LooprMetricLinkID.sleepEfficiency ? Self.percentText : Self.minuteAxisText,
-                        baseline: LooprBaselineBand.trailing(points, before: endingOn),
-                        identifier: "sleep-trend-\(chart.id)",
-                        showsRangePicker: false,
-                        yAxisStep: chart.step
-                    )
-                }
-
-                let consistency = SleepConsistency(history: SleepNightHistory(trend: snapshot.trend, day: snapshot.day))
-                if consistency.measured.count >= 2 {
-                    VStack(alignment: .leading, spacing: LooprSpacing.xs) {
-                        LooprSectionHeader("Bedtime and wake time", detail: "Last 14 nights", accent: .sleep)
-                        LooprSurface {
-                            VStack(alignment: .leading, spacing: LooprSpacing.md) {
-                                if let summary = consistency.summary {
-                                    Text(summary)
-                                        .looprTypography(.prose)
-                                        .foregroundStyle(Color.loopr(.ink))
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                SleepTimingChart(consistency: consistency)
-                            }
-                        }
-                    }
-                    .padding(.top, LooprSpacing.sm)
-                }
+                SleepTrendsContent(snapshot: snapshot, range: $range)
             }
             .padding(LooprSpacing.screenGutter)
             .padding(.bottom, LooprSpacing.tabBarClearance)
         }
         .background(Color.loopr(.background).ignoresSafeArea())
         .navigationTitle("Sleep trends")
-        .toolbarBackground(Color.loopr(.background), for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarTitleDisplayMode(.inlineLarge)
         .accessibilityIdentifier("sleep-trends-screen")
-        .task(id: snapshot.day) { await loadHistory() }
     }
 
     static let percentText: @Sendable (Double) -> String = { "\(Int($0.rounded()))" }
@@ -539,15 +645,6 @@ public struct SleepTrendsScreen: View {
     /// Axis labels for minutes: "30 min" under two hours, "6 h" above.
     static let minuteAxisText: @Sendable (Double) -> String = { value in
         value.rounded() == 0 ? "0" : value < 120 ? "\(Int(value.rounded())) min" : "\(Int((value / 60).rounded())) h"
-    }
-
-    /// The selected night's day at noon, local time.
-    private var endingOn: Date {
-        SleepCivilDay(snapshot.day)?.noon(in: .current) ?? Date()
-    }
-
-    private func points(for id: String, trendKey: String?) -> [LooprChartPoint] {
-        Self.merged(history: loaded[id] ?? [], trend: Self.trendPoints(snapshot.trend, key: trendKey), endingOn: endingOn)
     }
 
     /// The metric history up to the selected night, with the snapshot's own
@@ -577,11 +674,126 @@ public struct SleepTrendsScreen: View {
         .sorted { $0.date < $1.date }
     }
 
+}
+
+/// Sleep's trend charts for one range: time asleep, deep, REM and efficiency, then bedtime and wake time. The Sleep
+/// page shows them under its range picker and the older Sleep trends screen wraps them (Data ICP R1: one Sleep page).
+public struct SleepTrendsContent: View {
+    @Environment(\.looprMetricLink) private var metricLink
+    public let snapshot: SleepDaySnapshot
+    private let insights: SleepNightInsights?
+    @Binding private var range: LooprChartRange
+    @State private var loaded: [String: [LooprChartPoint]] = [:]
+    @State private var showsMore = false
+
+    /// - Parameter insights: the night's insights, for the sleep debt card. Nil leaves debt out.
+    public init(snapshot: SleepDaySnapshot, range: Binding<LooprChartRange>, insights: SleepNightInsights? = nil) {
+        self.snapshot = snapshot
+        self.insights = insights
+        _range = range
+    }
+
+    public var body: some View {
+        Group {
+            // One sentence first: how many nights, the average, and the person's usual (Data ICP R2-NEW-07, R2-SW-04).
+            if let summary = Self.summary(points(for: LooprMetricLinkID.sleepDuration, trendKey: nil), range: range,
+                                          endingOn: endingOn) {
+                LooprCard {
+                    LooprText(summary, style: .prose)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityIdentifier("sleep-trends-summary")
+            }
+            chart(SleepTrendsScreen.charts[0])
+
+            if let insights, insights.ledger.measuredNights > 0 {
+                LooprSectionHeader(insights.target.sectionTitle, detail: "Last 14 nights", accent: .sleep)
+                    .padding(.top, LooprSpacing.sm)
+                SleepDebtCard(ledger: insights.ledger, target: insights.target)
+            }
+
+            let consistency = SleepConsistency(history: SleepNightHistory(trend: snapshot.trend, day: snapshot.day))
+            if consistency.measured.count >= 2 {
+                VStack(alignment: .leading, spacing: LooprSpacing.xs) {
+                    LooprSectionHeader("Bedtime and wake time", detail: "Last 14 nights", accent: .sleep)
+                    LooprSurface {
+                        VStack(alignment: .leading, spacing: LooprSpacing.md) {
+                            if let summary = consistency.summary {
+                                Text(summary)
+                                    .looprTypography(.prose)
+                                    .foregroundStyle(Color.loopr(.ink))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            SleepTimingChart(consistency: consistency)
+                        }
+                    }
+                }
+                .padding(.top, LooprSpacing.sm)
+            }
+
+            // Deep, REM and efficiency look alike as bars, so they wait behind one row.
+            LooprFoldSection("More sleep numbers", summary: "Deep sleep, REM sleep and efficiency",
+                             identifier: "sleep-trends-more", isOpen: $showsMore) {
+                ForEach(SleepTrendsScreen.charts.dropFirst(), id: \.id) { chart($0) }
+            }
+            .padding(.top, LooprSpacing.sm)
+        }
+        .task(id: snapshot.day) { await loadHistory() }
+    }
+
+    @ViewBuilder
+    private func chart(_ chart: (id: String, title: String, trendKey: String?, kind: LooprChartKind, step: Double)) -> some View {
+        let points = points(for: chart.id, trendKey: chart.trendKey)
+        LooprSectionHeader(chart.title, accent: .sleep)
+            .padding(.top, LooprSpacing.sm)
+        LooprMetricTrendCard(
+            title: chart.title,
+            points: points,
+            endingOn: endingOn,
+            range: $range,
+            kind: chart.kind,
+            accent: .sleep,
+            unit: chart.id == LooprMetricLinkID.sleepEfficiency ? "%" : "",
+            valueFormat: chart.id == LooprMetricLinkID.sleepEfficiency ? SleepTrendsScreen.percentText : SleepTrendsScreen.durationText,
+            axisFormat: chart.id == LooprMetricLinkID.sleepEfficiency ? SleepTrendsScreen.percentText : SleepTrendsScreen.minuteAxisText,
+            baseline: LooprBaselineBand.trailing(points, before: endingOn),
+            identifier: "sleep-trend-\(chart.id)",
+            showsRangePicker: false,
+            yAxisStep: chart.step
+        )
+    }
+
+    /// "30 nights with a reading. You averaged 7 h 36 m. Your usual is 7 h 23 m to 7 h 49 m." Nil with no night in the
+    /// range. Without a usual range yet, the last sentence goes.
+    nonisolated static func summary(_ points: [LooprChartPoint], range: LooprChartRange, endingOn: Date,
+                        calendar: Calendar = .current) -> String? {
+        let end = calendar.startOfDay(for: endingOn)
+        guard let start = calendar.date(byAdding: .day, value: -(range.dayCount - 1), to: end) else { return nil }
+        let values = points.filter { $0.date >= start && $0.date <= end && $0.value.isFinite }.map(\.value)
+        guard !values.isEmpty, let average = LooprUnitFormatter.duration(minutes: values.reduce(0, +) / Double(values.count))
+        else { return nil }
+        var text = "\(values.count == 1 ? "1 night" : "\(values.count) nights") with a reading. You averaged \(average)."
+        if let band = LooprBaselineBand.trailing(points, before: endingOn),
+           let low = LooprUnitFormatter.duration(minutes: band.lower), let high = LooprUnitFormatter.duration(minutes: band.upper) {
+            text += " Your usual is \(low) to \(high)."
+        }
+        return text
+    }
+
+    /// The selected night's day at noon, local time.
+    private var endingOn: Date {
+        SleepCivilDay(snapshot.day)?.noon(in: .current) ?? Date()
+    }
+
+    private func points(for id: String, trendKey: String?) -> [LooprChartPoint] {
+        SleepTrendsScreen.merged(history: loaded[id] ?? [], trend: SleepTrendsScreen.trendPoints(snapshot.trend, key: trendKey), endingOn: endingOn)
+    }
+
     private func loadHistory() async {
         guard let metricLink else { return }
         var result: [String: [LooprChartPoint]] = [:]
-        for chart in Self.charts where metricLink.supports(chart.id) {
-            let points = await metricLink.history(chart.id, LooprChartRange.year.dayCount)
+        for chart in SleepTrendsScreen.charts where metricLink.supports(chart.id) {
+            let points = await metricLink.history(chart.id, LooprChartRange.longestDayCount)
             if !points.isEmpty { result[chart.id] = points }
         }
         loaded = result
@@ -661,9 +873,8 @@ public struct SleepSuggestedAlarmScreen: View {
             .padding(.bottom, LooprSpacing.tabBarClearance)
         }
         .background(Color.loopr(.background).ignoresSafeArea())
-        .navigationTitle("Suggested Alarm")
-        .toolbarBackground(Color.loopr(.background), for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .navigationTitle("Suggested alarm")
+        .toolbarTitleDisplayMode(.inlineLarge)
         .accessibilityIdentifier("sleep-suggested-alarm-screen")
     }
 }
@@ -702,9 +913,27 @@ public struct SleepCorrectionsScreen: View {
             .padding(.bottom, LooprSpacing.tabBarClearance)
         }
         .background(Color.loopr(.background).ignoresSafeArea())
-        .navigationTitle("Sleep Corrections")
-        .toolbarBackground(Color.loopr(.background), for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .navigationTitle("Sleep corrections")
+        .toolbarTitleDisplayMode(.inlineLarge)
         .accessibilityIdentifier("sleep-corrections-screen")
+    }
+}
+
+/// What the Sleep page shows: one night, or the trend charts for a range.
+public enum SleepPageScope: Hashable, Sendable {
+    case night
+    case range(LooprChartRange)
+
+    static let options: [LooprPillOption<SleepPageScope>] =
+        [LooprPillOption(.night, title: "Night", spokenTitle: "This night", identifier: "sleep-scope-night")]
+        + LooprChartRange.allCases.map {
+            LooprPillOption(.range($0), title: $0.title, spokenTitle: $0.spokenTitle, identifier: "sleep-scope-\($0.rawValue)")
+        }
+
+    /// The ranges longer than the history, shown dimmed: a 2Y pill over three months of nights would head a "2-year
+    /// average" it does not have (Data ICP R4-SW-01, R4-DES-01). The same rule as the metric pages' range picker.
+    static func locked(historyDays: Int) -> Set<SleepPageScope> {
+        let open = LooprChartRange.unlocked(historyDays: historyDays)
+        return Set(LooprChartRange.allCases.filter { !open.contains($0) }.map { .range($0) })
     }
 }

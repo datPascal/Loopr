@@ -5,6 +5,7 @@
 //  Created by Pascal Lindenau on 06.08.26.
 //
 
+import DesignSystem
 import NotificationKit
 import SwiftUI
 
@@ -21,6 +22,9 @@ struct LooprApp: App {
         // The model is built here rather than lazily inside the StateObject
         // autoclosure so the application delegate can find it during a
         // background relaunch for the band, when no scene is ever connected.
+        LooprNavigationAppearance.apply()
+        // The appearance Settings stored, before the first frame, so a dark choice never opens on a light frame.
+        LooprLaunchAppearance.applyRemembered(composition: environment.composition)
         let model = BluetoothApplicationModel.production()
         LooprLaunchBootstrap.shared.register(model)
         if environment.composition == .production {
@@ -60,7 +64,14 @@ struct LooprApp: App {
 
     private var productRoot: some View {
             RootGate(environment: environment, bluetoothModel: bluetoothModel)
-                .onOpenURL { url in LooprQuickActions.shared.receive(url: url) }
+                .onOpenURL { url in
+                    // A protocol file from the share sheet or Files goes to the file inbox and opens the Protocol tab.
+                    if RoutineFileInbox.shared.receive(url), let protocolTab = URL(string: "loopr://protocol") {
+                        LooprQuickActions.shared.receive(url: protocolTab)
+                    } else {
+                        LooprQuickActions.shared.receive(url: url)
+                    }
+                }
                 .environmentObject(bluetoothModel)
                 .environment(\.looprBluetoothModel, bluetoothModel)
                 .environment(\.looprBandLink, bluetoothModel.bandLink)

@@ -13,14 +13,8 @@ public struct OnboardingProfileForm: Equatable, Sendable {
         case intersex
         case undisclosed
 
-        public var title: String {
-            switch self {
-            case .female: "Female"
-            case .male: "Male"
-            case .intersex: "Intersex"
-            case .undisclosed: "Prefer not to say"
-            }
-        }
+        /// The same words Profile shows for the stored answer.
+        public var title: String { biologicalSex.title }
 
         public var biologicalSex: BiologicalSex {
             switch self {
@@ -42,14 +36,15 @@ public struct OnboardingProfileForm: Equatable, Sendable {
     }
 
     public enum Issue: Equatable, Sendable {
-        case age
+        /// The birth year is not a year that gives an age from 13 to 120.
+        case birthYear
         case height
         case weight
 
         public var message: String {
             switch self {
-            case .age:
-                "Enter an age from \(ProfileEstimates.supportedAges.lowerBound) to \(ProfileEstimates.supportedAges.upperBound), or leave it blank."
+            case .birthYear:
+                "Enter the year you were born, as four digits, or leave it blank."
             case .height: "That height looks off. Check the number and the units, or leave it blank."
             case .weight: "That weight looks off. Check the number and the units, or leave it blank."
             }
@@ -57,7 +52,9 @@ public struct OnboardingProfileForm: Equatable, Sendable {
     }
 
     public var name: String = ""
-    public var age: String = ""
+    /// The year as typed. The profile stores the birth year, and the Data and Fitness rulers ask for it by that name,
+    /// so onboarding asks for it too and works the age out (R2-UPG-2, R2-NEW-3).
+    public var birthYear: String = ""
     public var sex: SexChoice?
     public var unitSystem: UnitSystem = .metric
     /// Centimetres when metric; whole feet when imperial.
@@ -72,9 +69,7 @@ public struct OnboardingProfileForm: Equatable, Sendable {
     /// relaunch in the middle of onboarding.
     public init(draft: ProfileDraft, currentYear: Int) {
         name = draft.displayName ?? ""
-        if let birthYear = draft.birthYear {
-            age = String(ProfileEstimates.age(birthYear: birthYear, currentYear: currentYear))
-        }
+        if let year = draft.birthYear { birthYear = String(year) }
         sex = draft.biologicalSex.map(SexChoice.init)
         unitSystem = draft.unitSystem ?? .metric
         if let centimetres = draft.heightCentimeters {
@@ -95,8 +90,15 @@ public struct OnboardingProfileForm: Equatable, Sendable {
 
     // MARK: Parsed values
 
-    public var ageValue: Int? {
-        Int(age.trimmingCharacters(in: .whitespaces))
+    public var birthYearValue: Int? {
+        Int(birthYear.trimmingCharacters(in: .whitespaces))
+    }
+
+    /// The age the typed year gives this year, or nil when the year is blank or outside the supported ages.
+    public func age(currentYear: Int) -> Int? {
+        guard let year = birthYearValue else { return nil }
+        let age = ProfileEstimates.age(birthYear: year, currentYear: currentYear)
+        return ProfileEstimates.supportedAges.contains(age) ? age : nil
     }
 
     public var heightCentimeters: Double? {
@@ -116,19 +118,21 @@ public struct OnboardingProfileForm: Equatable, Sendable {
         return unitSystem == .metric ? value : UnitConverter.poundsToKilograms(value)
     }
 
-    /// The Tanaka estimate for the typed age, or nil when the age is blank
-    /// or outside the supported range.
-    public var estimatedMaxHeartRate: Int? {
-        ageValue.flatMap(ProfileEstimates.estimatedMaxHeartRate(age:))
+    /// The Tanaka estimate for the age the typed year gives, or nil when the
+    /// year is blank or outside the supported range.
+    public func estimatedMaxHeartRate(currentYear: Int) -> Int? {
+        age(currentYear: currentYear).flatMap(ProfileEstimates.estimatedMaxHeartRate(age:))
     }
 
     // MARK: Validation
 
     /// Problems with what was typed. Blank fields are never a problem.
-    public var issues: [Issue] {
+    public func issues(currentYear: Int) -> [Issue] {
         var result: [Issue] = []
-        if !age.trimmingCharacters(in: .whitespaces).isEmpty {
-            if let value = ageValue, ProfileEstimates.supportedAges.contains(value) {} else { result.append(.age) }
+        // A year still being typed ("19") is not flagged yet; Continue waits for the fourth digit.
+        let year = birthYear.trimmingCharacters(in: .whitespaces)
+        if !year.isEmpty, year.count >= 4 || !year.allSatisfy(\.isNumber), age(currentYear: currentYear) == nil {
+            result.append(.birthYear)
         }
         let heightTyped = !heightPrimary.trimmingCharacters(in: .whitespaces).isEmpty
             || !heightInches.trimmingCharacters(in: .whitespaces).isEmpty
@@ -145,7 +149,10 @@ public struct OnboardingProfileForm: Equatable, Sendable {
         return result
     }
 
-    public var canSubmit: Bool { issues.isEmpty }
+    public func canSubmit(currentYear: Int) -> Bool {
+        let yearTyped = !birthYear.trimmingCharacters(in: .whitespaces).isEmpty
+        return issues(currentYear: currentYear).isEmpty && (!yearTyped || age(currentYear: currentYear) != nil)
+    }
 
     /// The draft saved to ProfileKit. Time zone comes from the device, so
     /// nobody types an identifier.
@@ -153,11 +160,7 @@ public struct OnboardingProfileForm: Equatable, Sendable {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return ProfileDraft(
             displayName: trimmedName.isEmpty ? nil : trimmedName,
-            birthYear: ageValue.flatMap {
-                ProfileEstimates.supportedAges.contains($0)
-                    ? ProfileEstimates.birthYear(age: $0, currentYear: currentYear)
-                    : nil
-            },
+            birthYear: age(currentYear: currentYear) == nil ? nil : birthYearValue,
             biologicalSex: sex?.biologicalSex,
             heightCentimeters: heightCentimeters,
             weightKilograms: weightKilograms,

@@ -67,6 +67,38 @@ final class HandsFreeRoutingTests: XCTestCase {
         XCTAssertEqual(effects, [0])
     }
 
+    func testInvalidatedCueCannotResumeAfterDelayedStateRead() async {
+        let runtime = CueRuntimeFixture()
+        let gate = CueStateGate()
+        await runtime.pauseNextStateRead(gate)
+        let delivery = BandCueDelivery(runtime: runtime)
+        let send = Task { await delivery.send(pattern: [0], sessionID: UUID(), queue: BandCueCommandQueue(wait: {})) }
+        await gate.wait()
+        await delivery.invalidate()
+        await gate.open()
+        let result = await send.value
+        XCTAssertFalse(result)
+        let effects = await runtime.effects
+        XCTAssertTrue(effects.isEmpty)
+    }
+
+    func testOlderPendingCueCannotReplaceANewerSession() async {
+        let runtime = CueRuntimeFixture()
+        let gate = CueStateGate()
+        await runtime.pauseNextStateRead(gate)
+        let delivery = BandCueDelivery(runtime: runtime)
+        let queue = BandCueCommandQueue(wait: {})
+        let older = Task { await delivery.send(pattern: [0], sessionID: UUID(), queue: queue) }
+        await gate.wait()
+        let current = await delivery.send(pattern: [2], sessionID: UUID(), queue: queue)
+        await gate.open()
+        let oldResult = await older.value
+        XCTAssertTrue(current)
+        XCTAssertFalse(oldResult)
+        let effects = await runtime.effects
+        XCTAssertEqual(effects, [2])
+    }
+
     func testShortcutMomentUsesCanonicalJournalWithItsSource() async throws {
         let journal = JournalRepository()
         let date = Date(timeIntervalSince1970: 100)
@@ -108,23 +140,25 @@ final class HandsFreeRoutingTests: XCTestCase {
 
     @MainActor
     func testQuickActionsResolveOnceAndIgnoreUnknownTypes() {
-        _ = LooprQuickActions.shared.take()
+        // Its own store: the test host's shell may be open and would take a link from the shared one first.
+        let actions = LooprQuickActions()
         let items = LooprQuickActions.items
         XCTAssertEqual(items.count, 2)
-        XCTAssertTrue(LooprQuickActions.shared.receive(items[0]))
-        XCTAssertEqual(LooprQuickActions.shared.take(), .syncBand)
-        XCTAssertNil(LooprQuickActions.shared.take())
-        XCTAssertTrue(LooprQuickActions.shared.receive(items[1]))
-        XCTAssertEqual(LooprQuickActions.shared.take(), .breathing(start: true, bandPacing: true))
-        XCTAssertFalse(LooprQuickActions.shared.receive(.init(type: "unknown", localizedTitle: "Unknown")))
-        XCTAssertNil(LooprQuickActions.shared.take())
+        XCTAssertTrue(actions.receive(items[0]))
+        XCTAssertEqual(actions.take(), .syncBand)
+        XCTAssertNil(actions.take())
+        XCTAssertTrue(actions.receive(items[1]))
+        XCTAssertEqual(actions.take(), .breathing(start: true, bandPacing: true))
+        XCTAssertFalse(actions.receive(.init(type: "unknown", localizedTitle: "Unknown")))
+        XCTAssertNil(actions.take())
     }
     @MainActor
     func testColdLaunchURLWaitsForShellConsumption() {
-        _ = LooprQuickActions.shared.take()
-        XCTAssertTrue(LooprQuickActions.shared.receive(url: URL(string: "loopr://breathing?start=true&band=true")!))
-        XCTAssertEqual(LooprQuickActions.shared.take(), .breathing(start: true, bandPacing: true))
-        XCTAssertNil(LooprQuickActions.shared.take())
+        // Its own store: the test host's shell may be open and would take a link from the shared one first.
+        let actions = LooprQuickActions()
+        XCTAssertTrue(actions.receive(url: URL(string: "loopr://breathing?start=true&band=true")!))
+        XCTAssertEqual(actions.take(), .breathing(start: true, bandPacing: true))
+        XCTAssertNil(actions.take())
     }
 
 }
@@ -134,6 +168,8 @@ actor CueRuntimeFixture: LooprDeviceCenterRuntime {
     init(model: BandModel = .whoop4) { self.model = model }
     private var generation: UInt64 = 7
     private(set) var effects: [UInt8] = []
+    private var stateGate: CueStateGate?
+    func pauseNextStateRead(_ gate: CueStateGate) { stateGate = gate }
     func replaceConnection() { generation += 1 }
     func buzzBand(effect: UInt8) { effects.append(effect) }
     func buzzBand(effect: UInt8, expectedGeneration: UInt64) throws {
@@ -145,14 +181,30 @@ actor CueRuntimeFixture: LooprDeviceCenterRuntime {
     func acquireLiveStream(kind: LiveStreamKind, consumer: LiveStreamConsumer) throws -> LiveStreamConsumerHandle {
         throw HeartLiveStreamAdapterError.unavailable
     }
-    func runtimeState() -> BluetoothAdoptionRuntimeState {
-        .init(running: true, generation: generation,
+    func runtimeState() async -> BluetoothAdoptionRuntimeState {
+        if let gate = stateGate { stateGate = nil; await gate.pause() }
+        return .init(running: true, generation: generation,
               connection: .listening(generation: generation, peripheral: UUID()),
               setupReady: true, setupComplete: true, radioState: .poweredOn,
               health: .init(healthy: true, stale: false, shouldBounce: false, ageOfLatestObservation: 1, corruptionRate: 0, reasons: []),
               pendingReconnect: nil, liveConsumerCount: 0, pendingHistoryReplayCount: 0,
               validFrameCount: 1, corruptFrameCount: 0, writeTimeoutCount: 0, lastError: nil, bandModel: model)
     }
+}
+
+actor CueStateGate {
+    private var entered = false
+    private var waiting: CheckedContinuation<Void, Never>?
+    private var opening: CheckedContinuation<Void, Never>?
+    func pause() async {
+        entered = true; waiting?.resume(); waiting = nil
+        await withCheckedContinuation { opening = $0 }
+    }
+    func wait() async {
+        if entered { return }
+        await withCheckedContinuation { waiting = $0 }
+    }
+    func open() { opening?.resume(); opening = nil }
 }
 
 private actor CueSequenceRecorder {

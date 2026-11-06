@@ -4,6 +4,21 @@ import DesignSystem
 import XCTest
 
 final class SettingsKitTests: XCTestCase {
+    /// R2-UPG-2: Profile stores the birth year. A snapshot saved with an age only moves to the birth year that age
+    /// gives this year, and a saved birth year comes back as typed.
+    func testProfileSettingsKeepTheBirthYearAndMigrateAStoredAge() throws {
+        let legacy = Data(#"{"displayName":"Alex","age":41,"heightCentimeters":180}"#.utf8)
+        let migrated = try JSONDecoder().decode(ProfileSettings.self, from: legacy)
+        XCTAssertEqual(migrated.birthYear, ProfileSettings.currentYear() - 41)
+        XCTAssertEqual(migrated.age, 41)
+        XCTAssertEqual(migrated.heightCentimeters, 180)
+
+        let saved = ProfileSettings(displayName: "Alex", birthYear: 1985)
+        let reloaded = try JSONDecoder().decode(ProfileSettings.self, from: JSONEncoder().encode(saved))
+        XCTAssertEqual(reloaded, saved)
+        XCTAssertEqual(ProfileSettings.acceptedBirthYears(currentYear: 2026), 1906...2013)
+    }
+
     actor TestHealthKitEntryPoint: HealthKitSettingsEntryPoint {
         private var current: SettingsIntegrationState = .permissionRequired
         private(set) var requestCount = 0

@@ -53,7 +53,7 @@ final class LegalDisclosureUITests: XCTestCase {
         onboarding.terminate()
 
         let app = releaseLaunch("populated")
-        app.buttons["open-settings"].firstMatch.tap()
+        XCTAssertTrue(app.openLooprSettings())
         XCTAssertTrue(app.descendants(matching: .any)["settings-modal"].firstMatch.waitForExistence(timeout: 15))
         scrollToAndTap("settings-legal-and-licenses", in: app)
         XCTAssertTrue(textContaining("not affiliated", in: app).waitForExistence(timeout: 15))
@@ -67,7 +67,7 @@ final class DeletionFlowUITests: XCTestCase {
     @MainActor
     func testHealthKitPersistenceDisclosureAndSeparateRemovalControlExist() {
         let app = releaseLaunch("populated")
-        app.buttons["open-settings"].firstMatch.tap()
+        XCTAssertTrue(app.openLooprSettings())
         XCTAssertTrue(app.descendants(matching: .any)["settings-modal"].firstMatch.waitForExistence(timeout: 5))
         scrollToAndTap("settings-data-history", in: app)
         XCTAssertTrue(app.descendants(matching: .any)["data-screen"].firstMatch.waitForExistence(timeout: 5))
@@ -88,7 +88,8 @@ final class LaunchPerformanceTests: XCTestCase {
         app.launchEnvironment["LOOPR_LAUNCH_MODE"] = "populated"
         measure(metrics: [XCTApplicationLaunchMetric(waitUntilResponsive: true)]) {
             app.launch()
-            XCTAssertTrue(app.descendants(matching: .any)["main-tab-shell"].firstMatch.waitForExistence(timeout: 5))
+            // The shell root (`main-tab-shell`) is the launch's finish line: the five-tab shell, not the splash.
+            XCTAssertTrue(app.descendants(matching: .any)["main-tab-shell"].firstMatch.waitForExistence(timeout: 15))
             app.terminate()
         }
     }
@@ -103,7 +104,7 @@ final class LiveHRUpdateBudgetTests: XCTestCase {
     @MainActor
     func testLiveHeartProjectionIsOneBoundedAccessibleRegion() {
         let app = releaseLaunch("populated")
-        app.tabBars.buttons["Heart"].tap()
+        app.openLooprArea("Heart")
         let card = app.descendants(matching: .any)["heart-live-card"].firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 5))
         XCTAssertLessThanOrEqual(app.descendants(matching: .any)
@@ -155,10 +156,10 @@ final class NavigationMatrixTests: XCTestCase {
         let app = releaseLaunch("activeWorkout")
         let roots = [
             ("Today", "today-screen"),
-            ("Sleep", "sleep-screen"),
-            ("Heart", "heart-screen"),
-            ("Body", "body-screen"),
-            ("Workouts", "workouts-screen")
+            ("Food", "food-screen"),
+            ("Fitness", "workouts-screen"),
+            ("Protocol", "journal-screen"),
+            ("Data", "health-screen")
         ]
         for (tab, root) in roots {
             app.tabBars.buttons[tab].tap()
@@ -173,7 +174,7 @@ final class NavigationMatrixTests: XCTestCase {
     func testSettingsModalDismissesBackToSelectedTab() {
         let app = releaseLaunch("populated")
         XCTAssertTrue(app.descendants(matching: .any)["today-screen"].firstMatch.waitForExistence(timeout: 5))
-        app.buttons["open-settings"].firstMatch.tap()
+        XCTAssertTrue(app.openLooprSettings())
         XCTAssertTrue(app.descendants(matching: .any)["settings-modal"].firstMatch.waitForExistence(timeout: 5))
         app.buttons["Done"].firstMatch.tap()
         XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)

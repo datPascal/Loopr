@@ -23,11 +23,14 @@ public struct TodayRecoveryBreakdownScreen: View {
                 if let summary = viewModel.summary, let dashboard = viewModel.dashboard(isToday: isToday) {
                     let explanation = TodayRecoveryExplanation(summary: summary, context: viewModel.context)
                     VStack(alignment: .leading, spacing: 0) {
-                        HStack {
-                            LooprText("Score weights", style: .cardTitle)
-                            Spacer()
-                            if let reading = dashboard.hero.reading { LooprText(reading.text, style: .metricCompact) }
-                        }.padding(.horizontal, LooprSpacing.screenGutter).padding(.top, LooprSpacing.lg)
+                        // The score line shows only with a score, so a night not in yet has no stray heading (R3-NEW-11).
+                        if let reading = dashboard.hero.reading {
+                            HStack {
+                                LooprText("Recovery score", style: .cardTitle)
+                                Spacer()
+                                LooprText(reading.text, style: .metricCompact)
+                            }.padding(.horizontal, LooprSpacing.screenGutter).padding(.top, LooprSpacing.lg)
+                        }
 
                         TodayBreakdownSection(title: "What shaped it", detail: "Last night against your earlier nights") {
                             VStack(alignment: .leading, spacing: LooprSpacing.sm) {
@@ -86,7 +89,7 @@ public struct TodayRecoveryBreakdownScreen: View {
     static let howItWorks = "Recovery needs at least two usable signals. Before 14 nights it is an early estimate. Each morning Loopr compares last night's HRV, resting heart rate and breathing rate with your own earlier nights, up to 28 of them. HRV above your usual raises the score. Resting heart rate or breathing rate above your usual lowers it. HRV counts most and breathing rate least. 67 and up is Ready, 34 to 66 is Steady, 33 and below is Recover."
 
     private var isToday: Bool { dayNavigation?.isToday ?? true }
-    private var meta: String { (dayNavigation?.dateText ?? "").uppercased() }
+    private var meta: String { (dayNavigation?.dateText ?? "").looprLabelCased }
 
     private func row(_ row: TodayRecoveryExplanation.Row) -> LooprContributorRow {
         LooprContributorRow(
@@ -121,7 +124,7 @@ public struct TodayStrainBreakdownScreen: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            StickyHeader(title: "Strain", meta: (dayNavigation?.dateText ?? "").uppercased())
+            StickyHeader(title: "Strain", meta: (dayNavigation?.dateText ?? "").looprLabelCased)
             ScrollView {
                 if let summary = viewModel.summary {
                     let explanation = TodayStrainExplanation(summary: summary, context: viewModel.context)

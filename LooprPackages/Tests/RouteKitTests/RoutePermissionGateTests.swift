@@ -27,6 +27,18 @@ final class RoutePermissionGateTests: XCTestCase {
         XCTAssertEqual(state, .recording)
     }
 
+    func testPermissionGrantedDuringStartAllowsLaterResume() async throws {
+        let gate = AcceptingGate()
+        let recorder = RouteRecorder(location: gate)
+        try await recorder.start(workoutID: "permission-granted", activity: .walk, permission: .notRequested)
+        try await recorder.suspend()
+        try await recorder.resume()
+        let state = await recorder.currentState()
+        XCTAssertEqual(state, .recording)
+        let starts = await gate.startCount()
+        XCTAssertEqual(starts, 2)
+    }
+
     func testNotRequestedStillFailsWhenTheGateReportsADenial() async {
         let recorder = RouteRecorder(location: PermissionDenyingGate())
         do {

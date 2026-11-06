@@ -145,6 +145,8 @@ public enum OnboardingNotificationGroup: String, CaseIterable, Sendable {
     case workouts
     case breathing
     case band
+    /// Reminders the person confirms in Ask or starts with a Patterns test.
+    case reminders
     /// Families that stay off until the person turns them on.
     case offUntilChosen
 
@@ -157,6 +159,7 @@ public enum OnboardingNotificationGroup: String, CaseIterable, Sendable {
         case .detectedWorkouts, .workoutCompletion: return .workouts
         case .breathingCompletion: return .breathing
         case .battery, .chargeGuidance, .disconnect, .staleData: return .band
+        case .userReminders: return .reminders
         case .recoveryReadiness, .validatedHealthChanges, .goals, .journaling, .briefings,
              .windDown, .hydration, .cycleReminders, .highHeartRate, .lowHeartRate,
              .overnightCheck, .cardioFitness:

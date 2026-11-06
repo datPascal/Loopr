@@ -5,7 +5,7 @@ import SwiftUI
 
 /// What the right half of the meta line says about how fresh the numbers are.
 public enum LooprHeaderFreshness: Equatable, Sendable {
-    /// "SYNCED 5 MIN AGO", or "SYNCING" while the band hands over data.
+    /// "SYNCED 5 MIN AGO", or "Syncing" while the band hands over data.
     /// `now` pins the clock for fixture launches; nil is the real clock.
     case sync(lastSync: Date?, now: Date? = nil)
     /// The band is streaming heart rate right now.
@@ -20,15 +20,15 @@ public enum LooprHeaderMeta {
     /// The title already names the tab, so the day lives here.
     public static func dayPhrase(_ navigation: LooprDayNavigation) -> String {
         if navigation.isToday || navigation.title == navigation.dateText {
-            return navigation.dateText.uppercased()
+            return navigation.dateText.looprLabelCased
         }
-        return "\(navigation.title) · \(navigation.dateText)".uppercased()
+        return "\(navigation.title) · \(navigation.dateText)".looprLabelCased
     }
 
-    /// Sleep's day phrase: "LAST NIGHT" on today, otherwise the night
+    /// Sleep's day phrase: "Last night" on today, otherwise the night
     /// itself, "TUE 22 → WED 23 SEP".
     public static func nightPhrase(_ navigation: LooprDayNavigation) -> String {
-        navigation.isToday ? "LAST NIGHT" : navigation.nightRange.uppercased()
+        navigation.isToday ? "Last night" : navigation.nightRange.looprLabelCased
     }
 
     /// The freshness words, or nil when the slot stays empty.
@@ -41,13 +41,13 @@ public enum LooprHeaderMeta {
         case .hidden:
             return nil
         case .live:
-            return Freshness(text: "LIVE", isActive: true)
+            return Freshness(text: "Live", isActive: true)
         case .sync(let lastSync, let pinnedNow):
             if indicator?.link == .notPaired { return nil }
-            if indicator?.link == .syncing { return Freshness(text: "SYNCING", isActive: true) }
+            if indicator?.link == .syncing { return Freshness(text: "Syncing", isActive: true) }
             let newest = [lastSync, indicator?.lastSyncedAt].compactMap { $0 }.max()
             return LooprSyncAge.label(lastSync: newest, now: pinnedNow ?? now)
-                .map { Freshness(text: $0.uppercased(), isActive: false) }
+                .map { Freshness(text: $0.looprLabelCased, isActive: false) }
         }
     }
 
@@ -65,6 +65,97 @@ public enum LooprHeaderMeta {
 
 // MARK: - Header content
 
+/// The header's top row at default text sizes: the title, then the cluster (chip, shortcut, day control), then the band
+/// button. It is one row while the title fits at `minimumTitleScale` or more of its own width beside the cluster and the
+/// band button. Otherwise the title keeps the first row with the band button, and the cluster moves to a second row,
+/// trailing. Subviews, in order: title, cluster, band.
+struct LooprHeaderTopRow: Layout {
+    /// The smallest share of its width the title may shrink to before the controls move down.
+    static let minimumTitleScale: CGFloat = 0.85
+    /// The smallest scale the header asks for when it is the last resort, after the compact controls: 0.72 keeps
+    /// "Today" beside a past day's Today pill on a 402 pt phone instead of dropping the controls to a second row.
+    /// It stays above the title's `minimumScaleFactor` (0.7), so the title shrinks rather than truncates.
+    static let lastResortTitleScale: CGFloat = 0.72
+
+    enum Arrangement: Equatable, Sendable { case oneRow, twoRows }
+
+    var titleSpacing: CGFloat = LooprSpacing.sm
+    var clusterSpacing: CGFloat = LooprSpacing.headerClusterSpacing
+    var rowSpacing: CGFloat = LooprSpacing.xs
+    var titleScale: CGFloat = LooprHeaderTopRow.minimumTitleScale
+
+    /// The arrangement for a row `width` wide, from each part's own width.
+    static func arrangement(width: CGFloat, title: CGFloat, cluster: CGFloat, band: CGFloat,
+                            titleSpacing: CGFloat = LooprSpacing.sm,
+                            clusterSpacing: CGFloat = LooprSpacing.headerClusterSpacing,
+                            titleScale: CGFloat = minimumTitleScale) -> Arrangement {
+        guard width.isFinite else { return .oneRow }
+        let trailing = cluster + band + (cluster > 0 && band > 0 ? clusterSpacing : 0)
+        let room = width - trailing - (trailing > 0 ? titleSpacing : 0)
+        return room >= title * titleScale ? .oneRow : .twoRows
+    }
+
+    private struct Parts {
+        var title: CGSize, cluster: CGSize, band: CGSize
+    }
+
+    private func parts(_ subviews: Subviews) -> Parts {
+        func size(_ index: Int) -> CGSize {
+            guard subviews.indices.contains(index) else { return .zero }
+            return subviews[index].sizeThatFits(.unspecified)
+        }
+        return Parts(title: size(0), cluster: size(1), band: size(2))
+    }
+
+    private func arrangement(_ parts: Parts, width: CGFloat) -> Arrangement {
+        Self.arrangement(width: width, title: parts.title.width, cluster: parts.cluster.width, band: parts.band.width,
+                         titleSpacing: titleSpacing, clusterSpacing: clusterSpacing, titleScale: titleScale)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let parts = parts(subviews)
+        let trailing = parts.cluster.width + parts.band.width + (parts.cluster.width > 0 && parts.band.width > 0 ? clusterSpacing : 0)
+        let natural = parts.title.width + (trailing > 0 ? titleSpacing + trailing : 0)
+        let width = proposal.width ?? natural
+        switch arrangement(parts, width: width) {
+        case .oneRow:
+            return CGSize(width: width, height: max(parts.title.height, parts.cluster.height, parts.band.height))
+        case .twoRows:
+            let first = max(parts.title.height, parts.band.height)
+            let second = parts.cluster.width > 0 ? rowSpacing + parts.cluster.height : 0
+            return CGSize(width: width, height: first + second)
+        }
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 3 else { return }
+        let parts = parts(subviews)
+        switch arrangement(parts, width: bounds.width) {
+        case .oneRow:
+            let height = bounds.height
+            let bandX = bounds.maxX - parts.band.width
+            let clusterX = bandX - (parts.band.width > 0 && parts.cluster.width > 0 ? clusterSpacing : 0) - parts.cluster.width
+            let titleWidth = max(0, min(parts.title.width, clusterX - bounds.minX - (parts.cluster.width + parts.band.width > 0 ? titleSpacing : 0)))
+            subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.minY + (height - parts.title.height) / 2),
+                              proposal: ProposedViewSize(width: titleWidth, height: parts.title.height))
+            subviews[1].place(at: CGPoint(x: clusterX, y: bounds.minY + (height - parts.cluster.height) / 2),
+                              proposal: ProposedViewSize(parts.cluster))
+            subviews[2].place(at: CGPoint(x: bandX, y: bounds.minY + (height - parts.band.height) / 2),
+                              proposal: ProposedViewSize(parts.band))
+        case .twoRows:
+            let first = max(parts.title.height, parts.band.height)
+            let bandX = bounds.maxX - parts.band.width
+            let titleWidth = max(0, min(parts.title.width, bandX - bounds.minX - (parts.band.width > 0 ? titleSpacing : 0)))
+            subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.minY + (first - parts.title.height) / 2),
+                              proposal: ProposedViewSize(width: titleWidth, height: parts.title.height))
+            subviews[2].place(at: CGPoint(x: bandX, y: bounds.minY + (first - parts.band.height) / 2),
+                              proposal: ProposedViewSize(parts.band))
+            subviews[1].place(at: CGPoint(x: bounds.maxX - parts.cluster.width, y: bounds.minY + first + rowSpacing),
+                              proposal: ProposedViewSize(parts.cluster))
+        }
+    }
+}
+
 /// The second slot of the trailing cluster.
 public enum LooprHeaderControl {
     case none
@@ -79,12 +170,16 @@ public enum LooprHeaderControl {
 public struct LooprHeaderAction {
     public let symbol: String
     public let label: String
+    /// A short word drawn beside the symbol, such as "Ask". Nil draws the symbol alone in a circle.
+    public let title: String?
     public let identifier: String
     public let run: @MainActor () -> Void
 
-    public init(symbol: String, label: String, identifier: String, run: @escaping @MainActor () -> Void) {
+    public init(symbol: String, label: String, title: String? = nil, identifier: String,
+                run: @escaping @MainActor () -> Void) {
         self.symbol = symbol
         self.label = label
+        self.title = title
         self.identifier = identifier
         self.run = run
     }
@@ -99,6 +194,9 @@ public struct LooprTabHeaderContent {
     public var freshness: LooprHeaderFreshness
     public var status: StatusChip?
     public var control: LooprHeaderControl
+    /// A glass button left of `control`, for a shortcut that has to stay
+    /// reachable at any scroll depth, such as Today's coach.
+    public var secondaryAction: LooprHeaderAction?
     /// Band state and settings action for hosts that do not put them in the
     /// environment.
     public var bandFallback: LooprBandIndicator?
@@ -113,6 +211,7 @@ public struct LooprTabHeaderContent {
         freshness: LooprHeaderFreshness = .hidden,
         status: StatusChip? = nil,
         control: LooprHeaderControl = .none,
+        secondaryAction: LooprHeaderAction? = nil,
         bandFallback: LooprBandIndicator? = nil,
         settingsFallback: (@MainActor () -> Void)? = nil
     ) {
@@ -122,6 +221,7 @@ public struct LooprTabHeaderContent {
         self.freshness = freshness
         self.status = status
         self.control = control
+        self.secondaryAction = secondaryAction
         self.bandFallback = bandFallback
         self.settingsFallback = settingsFallback
     }
@@ -172,6 +272,7 @@ enum LooprHeaderSnap {
 /// under its material. Scrolling collapses it continuously over the first
 /// 44 pt and the scroll always comes to rest expanded or collapsed.
 public struct LooprTabScaffold<Content: View>: View {
+    @Environment(\.looprAsk) private var ask
     @Environment(\.looprRefresh) private var refresh
     @Environment(\.looprHeaderUsesNavigationBar) private var usesNavigationBar
     @State private var collapse = LooprHeaderCollapse()
@@ -181,6 +282,8 @@ public struct LooprTabScaffold<Content: View>: View {
 
     private let header: LooprTabHeaderContent
     private let glow: LooprColorToken?
+    /// The tab's drifting colour field (DESIGN_LANGUAGE premium check 4). Nil keeps the ambient glow.
+    let field: LooprColorFieldTab?
     private let identifier: String
     private let content: Content
 
@@ -194,10 +297,35 @@ public struct LooprTabScaffold<Content: View>: View {
         identifier: String,
         @ViewBuilder content: () -> Content
     ) {
+        self.init(header: header, glow: glow, field: nil, identifier: identifier, content: content)
+    }
+
+    /// A tab with its colour field behind the scroll view in place of the
+    /// ambient glow. The field pauses itself while the tab is hidden, in Low
+    /// Power Mode and under Reduce Motion.
+    ///
+    /// - Parameter field: The tab whose field is drawn. Nil draws the glow.
+    public init(
+        header: LooprTabHeaderContent,
+        glow: LooprColorToken?,
+        field: LooprColorFieldTab?,
+        identifier: String,
+        @ViewBuilder content: () -> Content
+    ) {
         self.header = header
         self.glow = glow
+        self.field = field
         self.identifier = identifier
         self.content = content()
+    }
+
+    @ViewBuilder
+    private var backdrop: some View {
+        if let field {
+            LooprColorField(tab: field)
+        } else {
+            LooprAmbientBackground(tint: glow, fallback: header.accent)
+        }
     }
 
     public var body: some View {
@@ -205,19 +333,25 @@ public struct LooprTabScaffold<Content: View>: View {
             // Pushed onto another tab's stack: the header moves into the
             // system bar beside the back button.
             scrollView
-                .background { LooprAmbientBackground(tint: glow, fallback: header.accent) }
-                .overlay(alignment: .top) {
-                    StickyHeader(title: header.title, meta: header.dayPhrase ?? "", status: header.status) {
-                        LooprHeaderControlView(control: header.control, accent: header.accent)
+                .background { backdrop }
+                .navigationTitle(header.title)
+                .toolbarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        LooprText(header.title, style: .title)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityIdentifier("loopr-navigation-header")
                     }
                 }
+                .looprAskToolbar(origin: header.title)
                 .sensoryFeedback(.success, trigger: finishedRefreshes)
         } else {
             scrollView
                 .safeAreaInset(edge: .top, spacing: 0) {
                     LooprTabHeader(header, collapse: collapse)
                 }
-                .background { LooprAmbientBackground(tint: glow, fallback: header.accent) }
+                .overlay(alignment: .bottom) { LooprTabBarScrim() }
+                .background { backdrop }
                 .sensoryFeedback(.success, trigger: finishedRefreshes)
         }
     }
@@ -281,7 +415,13 @@ public struct LooprTabHeader: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let content: LooprTabHeaderContent
+    @Environment(\.looprAsk) private var ask
+    private let originalContent: LooprTabHeaderContent
+    private var content: LooprTabHeaderContent {
+        var value = originalContent
+        if let ask { value.secondaryAction = ask.header(for: value.title, identifier: value.secondaryAction?.identifier) }
+        return value
+    }
     private let collapse: LooprHeaderCollapse?
     private let showsBar: Bool
 
@@ -289,7 +429,7 @@ public struct LooprTabHeader: View {
     ///   - collapse: Scroll-driven collapse. Nil keeps the header expanded.
     ///   - showsBar: Without `collapse`, whether the material bar is drawn.
     public init(_ content: LooprTabHeaderContent, collapse: LooprHeaderCollapse? = nil, showsBar: Bool = false) {
-        self.content = content
+        self.originalContent = content
         self.collapse = collapse
         self.showsBar = showsBar
     }
@@ -302,25 +442,49 @@ public struct LooprTabHeader: View {
         // The bar gives back the meta line's height as it collapses.
         let shrink = reduces || isLarge ? 0 : LooprSpacing.headerMetaCollapse * progress
 
-        VStack(alignment: .leading, spacing: LooprSpacing.sm) {
-            HStack(alignment: .center, spacing: LooprSpacing.sm) {
-                titleBlock(progress: progress, reduces: reduces, isLarge: isLarge)
-                    .layoutPriority(1)
-                Spacer(minLength: 0)
-                HStack(spacing: LooprSpacing.headerClusterSpacing) {
-                    if !isLarge {
+        VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
+            if !isLarge {
+                // One row, always tried in this order: the title at full size beside the labelled shortcut; then
+                // beside the shortcut as a symbol alone; then the title shrunk to 80 % beside the compact controls. A
+                // past day's Today pill made the controls drop to a second row under the title, which read as a
+                // broken header (Pascal, 2026-11-03). The second row stays only for a title that cannot fit at all.
+                ViewThatFits(in: .horizontal) {
+                    oneRow(progress: progress, reduces: reduces, shrink: shrink, compact: false)
+                    oneRow(progress: progress, reduces: reduces, shrink: shrink, compact: true)
+                    LooprHeaderTopRow(titleScale: LooprHeaderTopRow.lastResortTitleScale) {
+                        titleBlock(progress: progress, reduces: reduces, isLarge: isLarge)
+                        cluster(compact: true)
+                            .offset(y: -shrink / 2)
+                        HStack(spacing: 0) { band }
+                            .offset(y: -shrink / 2)
+                    }
+                }
+            } else {
+                topRow(progress: progress, reduces: reduces, isLarge: isLarge, shrink: shrink, showsChip: true)
+            }
+            LooprHeaderMetaLine(dayPhrase: content.dayPhrase, freshness: content.freshness,
+                accent: content.accent, stacked: isLarge)
+                .opacity(isLarge ? 1 : Double(max(0, 1 - progress * 1.6)))
+                .offset(y: reduces || isLarge ? 0 : -LooprSpacing.xxs * progress)
+            if isLarge, content.status != nil || hasControl || content.secondaryAction != nil {
+                // The chip, the shortcut and the day control share a second
+                // row. When they do not fit side by side the chip takes its
+                // own line.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: LooprSpacing.headerClusterSpacing) {
                         chip
+                        Spacer(minLength: 0)
+                        secondary
                         control
                     }
-                    band
-                }
-                .offset(y: -shrink / 2)
-            }
-            if isLarge, content.status != nil || hasControl {
-                HStack(spacing: LooprSpacing.headerClusterSpacing) {
-                    chip
-                    Spacer(minLength: 0)
-                    control
+                    VStack(alignment: .leading, spacing: LooprSpacing.headerClusterSpacing) {
+                        chip
+                        HStack(spacing: LooprSpacing.headerClusterSpacing) {
+                            Spacer(minLength: 0)
+                            secondary
+                            control
+                        }
+                    }
                 }
             }
         }
@@ -337,6 +501,54 @@ public struct LooprTabHeader: View {
 
     // MARK: Parts
 
+    /// The title at its full width with the controls beside it. `ViewThatFits` takes it only when all of it fits.
+    private func oneRow(progress: CGFloat, reduces: Bool, shrink: CGFloat, compact: Bool) -> some View {
+        HStack(alignment: .center, spacing: LooprSpacing.sm) {
+            titleBlock(progress: progress, reduces: reduces, isLarge: false)
+                .fixedSize(horizontal: true, vertical: false)
+            Spacer(minLength: 0)
+            HStack(spacing: LooprSpacing.headerClusterSpacing) {
+                cluster(compact: compact)
+                band
+            }
+            .offset(y: -shrink / 2)
+        }
+    }
+
+    /// The chip, the shortcut and the day control. `compact` draws the shortcut as its symbol alone.
+    private func cluster(compact: Bool) -> some View {
+        HStack(spacing: LooprSpacing.headerClusterSpacing) {
+            chip
+            if let action = content.secondaryAction {
+                LooprHeaderActionButton(action: action, compact: compact)
+            }
+            control
+        }
+    }
+
+    private func topRow(
+        progress: CGFloat,
+        reduces: Bool,
+        isLarge: Bool,
+        shrink: CGFloat,
+        showsChip: Bool
+    ) -> some View {
+        HStack(alignment: .center, spacing: LooprSpacing.sm) {
+            titleBlock(progress: progress, reduces: reduces, isLarge: isLarge)
+                .layoutPriority(1)
+            Spacer(minLength: 0)
+            HStack(spacing: LooprSpacing.headerClusterSpacing) {
+                if !isLarge {
+                    if showsChip { chip }
+                    secondary
+                    control
+                }
+                band
+            }
+            .offset(y: -shrink / 2)
+        }
+    }
+
     private func titleBlock(progress: CGFloat, reduces: Bool, isLarge: Bool) -> some View {
         VStack(alignment: .leading, spacing: LooprSpacing.xxs / 2) {
             Text(content.title)
@@ -349,18 +561,15 @@ public struct LooprTabHeader: View {
                 .scaleEffect(reduces || isLarge ? 1 : 1 - 0.2 * progress, anchor: .leading)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("tab-header-title")
-            LooprHeaderMetaLine(
-                dayPhrase: content.dayPhrase,
-                freshness: content.freshness,
-                accent: content.accent,
-                stacked: isLarge
-            )
-            // At accessibility sizes the meta line is several rows tall; it
-            // stays, so the collapsed bar is never a tall empty band.
-            .opacity(isLarge ? 1 : Double(max(0, 1 - progress * 1.6)))
-            .offset(y: reduces || isLarge ? 0 : -4 * progress)
         }
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private var secondary: some View {
+        if let action = content.secondaryAction {
+            LooprHeaderActionButton(action: action)
+        }
     }
 
     @ViewBuilder
@@ -411,17 +620,72 @@ struct LooprHeaderControlView: View {
         case .custom(let view):
             view
         case .action(let action):
+            LooprHeaderActionButton(action: action)
+        }
+    }
+}
+
+/// A glass circle in the header cluster, the size of the band button.
+public struct LooprHeaderActionButton: View {
+    let action: LooprHeaderAction
+    private let accent: LooprColorToken
+    /// Draws a labelled action as its symbol alone in a 48 pt circle, for a header short of room.
+    private let compact: Bool
+    public init(action: LooprHeaderAction, accent: LooprColorToken = .ink, compact: Bool = false) {
+        self.action = action
+        self.accent = accent
+        self.compact = compact
+    }
+
+    public var body: some View {
+        if compact {
             Button(action: action.run) {
                 Image(systemName: action.symbol)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Color.loopr(.ink))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
+                    .looprTypography(.metricValue)
+                    .foregroundStyle(Color.loopr(accent))
+                    .frame(width: LooprSpacing.headerControlDiameter, height: LooprSpacing.headerControlDiameter)
+                    .glassEffect(.regular.interactive(), in: Circle())
+                    .contentShape(.interaction, Circle())
             }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
+            .buttonStyle(.plain)
+            .frame(width: LooprSpacing.headerControlDiameter, height: LooprSpacing.interactiveRowHeight)
+            .accessibilityLabel(action.label)
+            .accessibilityIdentifier(action.identifier)
+        } else if let title = action.title {
+            // A labelled action: the symbol and its word in a glass capsule, so a first-time reader knows what it does
+            // (R1-NEW-17). Same height as the circle, so the row keeps its height.
+            Button(action: action.run) {
+                HStack(spacing: LooprSpacing.xxs) {
+                    Image(systemName: action.symbol)
+                        .looprTypography(.label)
+                    Text(title)
+                        .looprTypography(.label)
+                        .lineLimit(1)
+                }
+                .foregroundStyle(Color.loopr(accent))
+                .padding(.horizontal, LooprSpacing.sm)
+                .frame(height: LooprSpacing.headerControlDiameter)
+                .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+                .frame(minWidth: LooprSpacing.interactiveRowHeight, minHeight: LooprSpacing.interactiveRowHeight)
+                .contentShape(.interaction, Rectangle())
+            }
+            .buttonStyle(.plain)
+            .fixedSize()
+            .accessibilityLabel(action.label)
+            .accessibilityIdentifier(action.identifier)
+        } else {
+            Button(action: action.run) {
+                Image(systemName: action.symbol)
+                    .looprTypography(.metricValue)
+                    .foregroundStyle(Color.loopr(accent))
+                    .frame(width: LooprSpacing.headerControlDiameter, height: LooprSpacing.headerControlDiameter)
+                    .glassEffect(.regular.interactive(), in: Circle())
+                    .frame(width: LooprSpacing.interactiveRowHeight, height: LooprSpacing.interactiveRowHeight)
+                    .contentShape(.interaction, Rectangle())
+            }
+            .buttonStyle(.plain)
             // The same slot as the band button, so the row keeps its height.
-            .frame(width: LooprBandButton.diameter, height: LooprBandButton.diameter)
+            .frame(width: LooprSpacing.interactiveRowHeight, height: LooprSpacing.interactiveRowHeight)
             .accessibilityLabel(action.label)
             .accessibilityIdentifier(action.identifier)
         }
@@ -536,5 +800,40 @@ struct LooprHeaderMetaLine: View {
                 .contentTransition(.opacity)
         }
         .animation(LooprMotion.stateChange, value: freshness)
+    }
+}
+
+/// A backing under the glass tab bar. The bar's own glass is so clear that body text scrolled under it stayed readable
+/// as ghost lines between the labels (R1-NEW-13, R1-LAB-22). This scrim fades the page's ground in over the bar's
+/// height, so content dissolves before it reaches the labels. With Reduce Transparency it is solid.
+struct LooprTabBarScrim: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// How far above the bar the fade starts.
+    static let lead: CGFloat = 24
+    /// The ground's strength under the labels.
+    static func strength(isDark: Bool, reduceTransparency: Bool) -> Double {
+        reduceTransparency ? 1 : (isDark ? 0.86 : 0.9)
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let ground = Color.loopr(.background)
+            let strength = Self.strength(isDark: LooprAppearance.isDark(colorScheme), reduceTransparency: reduceTransparency)
+            let height = proxy.safeAreaInsets.bottom + Self.lead
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                LinearGradient(stops: [
+                    .init(color: ground.opacity(0), location: 0),
+                    .init(color: ground.opacity(strength), location: min(Self.lead / max(height, 1) * 1.6, 0.6)),
+                    .init(color: ground.opacity(strength), location: 1)
+                ], startPoint: .top, endPoint: .bottom)
+                .frame(height: height)
+            }
+            .ignoresSafeArea(.container, edges: .bottom)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

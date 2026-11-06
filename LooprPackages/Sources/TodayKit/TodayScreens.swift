@@ -5,6 +5,17 @@ import DesignSystem
 import OSLog
 #endif
 
+/// The Ask shortcut in Today's header. It lives in the sticky header so it stays one tap away at any
+/// scroll depth, on every day. Ask reads the day the person is looking at.
+enum TodayHeaderShortcut {
+    static let coachIdentifier = "today-header-coach"
+    static let coachLabel = "Ask your coach"
+
+    static func coach(open: @escaping @MainActor () -> Void) -> LooprHeaderAction {
+        LooprHeaderAction(symbol: "sparkles", label: coachLabel, title: "Ask", identifier: coachIdentifier, run: open)
+    }
+}
+
 public enum TodayRoute: Hashable, Sendable, CaseIterable {
     case sleep
     case heart
@@ -30,6 +41,8 @@ public struct TodayScreen: View {
     /// The shared day, when the app provides one. The header then names that
     /// day and carries the day navigator.
     @Environment(\.looprDayNavigation) private var dayNavigation
+    /// The person hid "No band connected" (ICP R3-NEW-7).
+    @AppStorage(TodayBandBannerPreference.hiddenKey) private var noBandHidden = false
     private let bandConnectionTitle: String
     private let bandConnectionMessage: String?
     private let bandModelName: String?
@@ -43,9 +56,16 @@ public struct TodayScreen: View {
     /// A card the app places under the day's content, such as the wake
     /// alarm. TodayKit does not know what it is; it only gives it a spot.
     private let accessory: AnyView?
-    @State private var isEditingNumbers = false
-    /// One tap when the pinned numbers are saved or a heads-up is put away.
-    @State private var haptic: LooprHaptic?
+    private let pinnedNumbers: AnyView?
+    /// Rows, timeline moments and the pattern card the app reads from Food, Train, Journal and Patterns.
+    private let agent: TodayAgentContent
+    private let onAgentAction: (TodayAgentAction) -> Void
+    /// The day dial the app read from its stores (DEC-12.3). Nil while it loads: its placeholder holds the place.
+    private let dial: TodayDialContent?
+    /// What sits under the dial: the coach note, the protocol rail and the experiment strip (LV-04 step 3).
+    private let dialCompanion: AnyView?
+    /// The experiment strip, under "More from today".
+    private let dialCompanionMore: AnyView?
 
     public init(
         viewModel: TodayViewModel,
@@ -58,7 +78,13 @@ public struct TodayScreen: View {
         bandModelName: String? = nil,
         bandIsExperimental: Bool = false,
         onConnectBand: @escaping () -> Void = {},
-        accessory: AnyView? = nil
+        accessory: AnyView? = nil,
+        pinnedNumbers: AnyView? = nil,
+        agent: TodayAgentContent = .empty,
+        onAgentAction: @escaping (TodayAgentAction) -> Void = { _ in },
+        dial: TodayDialContent? = nil,
+        dialCompanion: AnyView? = nil,
+        dialCompanionMore: AnyView? = nil
     ) {
         self.bandConnectionTitle = bandConnectionTitle
         self.bandConnectionMessage = bandConnectionMessage
@@ -71,10 +97,17 @@ public struct TodayScreen: View {
         self.showsConnectBand = showsConnectBand
         self.onConnectBand = onConnectBand
         self.accessory = accessory
+        self.pinnedNumbers = pinnedNumbers
+        self.agent = agent
+        self.onAgentAction = onAgentAction
+        self.dial = dial
+        self.dialCompanion = dialCompanion
+        self.dialCompanionMore = dialCompanionMore
     }
 
     public var body: some View {
-        LooprTabScaffold(header: header, glow: glow, identifier: "today-screen") {
+        // Today always stands on its own field, loading or not, so the first frame is already the dial's page.
+        LooprTabScaffold(header: header, glow: glow, field: .today, identifier: "today-screen") {
             VStack(alignment: .leading, spacing: LooprSpacing.sm) {
                 bandBanner
                 if let bandModelName, !showsConnectBand {
@@ -101,18 +134,15 @@ public struct TodayScreen: View {
             }
             // The band row slides in and out instead of shoving the hero.
             .animation(LooprMotion.stateChange, value: bannerKind)
+            // At the largest text sizes a prompt chip or a readout has an ideal width past the screen. Without this it
+            // widens the whole vertical scroll view and the header, so every card runs off both edges (as 91903334 fixed
+            // on the metric pages).
+            .containerRelativeFrame(.horizontal)
+            // Meals and workouts fly their dots onto the dial.
+            .looprDotFlightHost()
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $isEditingNumbers) {
-            TodayEditNumbersSheet(pinned: viewModel.preferences.pinned) { pinned in
-                if pinned != viewModel.preferences.pinned { haptic = .success }
-                withAnimation(LooprMotion.phaseChange(reduceMotion: reduceMotion)) {
-                    viewModel.setPinned(pinned)
-                }
-            }
-        }
-        .looprHaptic(haptic)
     }
 
     private var header: LooprTabHeaderContent {
@@ -120,13 +150,14 @@ public struct TodayScreen: View {
             title: "Today",
             accent: .brand,
             dayPhrase: dayNavigation.map(LooprHeaderMeta.dayPhrase)
-                ?? viewModel.summary.flatMap { TodayHeaderFormatting.dayLabel(for: $0.day)?.uppercased() },
+                ?? viewModel.summary.flatMap { TodayHeaderFormatting.dayLabel(for: $0.day)?.looprLabelCased },
             freshness: .sync(
                 lastSync: dayNavigation?.lastSyncedAt ?? viewModel.summary?.freshness.updatedAt,
                 now: dayNavigation?.now
             ),
             status: headerStatus,
             control: dayNavigation.map { .day($0) } ?? .none,
+            secondaryAction: TodayHeaderShortcut.coach { route(.coach) },
             settingsFallback: { route(.settings) }
         )
     }
@@ -158,14 +189,27 @@ public struct TodayScreen: View {
     private var phaseContent: some View {
         switch phase {
         case .loading:
-            LooprLoadingPlaceholder(.ringHero(cards: 2))
+            // The dial's own frame in the dial's place, then the cards, so the page keeps its shape (ICP R3-PAS-1).
+            VStack(alignment: .leading, spacing: 0) {
+                TodayDialPlaceholder()
+                    .padding(.top, LooprSpacing.xs)
+                LooprLoadingPlaceholder(.cards(2))
+            }
         case .emptyDay:
             if let dayNavigation {
                 // A day with nothing derived reads as one plain card, not a
-                // page of empty rings and rows.
-                LooprDayEmptyState(dayNavigation, accent: .brand)
-                    .padding(.horizontal, LooprSpacing.screenGutter)
-                    .padding(.top, LooprSpacing.lg)
+                // page of empty rings and rows. What the person logged follows it.
+                VStack(alignment: .leading, spacing: 0) {
+                    // First run already shows the one teaching card above; a second "nothing yet" card under it said
+                    // the same thing again (UX R1-DES-12).
+                    if bannerKind != .invitation {
+                        LooprDayEmptyState(dayNavigation, accent: .brand, context: .logsBelow)
+                            .padding(.horizontal, LooprSpacing.screenGutter)
+                            .padding(.top, LooprSpacing.lg)
+                    }
+                    TodayManualDayContent(agent: agent, route: route, onAgentAction: onAgentAction, dial: dial,
+                                          dialCompanion: dialCompanion, dialCompanionMore: dialCompanionMore)
+                }
             }
         case .content:
             if let summary = viewModel.summary,
@@ -174,16 +218,14 @@ public struct TodayScreen: View {
                     summary: summary,
                     dashboard: dashboard,
                     route: route,
+                    agent: agent,
+                    onAgentAction: onAgentAction,
                     externalInsight: externalInsight,
                     onExternalInsight: onExternalInsight,
-                    accessory: isLoading ? nil : accessory,
-                    onDismissHeadsUp: {
-                        haptic = .light
-                        withAnimation(.easeOut(duration: LooprMotion.standard)) {
-                            viewModel.dismissHeadsUp(for: summary.day)
-                        }
-                    },
-                    onEditNumbers: { isEditingNumbers = true }
+                    pinnedNumbers: pinnedNumbers,
+                    dial: dial,
+                    dialCompanion: dialCompanion,
+                    dialCompanionMore: dialCompanionMore
                 )
             }
         case .failed:
@@ -191,16 +233,27 @@ public struct TodayScreen: View {
                 .padding(.horizontal, LooprSpacing.screenGutter)
                 .padding(.top, LooprSpacing.lg)
         case .empty:
-            LooprCard { TodayEmptyState() }
-                .padding(.horizontal, LooprSpacing.screenGutter)
-                .padding(.top, LooprSpacing.lg)
+            VStack(alignment: .leading, spacing: 0) {
+                if bannerKind != .invitation {
+                    LooprCard { TodayEmptyState() }
+                        .padding(.horizontal, LooprSpacing.screenGutter)
+                        .padding(.top, LooprSpacing.lg)
+                }
+                TodayManualDayContent(agent: agent, route: route, onAgentAction: onAgentAction, dial: dial,
+                                          dialCompanion: dialCompanion, dialCompanionMore: dialCompanionMore)
+            }
         }
     }
 
     private enum BannerKind: Hashable { case none, invitation, noBand, connection }
 
     private var bannerKind: BannerKind {
-        if showsConnectBand { return hasHistory ? .noBand : .invitation }
+        // An empty today without a band gets the one card with its two buttons, history or not; a slim row over a
+        // "nothing yet" card said the same thing twice with no button (UX R2-NEW-01, R2-DES-17).
+        if showsConnectBand {
+            if !hasHistory || (isEmptyToday && !noBandHidden) { return .invitation }
+            return noBandHidden ? .none : .noBand
+        }
         if bandConnectionMessage != nil, !bandConnected { return .connection }
         return .none
     }
@@ -213,17 +266,18 @@ public struct TodayScreen: View {
     /// with history gets one slim line, so their numbers stay on top.
     @ViewBuilder
     private var bandBanner: some View {
-        if showsConnectBand, !hasHistory {
-            TodayConnectBandCard(action: onConnectBand)
+        if bannerKind == .invitation {
+            TodayConnectBandCard(action: onConnectBand, logMeal: { onAgentAction(.yourDayRow("food")) })
                 .transition(bannerTransition)
-        } else if showsConnectBand {
+        } else if showsConnectBand, !noBandHidden {
             TodayBandStatusRow(
                 title: "No band connected",
-                detail: "Connect to sync new nights.",
-                actionTitle: "Connect",
+                detail: "Connect it to sync your nights.",
+                actionTitle: "Connect band",
                 actionIdentifier: "today-connect-band",
                 statusIdentifier: "today-band-status",
-                action: onConnectBand
+                action: onConnectBand,
+                hide: { withAnimation(LooprMotion.reducesMotion(reduceMotion) ? nil : LooprMotion.stateChange) { noBandHidden = true } }
             )
             .padding(.horizontal, LooprSpacing.screenGutter)
             .padding(.top, LooprSpacing.sm)
@@ -241,6 +295,11 @@ public struct TodayScreen: View {
             .padding(.top, LooprSpacing.sm)
             .transition(bannerTransition)
         }
+    }
+
+    /// Today, with nothing derived for it.
+    private var isEmptyToday: Bool {
+        (dayNavigation?.isToday ?? true) && (phase == .emptyDay || phase == .empty)
     }
 
     /// Band history exists when any day has data, or this day has a summary.
@@ -280,8 +339,18 @@ public struct TodayScreen: View {
     }
 }
 
+/// First run without a band: what a band adds, what works without one, and the two first steps. Pairing is offered,
+/// never demanded (R1-NEW-2).
+enum TodayNoBandCopy {
+    static let label = "Start with a meal or a workout"
+    static let body = "Whatever you log shows up here. Sleep and recovery need a WHOOP 4.0 band and appear after its first night."
+    static let logMeal = "Log a meal"
+    static let connect = "Connect a band"
+}
+
 private struct TodayConnectBandCard: View {
     let action: () -> Void
+    let logMeal: () -> Void
     #if DEBUG
     private let pairingLogger = Logger(subsystem: "com.loopr.ios", category: "pairing")
     #endif
@@ -289,21 +358,24 @@ private struct TodayConnectBandCard: View {
     var body: some View {
         LooprCard {
             VStack(alignment: .leading, spacing: LooprSpacing.sm) {
-                LooprText("CONNECT YOUR BAND", style: .sectionLabel, color: .brand)
-                LooprText(
-                    "Pair your band to start syncing health and activity data.",
-                    style: .prose,
-                    color: .inkSecondary
-                )
+                LooprText(TodayNoBandCopy.label, style: .title, color: .ink)
+                    .accessibilityAddTraits(.isHeader)
+                LooprText(TodayNoBandCopy.body, style: .prose, color: .inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(action: logMeal) {
+                    Label(TodayNoBandCopy.logMeal, systemImage: "fork.knife")
+                }
+                .buttonStyle(LooprButtonStyle())
+                .accessibilityIdentifier("today-no-band-log-meal")
                 Button {
                     #if DEBUG
                     pairingLogger.debug("Today Connect button tapped")
                     #endif
                     action()
                 } label: {
-                    Label("Connect band", systemImage: "antenna.radiowaves.left.and.right")
+                    Label(TodayNoBandCopy.connect, systemImage: "antenna.radiowaves.left.and.right")
                 }
-                .buttonStyle(LooprButtonStyle())
+                .buttonStyle(LooprButtonStyle(prominent: false))
                 .accessibilityIdentifier("today-connect-band")
             }
         }
@@ -316,54 +388,5 @@ private struct TodayEmptyState: View {
     var body: some View {
         StateMessage(.noRecords)
             .padding(LooprSpacing.md)
-    }
-}
-
-/// Goal editing stays beside the Today projection.  The app may inject a
-/// durable save closure, while this package-owned view remains usable in the
-/// fixture composition and never mutates the metric summary itself.
-public struct TodayGoalSettingsScreen: View {
-    public let initialStepGoal: Int?
-    public let initialStrainTarget: Double?
-    public let onSave: (Int?, Double?) -> Void
-
-    @State private var stepGoal: String
-    @State private var strainTarget: String
-
-    public init(
-        initialStepGoal: Int? = 10_000,
-        initialStrainTarget: Double? = 10,
-        onSave: @escaping (Int?, Double?) -> Void = { _, _ in }
-    ) {
-        self.initialStepGoal = initialStepGoal
-        self.initialStrainTarget = initialStrainTarget
-        self.onSave = onSave
-        _stepGoal = State(initialValue: initialStepGoal.map(String.init) ?? "")
-        _strainTarget = State(initialValue: initialStrainTarget.map { String($0) } ?? "")
-    }
-
-    public var body: some View {
-        Form {
-            Section("Daily goals") {
-                TextField("Estimated steps", text: $stepGoal)
-                    .keyboardType(.numberPad)
-                    .accessibilityIdentifier("goal-step-input")
-                TextField("Strain target", text: $strainTarget)
-                    .keyboardType(.decimalPad)
-                    .accessibilityIdentifier("goal-strain-input")
-            }
-            Section {
-                Button("Save goals") {
-                    onSave(Int(stepGoal), Double(strainTarget))
-                }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .accessibilityIdentifier("goal-save")
-            } footer: {
-                Text("Goals are personal targets, not medical recommendations. Missing values remain unset.")
-            }
-        }
-        .navigationTitle("Goal Settings")
-        .accessibilityIdentifier("goal-settings-screen")
     }
 }

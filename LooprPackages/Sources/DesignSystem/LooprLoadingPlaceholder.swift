@@ -9,9 +9,6 @@ import SwiftUI
 /// blocks breathe in opacity instead.
 public struct LooprLoadingPlaceholder: View {
     public enum Layout: Equatable, Sendable {
-        /// A large ring with a line under it, a card of three small rings,
-        /// then `cards` plain cards. Today.
-        case ringHero(cards: Int)
         /// A card with a large number and a chart band, then `cards` cards.
         /// Sleep, Heart and Body.
         case heroCard(cards: Int)
@@ -33,10 +30,6 @@ public struct LooprLoadingPlaceholder: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: LooprSpacing.cardStack) {
             switch layout {
-            case .ringHero(let cards):
-                ringHero
-                ringRow
-                cardStack(cards)
             case .heroCard(let cards):
                 heroCard
                 cardStack(cards)
@@ -55,37 +48,6 @@ public struct LooprLoadingPlaceholder: View {
             guard !revealed else { return }
             do { try await Task.sleep(for: revealDelay) } catch { return }
             withAnimation(.easeIn(duration: 0.2)) { revealed = true }
-        }
-    }
-
-    private var ringHero: some View {
-        VStack(spacing: LooprSpacing.md) {
-            Circle()
-                .stroke(LooprPlaceholderStyle.blockFill, lineWidth: 14)
-                .frame(width: 176, height: 176)
-                .looprShimmer()
-            LooprPlaceholderBlock(width: 150, height: 12)
-            LooprPlaceholderBlock(width: 220, height: 10)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, LooprSpacing.md)
-    }
-
-    private var ringRow: some View {
-        LooprCard(density: .flush) {
-            HStack(spacing: 0) {
-                ForEach(0..<3, id: \.self) { _ in
-                    VStack(spacing: LooprSpacing.xs) {
-                        Circle()
-                            .stroke(LooprPlaceholderStyle.blockFill, lineWidth: 6)
-                            .frame(width: 56, height: 56)
-                            .looprShimmer()
-                        LooprPlaceholderBlock(width: 44, height: 9)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-            .padding(.vertical, LooprSpacing.lg)
         }
     }
 

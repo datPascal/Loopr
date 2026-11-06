@@ -7,7 +7,7 @@ import SwiftUI
 public extension LooprSpacing {
     /// Header text inset: the 16 pt card gutter plus a 4 pt optical inset, so
     /// the title lines up with the text inside the cards below it.
-    static let headerHorizontal: CGFloat = 20
+    static let headerHorizontal: CGFloat = 24
     static let headerVertical: CGFloat = 12
     /// How far the page scrolls before the header is fully collapsed.
     static let headerCollapseDistance: CGFloat = 44
@@ -17,26 +17,28 @@ public extension LooprSpacing {
     static let headerClusterSpacing: CGFloat = 8
 
     /// Padding inside a regular card.
-    static let cardVertical: CGFloat = 16
-    static let cardHorizontal: CGFloat = 18
+    static let cardVertical: CGFloat = 20
+    static let cardHorizontal: CGFloat = 20
     /// Padding inside a compact card, such as a number tile.
-    static let compactCardVertical: CGFloat = 12
-    static let compactCardHorizontal: CGFloat = 14
+    static let compactCardVertical: CGFloat = 16
+    static let compactCardHorizontal: CGFloat = 16
     /// Vertical padding of a row inside a hairline list.
-    static let metricRowVertical: CGFloat = 13
+    static let metricRowVertical: CGFloat = 15
     /// Space between the header and the first card on a tab.
     static let tabContentTop: CGFloat = 8
     /// Space between two cards that belong together.
     static let cardStack: CGFloat = 12
     /// Space between titled sections on a tab.
-    static let tabSection: CGFloat = 24
+    static let tabSection: CGFloat = 36
+    /// Plot and weekday labels for the seven-day summary.
+    static let weeklyChartHeight: CGFloat = 156
 }
 
 public extension LooprRadius {
-    /// The corner radius of a regular card: tighter on the dark set, softer on
-    /// the white one.
+    /// The corner radius of a regular card. Both appearances use the same soft
+    /// corner since the 2026-10-22 redesign.
     static func surface(isDark: Bool) -> CGFloat {
-        isDark ? compactCard : card
+        card
     }
 }
 

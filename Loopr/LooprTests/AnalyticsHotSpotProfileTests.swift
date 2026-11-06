@@ -1,3 +1,4 @@
+#if LOOPR_PRIVATE_DATABASE_AUDITS
 import XCTest
 import Foundation
 import AnalyticsKit
@@ -6,7 +7,7 @@ import DomainKit
 @testable import Loopr
 
 /// Times the individual analytics primitives over a real day so the cost of one
-/// derivation can be attributed instead of guessed. Skips itself without a
+/// derivation can be attributed instead of guessed. Requires an opt-in private
 /// database copy. Nothing asserts a budget; the numbers are printed.
 final class AnalyticsHotSpotProfileTests: XCTestCase {
     private static var sourcePath: String {
@@ -22,7 +23,7 @@ final class AnalyticsHotSpotProfileTests: XCTestCase {
     }
 
     func testPrimitiveTimings() throws {
-        try XCTSkipIf(!FileManager.default.isReadableFile(atPath: Self.sourcePath), "No real strap database available")
+        try XCTUnwrap(FileManager.default.isReadableFile(atPath: Self.sourcePath) ? Self.sourcePath : nil, "Private audit requires a readable device database")
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -127,3 +128,5 @@ private final class UncheckedBox<T>: @unchecked Sendable {
     var value: T
     init(_ value: T) { self.value = value }
 }
+
+#endif

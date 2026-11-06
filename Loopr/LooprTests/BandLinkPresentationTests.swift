@@ -2,6 +2,8 @@ import BluetoothKit
 import DesignSystem
 import Foundation
 import SyncKit
+import SettingsKit
+import SwiftUI
 import Testing
 @testable import Loopr
 
@@ -323,5 +325,34 @@ private actor PresentationTestRuntime: LooprBluetoothAdoptionRuntime, LooprDevic
 
     func runtimeState() async -> BluetoothAdoptionRuntimeState {
         LooprRuntimeHandle.unboundState
+    }
+}
+
+/// R2-UPG-24: Settings says what every tab's band button says. A launch whose shell stands in a paired band has no real
+/// link, so the line reads that band instead of "Not paired".
+@MainActor
+struct BandSettingsSummaryTests {
+    @Test func aStandInPairedBandReadsAsConnectedInSettings() {
+        let shown = LooprBandIndicator(link: .connected, batteryPercent: 78, lastSyncedAt: Date())
+        #expect(BandLinkPresentation.settingsSummary(link: nil, shown: shown, paired: true) == "Connected")
+        #expect(BandLinkPresentation.settingsSummary(link: nil, shown: nil, paired: false) == "Not paired")
+        #expect(BandLinkPresentation.summary(for: LooprBandIndicator(link: .connected, charging: true)) == "Charging")
+        #expect(BandLinkPresentation.summary(for: LooprBandIndicator(link: .bluetoothOff)) == "Bluetooth is off")
+    }
+}
+
+/// R2-LAB-23: one appearance source for a launch. A fixture follows its `--loopr-appearance=` argument, production
+/// what Settings last applied, and neither means the system.
+struct LaunchAppearanceTests {
+    @Test func theLaunchArgumentAndTheStoredSettingResolveThroughOneSource() throws {
+        let defaults = try #require(UserDefaults(suiteName: "LaunchAppearanceTests.\(UUID().uuidString)"))
+        #expect(LooprLaunchAppearance.launchAppearance(composition: .populated, arguments: ["--loopr-appearance=dark"],
+                                                       defaults: defaults) == .dark)
+        #expect(LooprLaunchAppearance.launchAppearance(composition: .empty, arguments: [], defaults: defaults) == nil)
+        #expect(LooprLaunchAppearance.launchAppearance(composition: .production, arguments: [], defaults: defaults) == nil)
+        LooprLaunchAppearance.remember(.dark, defaults: defaults)
+        #expect(LooprLaunchAppearance.launchAppearance(composition: .production, arguments: ["--loopr-appearance=light"],
+                                                       defaults: defaults) == .dark)
+        #expect(LooprAppearanceOverride.dark.colorScheme == .dark && LooprAppearanceOverride.system.colorScheme == nil)
     }
 }

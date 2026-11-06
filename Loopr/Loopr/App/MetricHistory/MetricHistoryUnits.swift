@@ -29,12 +29,12 @@ nonisolated extension MetricKey {
         switch self {
         case .restingHeartRate, .sleepingHeartRate, .maxHeartRate: .beatsPerMinute
         case .rmssd, .sdnn: .milliseconds
-        case .pNN50, .heartRateDip, .oxygenSaturation, .sleepEfficiency: .percent
+        case .pNN50, .heartRateDip, .oxygenSaturation, .sleepEfficiency, .sleepPerformance: .percent
         case .respiratoryRate: .breathsPerMinute
         case .skinTemperatureDeviation: .celsiusDeviation
         case .recovery, .stress, .sleepConsistency: .score
         case .strain: .strainScale
-        case .sleepDuration, .deepSleep, .remSleep: .minutes
+        case .sleepDuration, .sleepDebt, .deepSleep, .remSleep: .minutes
         case .vo2Max: .millilitresPerKilogramMinute
         case .activeEnergy: .kilocalories
         case .steps: .count

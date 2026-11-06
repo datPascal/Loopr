@@ -99,6 +99,8 @@ struct RootGate: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: onboardingCompleted)
         .looprMeasurementSystem(designSystem.measurementSystem)
         .looprVoiceOverHints(designSystem.voiceOverHints)
+        // The window follows the stored appearance, so system chrome and the tokens always agree.
+        .preferredColorScheme(designSystem.appearance.colorScheme)
         .background(Color.loopr(.background).ignoresSafeArea())
         .onReceive(NotificationCenter.default.publisher(for: DesignSystemRuntime.didChangeNotification)) { _ in
             designSystem = DesignSystemRuntime.state()
@@ -182,7 +184,7 @@ private struct OnboardingFoundation: View {
                         VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
                             LooprText("LOOPR", style: .overline, color: .brand)
                             LooprText(
-                                composition == .pairing ? "CONNECT" : "GETTING READY",
+                                composition == .pairing ? "Connect" : "Getting ready",
                                 style: .caption,
                                 color: .inkSecondary
                             )

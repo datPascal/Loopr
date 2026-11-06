@@ -25,7 +25,7 @@ public enum DataImportParserError: Error, Equatable, Sendable, LocalizedError {
     }
 }
 
-private enum DataImportValidation {
+enum DataImportValidation {
     static func validate(_ record: DataRecord, row: Int? = nil) throws {
         guard !record.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw DataImportParserError.invalidRow(row ?? 0, "record id is empty")
@@ -106,10 +106,11 @@ public enum EdgeDatabaseMergeParser {
 public enum WHOOPCSVParser {
     public static func parse(_ data: Data) throws -> [DataRecord] {
         guard !data.isEmpty else { throw DataImportParserError.emptyInput }
-        guard let text = String(data: data, encoding: .utf8) else {
+        guard var text = String(data: data, encoding: .utf8) else {
             throw DataImportParserError.invalidUTF8
         }
-        if !text.hasPrefix("id,") {
+        if text.first == "\u{FEFF}" { text.removeFirst() }
+        if !text.hasPrefix("id,"), !text.hasPrefix("\"id\",") {
             let url = FileManager.default.temporaryDirectory.appendingPathComponent("loopr-csv-\(UUID().uuidString).csv")
             try data.write(to: url)
             defer { try? FileManager.default.removeItem(at: url) }
@@ -255,6 +256,10 @@ private enum CSV {
                 finishField()
                 index += 1
             case "\n":
+                finishRow()
+                index += 1
+            case "\r\n":
+                // Swift treats CRLF as one Character, not two.
                 finishRow()
                 index += 1
             case "\r":

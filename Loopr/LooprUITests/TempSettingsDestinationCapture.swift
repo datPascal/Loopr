@@ -9,9 +9,7 @@ final class TempSettingsDestinationCaptureUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.descendants(matching: .any)["today-screen"].firstMatch.waitForExistence(timeout: 20))
-        let settingsButton = app.buttons["open-settings"].firstMatch
-        XCTAssertTrue(settingsButton.waitForExistence(timeout: 10))
-        settingsButton.tap()
+        XCTAssertTrue(app.openLooprSettings())
         XCTAssertTrue(app.descendants(matching: .any)["settings-modal"].firstMatch.waitForExistence(timeout: 15))
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 2.0))
         attach(name: "tempcap-settings-light")

@@ -15,6 +15,8 @@ public struct OnboardingActions {
     public var requestPairing: () -> Void = {}
     public var confirmPairingSheet: () -> Void = {}
     public var deferPairing: () -> Void = {}
+    /// "Continue without a band" on Welcome.
+    public var continueWithoutBand: () -> Void = {}
     public var setExperimentalSupport: (Bool) -> Void = { _ in }
     public var completeProfile: (ProfileDraft) -> Void = { _ in }
     public var requestPermission: (OnboardingPermission) -> Void = { _ in }
@@ -52,6 +54,7 @@ public struct OnboardingScreen: View {
 
     @State private var profileForm = OnboardingProfileForm()
     @State private var profileFormLoaded = false
+    @State private var profileEditing = false
     @State private var sleepNeed: Double?
     @State private var movingBack = false
     @State private var headerIsScrolled = false
@@ -123,7 +126,7 @@ public struct OnboardingScreen: View {
             sleepNeed = snapshot.sleepGoalHours ?? OnboardingFacts.defaultSleepNeedHours
         }
         .onChange(of: snapshot.stage) { old, new in
-            movingBack = (new.stepNumber ?? 0) < (old.stepNumber ?? 0)
+            movingBack = (new.stepNumber(on: snapshot.path) ?? 0) < (old.stepNumber(on: snapshot.path) ?? 0)
             headerIsScrolled = false
             if new == .profileSetup { loadProfileFormIfNeeded() }
             // A new step is a new screen to VoiceOver: move focus to its top
@@ -151,15 +154,10 @@ public struct OnboardingScreen: View {
         )
     }
 
-    /// One accent per screen, matched to the step's domain as the tabs match
-    /// theirs: crimson for the body and Apple Health, amber for alerts,
-    /// violet for sleep, teal for the band and everything neutral. A pairing
-    /// problem turns the pairing screen amber, buttons included.
+    /// One accent through the whole of onboarding, Loopr's teal; a colour per step made six screens look like six apps
+    /// (UX R1-DES-24, R1-VET-27). A pairing problem still turns the pairing screen amber, buttons included.
     private var accent: LooprColorToken {
         switch snapshot.stage {
-        case .profileSetup, .appleHealth: .heart
-        case .notifications: .strain
-        case .sleepGoal: .sleep
         case .pairing where pairingPhase.isProblem: .strain
         default: .brand
         }
@@ -196,10 +194,10 @@ public struct OnboardingScreen: View {
                     dataControlsControl
                 }
             }
-            if let step = snapshot.stage.stepNumber {
-                OnboardingProgressTrack(step: step, total: OnboardingStage.stepCount, accent: accent)
+            if let step = snapshot.shownStepNumber {
+                OnboardingProgressTrack(step: step, total: snapshot.path.stepCount, accent: accent)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(OnboardingCopy.Chrome.progress(step: step, of: OnboardingStage.stepCount))
+                    .accessibilityLabel(OnboardingCopy.Chrome.progress(step: step, of: snapshot.path.stepCount))
                     .accessibilityIdentifier("onboarding-progress")
             }
         }
@@ -220,7 +218,7 @@ public struct OnboardingScreen: View {
 
     @ViewBuilder
     private var backControl: some View {
-        if snapshot.stage.previous != nil {
+        if snapshot.stage.previous(on: snapshot.path) != nil {
             glassButton(
                 symbol: "chevron.left",
                 label: OnboardingCopy.Chrome.back,
@@ -247,10 +245,10 @@ public struct OnboardingScreen: View {
                 .foregroundStyle(Color.loopr(.ink))
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 .minimumScaleFactor(0.7)
-            if let step = snapshot.stage.stepNumber {
+            if let step = snapshot.shownStepNumber {
                 Text(OnboardingCopy.Chrome.meta(
                     step: step,
-                    of: OnboardingStage.stepCount,
+                    of: snapshot.path.stepCount,
                     optional: snapshot.stage.isOptional
                 ))
                 .looprTypography(.headerMeta)
@@ -303,15 +301,16 @@ public struct OnboardingScreen: View {
                 accent: accent
             )
         case .profileSetup:
-            OnboardingProfileStep(form: $profileForm, timeZone: timeZone, now: now, accent: accent)
+            OnboardingProfileStep(form: $profileForm, editing: $profileEditing, timeZone: timeZone, now: now, accent: accent)
         case .appleHealth:
             OnboardingHealthStep(request: health, accent: accent)
         case .notifications:
-            OnboardingNotificationsStep(accent: accent)
+            OnboardingNotificationsStep(path: snapshot.path, accent: accent)
         case .sleepGoal:
             OnboardingSleepNeedStep(selection: $sleepNeed, accent: accent)
         case .finish:
             OnboardingFinishStep(
+                withoutBand: snapshot.path == .noBand,
                 pairingDeferred: !snapshot.pairingRequested,
                 bandStillConnecting: snapshot.pairingRequested && bandStillConnecting,
                 backgroundRefreshOff: backgroundRefreshOff,
@@ -364,6 +363,7 @@ public struct OnboardingScreen: View {
             EmptyView()
         case .welcomeDisclosures:
             primary(OnboardingCopy.Welcome.action, id: "onboarding-continue", action: actions.advance)
+            secondary(OnboardingCopy.Welcome.noBandAction, id: "onboarding-no-band", action: actions.continueWithoutBand)
         case .whoopHandover:
             primary(OnboardingCopy.Handover.action, id: "onboarding-handover-continue", action: actions.advance)
             secondary(OnboardingCopy.Handover.later, id: "onboarding-handover-later", action: actions.deferPairing)
@@ -376,12 +376,15 @@ public struct OnboardingScreen: View {
             primary(
                 OnboardingCopy.Profile.action,
                 id: "profile-save",
-                enabled: profileForm.canSubmit
+                enabled: profileForm.canSubmit(currentYear: ProfileEstimates.currentYear(for: now))
             ) {
                 actions.completeProfile(profileForm.draft(
                     currentYear: ProfileEstimates.currentYear(for: now),
                     timeZone: timeZone
                 ))
+            }
+            if profileEditing {
+                secondary(OnboardingCopy.Profile.doneEditing, id: "profile-done-editing") { profileEditing = false }
             }
         case .appleHealth:
             primary(OnboardingCopy.Health.allow, id: "onboarding-health-allow") {
@@ -724,7 +727,7 @@ public struct OnboardingDestructiveActionsScreen: View {
 #if canImport(DataKit)
         DataDisclosureCopy.deleteAllData
 #else
-        "This permanently removes every Loopr record on this iPhone: local records, files, snapshots, keychain items, notification data, live activities, re-analysis ledgers, your profile, and the paired strap. Loopr restarts at onboarding. HealthKit samples stay where they are."
+        "This permanently removes every Loopr record on this iPhone: local records, files, snapshots, keychain items, notification data, live activities, re-analysis ledgers, your profile, and the paired band. Loopr restarts at onboarding. HealthKit samples stay where they are."
 #endif
     }
 }

@@ -1,11 +1,12 @@
+#if LOOPR_PRIVATE_DATABASE_AUDITS
 import XCTest
 
 /// Captures beat-to-beat and Cardio Age after the archived vitals cards were removed
 /// against a real history database.
 ///
-/// It only runs when `LOOPR_VITALS_SHOTS` names an output directory: the
-/// harness installs the app, copies a history snapshot into its container,
-/// and then runs this test against the production composition.
+/// It needs a real history database, so it compiles only with `LOOPR_PRIVATE_DATABASE_AUDITS`, like the other audits in
+/// `docs/PRIVATE_DATABASE_AUDITS.md`. `LOOPR_VITALS_SHOTS` names the output directory: the harness installs the app,
+/// copies a history snapshot into its container, and then runs this test against the production composition.
 final class VitalsScreenshotUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = true }
 
@@ -49,7 +50,8 @@ final class VitalsScreenshotUITests: XCTestCase {
 
     @MainActor
     func testCaptureVitalsOnRealData() throws {
-        try XCTSkipIf(outputDirectory == nil, "Set LOOPR_VITALS_SHOTS to capture vitals screenshots")
+        // An enabled audit fails when its input is missing.
+        XCTAssertNotNil(outputDirectory, "Set LOOPR_VITALS_SHOTS to capture vitals screenshots")
         let app = XCUIApplication()
         app.launch()
 
@@ -69,7 +71,7 @@ final class VitalsScreenshotUITests: XCTestCase {
         }
 
         XCTAssertTrue(element("main-tab-shell", in: app).waitForExistence(timeout: 60))
-        app.tabBars.buttons["Heart"].tap()
+        app.openLooprArea("Heart")
         // A Debug derivation of the real days takes a while on first open.
         XCTAssertTrue(element("heart-advanced-disclosure", in: app).waitForExistence(timeout: 240))
         capture("vitals-01-heart-top", in: app)
@@ -85,7 +87,7 @@ final class VitalsScreenshotUITests: XCTestCase {
         app.terminate()
         app.launchArguments = []
         app.launch()
-        app.tabBars.buttons["Heart"].tap()
+        app.openLooprArea("Heart")
         scroll(to: "heart-advanced-disclosure", in: app)
         capture("vitals-02-heart-details", in: app)
 
@@ -101,10 +103,11 @@ final class VitalsScreenshotUITests: XCTestCase {
             capture("vitals-05-detail-tachogram", in: app)
         }
 
-        app.tabBars.buttons["Body"].tap()
+        app.openLooprArea("Body")
         let age = element("body-cardio-age", in: app)
         scroll(to: "body-cardio-age", in: app)
         XCTAssertTrue(age.waitForExistence(timeout: 5))
         capture("vitals-06-body-cardio-age", in: app)
     }
 }
+#endif

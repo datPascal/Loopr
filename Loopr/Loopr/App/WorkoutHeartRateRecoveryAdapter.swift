@@ -57,11 +57,10 @@ nonisolated struct StoredWorkoutRecoveryProvider: WorkoutHeartRateRecoveryProvid
             result = saved
         } else { result = measured }
         // Cache observations. Missing tails can become available
-        // after a sync. Refresh the record first so unrelated edits survive.
-        if result.firstMinute != nil, var latest = await workouts.workout(id: workout.id),
-           latest.startedAt == start, latest.endedAt == end {
-            latest.heartRateRecovery = result
-            try? await workouts.save(latest)
+        // after a sync. The store conditionally updates only an existing,
+        // unchanged time window, preserving edits and deletion.
+        if result.firstMinute != nil {
+            try? await workouts.cacheHeartRateRecovery(result, workoutID: workout.id, startedAt: start, endedAt: end)
         }
         return result
     }

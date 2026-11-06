@@ -41,7 +41,10 @@ nonisolated struct MetricPresentation: Sendable {
 
     func attach(_ text: String) -> String {
         if unit.isEmpty { return text }
-        if unit == "%" || unit.hasPrefix("/") || unit == "°C" { return text + unit }
+        // A change from usual says so: "0.0 °C" alone reads as a temperature of zero (ICP R2-OPT-27). The space also
+        // keeps Space Grotesk from setting "0.0°C" as "0.0°c" in captions.
+        if format == .signedOneDecimal { return "\(text) \(unit) vs usual" }
+        if unit == "%" || unit.hasPrefix("/") { return text + unit }
         return "\(text) \(unit)"
     }
 
@@ -69,7 +72,7 @@ nonisolated enum MetricValueFormat: Sendable {
         case .whole:
             return String(Int(value.rounded()))
         case .oneDecimal:
-            return String(format: "%.1f", value)
+            return LooprUnitFormatter.number(value, digits: 1) ?? "-"
         case .signedOneDecimal:
             return LooprSignalFormatting.temperatureChange(value) ?? "-"
         case .grouped:
@@ -101,13 +104,10 @@ nonisolated enum MetricValueFormat: Sendable {
     func delta(_ value: Double) -> String {
         switch self {
         case .duration:
-            let minutes = Int(value.rounded())
-            guard minutes != 0 else { return "0 min" }
-            return (minutes > 0 ? "+" : "-") + MetricValueFormat.duration.string(Double(abs(minutes)))
+            return LooprUnitFormatter.signedDuration(minutes: value) ?? "-"
         case .whole, .grouped:
-            let rounded = Int(value.rounded())
-            let body = MetricValueFormat.grouped.string(Double(abs(rounded)))
-            return rounded > 0 ? "+" + body : rounded < 0 ? "-" + body : "0"
+            // A decimal point and comma grouping on every device, like `MetricValueFormat.grouped`.
+            return LooprUnitFormatter.signed(value.rounded(), digits: 0) ?? "-"
         case .oneDecimal, .signedOneDecimal:
             return MetricValueFormat.signedOneDecimal.string(value)
         }
@@ -125,56 +125,60 @@ nonisolated extension MetricKey {
     var presentation: MetricPresentation {
         switch self {
         case .restingHeartRate:
-            .init(title: "Resting heart rate", unit: "bpm", spokenUnit: "beats per minute", accent: .heart, chartKind: .line, format: .whole, availability: .calculated, period: "LAST NIGHT")
+            .init(title: "Resting heart rate", unit: "bpm", spokenUnit: "beats per minute", accent: .heart, chartKind: .line, format: .whole, availability: .calculated, period: "Last night")
         case .rmssd:
             // "HRV" everywhere in Loopr; the page names RMSSD in its definition.
-            .init(title: "HRV", unit: "ms", spokenUnit: "milliseconds", accent: .heart, chartKind: .line, format: .whole, availability: .calculated, period: "LAST NIGHT")
+            .init(title: "HRV", unit: "ms", spokenUnit: "milliseconds", accent: .heart, chartKind: .line, format: .whole, availability: .calculated, period: "Last night")
         case .sdnn:
-            .init(title: "SDNN", unit: "ms", spokenUnit: "milliseconds", accent: .heart, chartKind: .line, format: .whole, availability: .calculated, period: "LAST NIGHT")
+            .init(title: "SDNN", unit: "ms", spokenUnit: "milliseconds", accent: .heart, chartKind: .line, format: .whole, availability: .calculated, period: "Last night")
         case .pNN50:
-            .init(title: "pNN50", unit: "%", spokenUnit: "percent", accent: .heart, chartKind: .line, format: .whole, availability: .calculated, period: "LAST NIGHT")
+            .init(title: "pNN50", unit: "%", spokenUnit: "percent", accent: .heart, chartKind: .line, format: .whole, availability: .calculated, period: "Last night")
         case .respiratoryRate:
-            .init(title: "Respiratory rate", unit: "br/min", spokenUnit: "breaths per minute", accent: .heart, chartKind: .line, format: .oneDecimal, availability: .calculated, period: "LAST NIGHT")
+            .init(title: "Breathing rate", unit: "br/min", spokenUnit: "breaths per minute", accent: .heart, chartKind: .line, format: .oneDecimal, availability: .calculated, period: "Last night")
         case .sleepingHeartRate:
-            .init(title: "Sleeping heart rate", unit: "bpm", spokenUnit: "beats per minute", accent: .heart, chartKind: .rangeBars, format: .whole, availability: .calculated, period: "LAST NIGHT",
+            .init(title: "Sleeping heart rate", unit: "bpm", spokenUnit: "beats per minute", accent: .heart, chartKind: .rangeBars, format: .whole, availability: .calculated, period: "Last night",
                   emptyDetail: "Sleeping heart rate needs a main sleep with at least 5 minutes of valid heart rate readings. It appears after that night syncs.")
         case .heartRateDip:
-            .init(title: "Heart rate dip", unit: "%", spokenUnit: "percent", accent: .heart, chartKind: .line, format: .whole, availability: .calculated, period: "LAST NIGHT",
+            .init(title: "Heart rate dip", unit: "%", spokenUnit: "percent", accent: .heart, chartKind: .line, format: .whole, availability: .calculated, period: "Last night",
                   emptyDetail: "Heart rate dip needs at least 5 minutes of valid heart rate during your main sleep and 5 while awake. It appears after both sync.")
         case .oxygenSaturation:
-            .init(title: "Blood oxygen", unit: "%", spokenUnit: "percent", accent: .brand, chartKind: .line, format: .oneDecimal, availability: .importedOnly, period: "LAST NIGHT")
+            .init(title: "Blood oxygen", unit: "%", spokenUnit: "percent", accent: .brand, chartKind: .line, format: .oneDecimal, availability: .importedOnly, period: "Last night")
         case .skinTemperatureDeviation:
-            .init(title: "Skin temperature", unit: "°C", spokenUnit: "degrees Celsius from your usual", accent: .heart, chartKind: .line, format: .signedOneDecimal, availability: .calculated, period: "LAST NIGHT",
+            .init(title: "Skin temperature", unit: "°C", spokenUnit: "degrees Celsius from your usual", accent: .heart, chartKind: .line, format: .signedOneDecimal, availability: .calculated, period: "Last night",
                   emptyDetail: "Your change from usual appears after 4 nights with a settled reading. Sleep with your band on and sync in the morning.")
         case .recovery:
-            .init(title: "Recovery", unit: "", spokenUnit: "out of 100", accent: .recovery, chartKind: .line, format: .whole, availability: .calculated, period: "THIS MORNING",
+            .init(title: "Recovery", unit: "", spokenUnit: "out of 100", accent: .recovery, chartKind: .line, format: .whole, availability: .calculated, period: "This morning",
                   emptyDetail: "Recovery needs at least two overnight heart readings with enough history. It can start after 4 nights with the band on.")
         case .strain:
-            .init(title: "Strain", unit: "/21", spokenUnit: "out of 21", accent: .strain, chartKind: .bars, format: .oneDecimal, availability: .calculated, period: "TODAY",
+            .init(title: "Strain", unit: "/21", spokenUnit: "out of 21", accent: .strain, chartKind: .bars, format: .oneDecimal, availability: .calculated, period: "Today",
                   emptyDetail: "Strain needs your birth year in Profile and a resting heart rate from a night with the band on. With both in place, it appears after your next sync.")
         case .stress:
-            .init(title: "Stress", unit: "/100", spokenUnit: "out of 100", accent: .stress, chartKind: .line, format: .whole, availability: .calculated, period: "LAST NIGHT")
+            .init(title: "Stress", unit: "/100", spokenUnit: "out of 100", accent: .stress, chartKind: .line, format: .whole, availability: .calculated, period: "Last night")
         case .sleepDuration:
-            .init(title: "Sleep duration", unit: "", spokenUnit: "", accent: .sleep, chartKind: .bars, format: .duration, availability: .calculated, period: "LAST NIGHT")
+            .init(title: "Sleep duration", unit: "", spokenUnit: "", accent: .sleep, chartKind: .bars, format: .duration, availability: .calculated, period: "Last night")
+        case .sleepPerformance:
+            .init(title: "Hours vs estimated need", unit: "%", spokenUnit: "percent of sleep need", accent: .sleep, chartKind: .line, format: .whole, availability: .calculated, period: "Last night")
+        case .sleepDebt:
+            .init(title: "Nightly shortfall", unit: "", spokenUnit: "", accent: .sleep, chartKind: .bars, format: .duration, availability: .calculated, period: "Recent nights")
         case .sleepEfficiency:
-            .init(title: "Sleep efficiency", unit: "%", spokenUnit: "percent", accent: .sleep, chartKind: .line, format: .whole, availability: .calculated, period: "LAST NIGHT")
+            .init(title: "Sleep efficiency", unit: "%", spokenUnit: "percent", accent: .sleep, chartKind: .line, format: .whole, availability: .calculated, period: "Last night")
         case .deepSleep:
-            .init(title: "Deep sleep", unit: "", spokenUnit: "", accent: .sleep, chartKind: .bars, format: .duration, availability: .calculated, period: "LAST NIGHT")
+            .init(title: "Deep sleep", unit: "", spokenUnit: "", accent: .sleep, chartKind: .bars, format: .duration, availability: .calculated, period: "Last night")
         case .remSleep:
-            .init(title: "REM sleep", unit: "", spokenUnit: "", accent: .sleep, chartKind: .bars, format: .duration, availability: .calculated, period: "LAST NIGHT")
+            .init(title: "REM sleep", unit: "", spokenUnit: "", accent: .sleep, chartKind: .bars, format: .duration, availability: .calculated, period: "Last night")
         case .sleepConsistency:
-            .init(title: "Sleep regularity", unit: "/100", spokenUnit: "out of 100", accent: .sleep, chartKind: .line, format: .whole, availability: .calculated, period: "LAST NIGHT")
+            .init(title: "Sleep consistency", unit: "/100", spokenUnit: "out of 100", accent: .sleep, chartKind: .line, format: .whole, availability: .calculated, period: "Last night")
         case .vo2Max:
-            .init(title: "VO2 max", unit: "ml/kg/min", spokenUnit: "millilitres per kilogram per minute", accent: .brand, chartKind: .line, format: .oneDecimal, availability: .appleHealthOnly, period: "LATEST",
+            .init(title: "VO2 max", unit: "ml/kg/min", spokenUnit: "millilitres per kilogram per minute", accent: .brand, chartKind: .line, format: .oneDecimal, availability: .appleHealthOnly, period: "Latest",
                   emptyDetail: "Loopr does not estimate VO2 max from band data. You can show readings from Apple Health if you allow access.")
         case .maxHeartRate:
-            .init(title: "Max heart rate", unit: "bpm", spokenUnit: "beats per minute", accent: .heart, chartKind: .line, format: .whole, availability: .calculated, period: "TODAY",
+            .init(title: "Max heart rate", unit: "bpm", spokenUnit: "beats per minute", accent: .heart, chartKind: .line, format: .whole, availability: .calculated, period: "Today",
                   emptyDetail: "Your band has not synced valid heart rate readings for this day. The recorded peak appears after it syncs.")
         case .activeEnergy:
-            .init(title: "Active energy", unit: "kcal", spokenUnit: "kilocalories", accent: .strain, chartKind: .bars, format: .grouped, availability: .calculated, period: "TODAY",
+            .init(title: "Active energy", unit: "kcal", spokenUnit: "kilocalories", accent: .strain, chartKind: .bars, format: .grouped, availability: .calculated, period: "Today",
                   emptyDetail: "Active energy needs your birth year, height and weight in Profile. With those set, it appears after a day with the band on.")
         case .steps:
-            .init(title: "Estimated steps", unit: "steps", spokenUnit: "steps", accent: .brand, chartKind: .bars, format: .grouped, availability: .calculated, period: "TODAY",
+            .init(title: "Estimated steps", unit: "steps", spokenUnit: "steps", accent: .brand, chartKind: .bars, format: .grouped, availability: .calculated, period: "Today",
                   emptyDetail: "Loopr first learns how you move, which takes 5 days with at least an hour of wear each. Step estimates start after that.")
         }
     }

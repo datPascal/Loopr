@@ -379,6 +379,13 @@ struct LooprWorkoutLiveActivityVisual {
         return "\(name) · \(status)"
     }
     var status: String { isStale ? "Stopped updating" : state.status }
+    /// The end of the current rest, only while it is still ahead and the activity is fresh.
+    var restEndsAt: Date? {
+        guard !isStale, let end = state.restEndsAt, end > Date() else { return nil }
+        return end
+    }
+    /// "Bench press · set 3 of 4" for a strength session.
+    var setSummary: String? { isStale ? nil : state.setSummary }
     var distance: String? {
         state.distanceMeters.map { String(format: "%.2f km", $0 / 1_000) }
     }
@@ -402,6 +409,20 @@ struct LooprWorkoutElapsedView: View {
             let minutes = (state.elapsedSeconds % 3_600) / 60
             let seconds = state.elapsedSeconds % 60
             Text(String(format: "%02d:%02d:%02d", hours, minutes, seconds))
+                .monospacedDigit()
+        }
+    }
+}
+
+/// "Rest 1:45", counting down to the end of a strength rest.
+struct LooprWorkoutRestCountdown: View {
+    let endsAt: Date
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "timer").accessibilityHidden(true)
+            Text("Rest")
+            Text(timerInterval: Date()...max(endsAt, Date().addingTimeInterval(1)), countsDown: true, showsHours: false)
                 .monospacedDigit()
         }
     }
@@ -437,6 +458,12 @@ struct LooprWorkoutLiveActivityBanner: View {
                 }
             }
             if let target = visual.targetLine { Text(target).font(.caption.weight(.semibold)).fixedSize(horizontal: false, vertical: true) }
+            if let summary = visual.setSummary {
+                Text(summary).font(.subheadline.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+            }
+            if let restEndsAt = visual.restEndsAt {
+                LooprWorkoutRestCountdown(endsAt: restEndsAt).font(.subheadline.weight(.semibold))
+            }
             if let distance = visual.distance {
                 HStack(spacing: 12) {
                     Text(distance)
@@ -450,7 +477,10 @@ struct LooprWorkoutLiveActivityBanner: View {
         }
         .padding()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(visual.name), \(visual.targetLine ?? visual.zoneName), \(visual.heartRateAccessibility), \(visual.zoneName), \(visual.status)")
+        .accessibilityLabel(
+            ([visual.name, visual.setSummary, visual.restEndsAt == nil ? nil : "Resting",
+              visual.targetLine ?? visual.zoneName, visual.heartRateAccessibility, visual.zoneName, visual.status]
+                .compactMap { $0 }).joined(separator: ", "))
     }
 }
 
@@ -481,5 +511,191 @@ struct LooprBreathingLiveActivityBanner: View {
         .padding()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Breathing, \(state.completedCycles) cycles, \(isStale ? "Stopped updating" : state.status)")
+    }
+}
+
+// MARK: - Bedtime countdown (DEC-12.17)
+
+/// What the bedtime activity draws, from the attributes and the content state. Plain values, so the copy and the
+/// layout choices can be checked without ActivityKit.
+struct LooprBedtimeActivityVisual {
+    let attributes: LooprBedtimeActivityAttributes
+    let state: LooprBedtimeActivityAttributes.ContentState
+    let isStale: Bool
+
+    var bedtimeText: String { LooprClockFormat.text(minuteOfDay: attributes.bedtimeMinuteOfDay) }
+
+    /// The span the countdown and the bar run over. Never reversed, so a bad pair cannot trap a timer.
+    var window: ClosedRange<Date> { attributes.windowStart...max(attributes.bedtime, attributes.windowStart) }
+
+    func stepTime(_ step: LooprBedtimeActivityAttributes.ContentState.Step) -> String? {
+        step.minuteOfDay.map { LooprClockFormat.text(minuteOfDay: $0) }
+    }
+
+    func stepLine(_ step: LooprBedtimeActivityAttributes.ContentState.Step) -> String {
+        stepTime(step).map { "\(step.title) \($0)" } ?? step.title
+    }
+
+    /// Where the next step sits on the bar, 0 to 1. Nil when there is no next step or it has no time.
+    var markerFraction: Double? {
+        guard let at = state.nextStep?.at else { return nil }
+        let span = attributes.bedtime.timeIntervalSince(attributes.windowStart)
+        guard span > 0 else { return nil }
+        return min(max(at.timeIntervalSince(attributes.windowStart) / span, 0), 1)
+    }
+
+    var headline: String { isStale ? "Time for bed" : "Bedtime" }
+
+    var accessibilitySummary: String {
+        var parts = ["Bedtime at \(bedtimeText)"]
+        if !state.steps.isEmpty { parts.append("\(state.doneCount) of \(state.steps.count) steps done") }
+        if let next = state.nextStep { parts.append("Next, \(stepLine(next))") }
+        return parts.joined(separator: ". ")
+    }
+}
+
+/// The time left to bed. `Text(timerInterval:)` keeps counting on the lock screen with no update from the app.
+struct LooprBedtimeCountdown: View {
+    let visual: LooprBedtimeActivityVisual
+    var font: Font = .title
+
+    var body: some View {
+        Group {
+            if visual.isStale {
+                Text("Time for bed")
+            } else {
+                Text(timerInterval: visual.window, countsDown: true, showsHours: true)
+            }
+        }
+        .font(font.weight(.semibold))
+        .monospacedDigit()
+    }
+}
+
+struct LooprBedtimeMoon: View {
+    var size: CGFloat = 22
+
+    var body: some View {
+        Image(systemName: "moon.fill")
+            .font(.system(size: size * 0.55, weight: .semibold))
+            .foregroundStyle(Color.white)
+            .frame(width: size, height: size)
+            .background(Color.loopr(.sleep), in: RoundedRectangle(cornerRadius: size * 0.32, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+struct LooprBedtimeStepRow: View {
+    let step: LooprBedtimeActivityAttributes.ContentState.Step
+    let visual: LooprBedtimeActivityVisual
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if step.isDone { Image(systemName: "checkmark").font(.caption2.weight(.bold)).accessibilityHidden(true) }
+            Text(visual.stepLine(step)).lineLimit(1)
+        }
+        .foregroundStyle(step.isDone ? Color.loopr(.recovery) : Color.loopr(.inkSecondary))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(visual.stepLine(step)), \(step.isDone ? "done" : "to do")")
+    }
+}
+
+/// The fill follows the clock through a timer-interval `ProgressView`, so it moves with no update. The marker is the
+/// next step.
+struct LooprBedtimeProgressBar: View {
+    let visual: LooprBedtimeActivityVisual
+
+    var body: some View {
+        ProgressView(timerInterval: visual.window, countsDown: false) { EmptyView() } currentValueLabel: { EmptyView() }
+            .progressViewStyle(.linear)
+            .tint(Color.loopr(.sleep))
+            .overlay {
+                if let fraction = visual.markerFraction {
+                    GeometryReader { proxy in
+                        Capsule()
+                            .fill(Color.loopr(.protocol))
+                            .frame(width: 2, height: 14)
+                            .position(x: proxy.size.width * fraction, y: proxy.size.height / 2)
+                    }
+                }
+            }
+            .frame(height: 14)
+            .accessibilityHidden(true)
+    }
+}
+
+struct LooprBedtimeLockScreenView: View {
+    let visual: LooprBedtimeActivityVisual
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                LooprBedtimeMoon()
+                Text("Loopr · \(visual.headline.lowercased())")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Color.loopr(.inkSecondary))
+                Spacer()
+                Text(visual.bedtimeText)
+                    .font(.footnote.weight(.medium)).monospacedDigit()
+                    .foregroundStyle(Color.loopr(.inkSecondary))
+            }
+            HStack(alignment: .bottom, spacing: 12) {
+                LooprBedtimeCountdown(visual: visual, font: .system(size: 44, design: .rounded))
+                    .foregroundStyle(Color.loopr(.sleepChip))
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 3) {
+                    ForEach(visual.state.visibleSteps(limit: 3)) { step in
+                        LooprBedtimeStepRow(step: step, visual: visual)
+                    }
+                }
+                .font(.caption)
+            }
+            LooprBedtimeProgressBar(visual: visual)
+        }
+        .padding(16)
+        .environment(\.colorScheme, .dark)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(visual.accessibilitySummary)
+    }
+}
+
+/// The expanded Dynamic Island, one piece per region.
+struct LooprBedtimeIslandLeading: View {
+    let visual: LooprBedtimeActivityVisual
+
+    var body: some View {
+        HStack(spacing: 8) {
+            LooprBedtimeMoon(size: 26)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(visual.headline).font(.caption).foregroundStyle(Color.loopr(.inkSecondary))
+                Text(visual.bedtimeText).font(.headline).monospacedDigit()
+            }
+        }
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+struct LooprBedtimeIslandBottom: View {
+    let visual: LooprBedtimeActivityVisual
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let next = visual.state.nextStep {
+                Text("Next, \(visual.stepLine(next))")
+                    .font(.subheadline.weight(.semibold)).lineLimit(1)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(visual.state.visibleSteps(limit: 3)) { step in
+                    LooprBedtimeStepRow(step: step, visual: visual)
+                }
+            }
+            .font(.caption)
+            LooprBedtimeProgressBar(visual: visual)
+        }
+        .environment(\.colorScheme, .dark)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(visual.accessibilitySummary)
     }
 }

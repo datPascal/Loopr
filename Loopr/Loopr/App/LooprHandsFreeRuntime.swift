@@ -109,6 +109,7 @@ struct WorkoutGPXShareAction: ViewModifier {
                 file = nil
                 var stored = try? await routes?.route(workoutID: workout.id.uuidString)
                 #if DEBUG
+                if stored == nil, routes == nil { stored = WorkoutPageFixtures.route(for: workout.id) }
                 if stored == nil, routes == nil, DebugCaptureFixtures.gpxRoute { stored = DebugCaptureFixtures.fixtureRoute }
                 #endif
                 guard let route = stored, !route.points.isEmpty else { return }

@@ -31,7 +31,7 @@ public struct LooprGlanceSummary: View {
     }
     private var content: some View {
         VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
-            Text(title.uppercased()).font(.system(.caption2, design: .monospaced)).tracking(1.5)
+            Text(title.looprLabelCased).font(.system(.caption2, design: .monospaced)).tracking(1.5)
                 .foregroundStyle(Color.loopr(.inkSecondary))
             HStack(alignment: .firstTextBaseline, spacing: LooprSpacing.xs) {
                 Text(value).font(.system(.title, design: .rounded).weight(.bold)).monospacedDigit()
@@ -47,7 +47,7 @@ public struct LooprGlanceSummary: View {
             HStack(alignment: .top, spacing: LooprSpacing.xs) {
                 ForEach(items) { item in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(item.id.uppercased()).font(.system(.caption2, design: .monospaced)).tracking(1)
+                        Text(item.id.looprLabelCased).font(.system(.caption2, design: .monospaced)).tracking(1)
                             .lineLimit(1).minimumScaleFactor(0.7)
                             .foregroundStyle(Color.loopr(.inkSecondary))
                         Text(item.value).font(.subheadline.weight(.semibold)).monospacedDigit()

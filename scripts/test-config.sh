@@ -674,8 +674,14 @@ class Verifier:
             self.error(context, "NSPrivacyTracking must be false")
         if plist.get("NSPrivacyTrackingDomains", []) != []:
             self.error(context, "NSPrivacyTrackingDomains must be empty")
-        if plist.get("NSPrivacyCollectedDataTypes") != []:
-            self.error(context, "stable local-only composition must declare no collected data types")
+        expected_collected = [{
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataType" + category,
+            "NSPrivacyCollectedDataTypeLinked": True,
+            "NSPrivacyCollectedDataTypeTracking": False,
+            "NSPrivacyCollectedDataTypePurposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+        } for category in ("Health", "Fitness", "PhotosorVideos", "OtherUserContent", "SearchHistory")]
+        if plist.get("NSPrivacyCollectedDataTypes") != expected_collected:
+            self.error(context, "collection declarations must cover approved AI sharing and Open Food Facts lookups")
         accessed = plist.get("NSPrivacyAccessedAPITypes")
         # SystemBootTime covers ProcessInfo.systemUptime in LooprDayNavigator.
         expected_accessed = [{
@@ -817,7 +823,9 @@ class Verifier:
             )
 
     def validate_watch_shared_surface_ownership(self, target_records, objects, isa_by_id):
-        expected_source_path = "../../LooprPackages/Sources/SharedSurfaceKit/Placeholder.swift"
+        # Since fe740af (2026-10-07) the Watch targets link the SharedSurfaceKit package product, which
+        # now holds more than one source. Compiling a source directly as well would define its types twice.
+        shared_prefix = "../../LooprPackages/Sources/SharedSurfaceKit/"
         for target_name in ("LooprWatch", "LooprWatchWidgets"):
             target_record = target_records.get(target_name)
             if target_record is None:
@@ -825,69 +833,45 @@ class Verifier:
             target_object = target_record["object"]
             context = f"target {target_name}"
 
+            links_shared_surface = False
             package_values = self.single_array(
                 target_object,
                 "packageProductDependencies",
                 context,
                 required=False,
             )
-            if package_values is not None:
-                for index, value in enumerate(package_values):
-                    product_id = self.scalar(
-                        value,
-                        f"{context}.packageProductDependencies[{index}]",
-                    )
-                    product = objects.get(product_id) if product_id is not None else None
-                    if product is None or isa_by_id.get(product_id) != "XCSwiftPackageProductDependency":
-                        self.error(context, "packageProductDependencies contains an invalid product link")
-                        continue
-                    product_name = self.single_scalar(
-                        product,
-                        "productName",
-                        f"package product {product_id}",
-                    )
-                    if product_name == "SharedSurfaceKit":
-                        self.error(
-                            context,
-                            "must compile the shared surface model source directly; linking the iOS package product breaks mixed iPhone/Watch Release Simulator builds",
-                        )
-
-            source_paths = []
-            phase_values = self.single_array(target_object, "buildPhases", context)
-            if phase_values is not None:
-                for phase_index, phase_value in enumerate(phase_values):
-                    phase_id = self.scalar(phase_value, f"{context}.buildPhases[{phase_index}]")
-                    phase = objects.get(phase_id) if phase_id is not None else None
-                    if phase is None or isa_by_id.get(phase_id) != "PBXSourcesBuildPhase":
-                        continue
-                    file_values = self.single_array(phase, "files", f"source phase {phase_id}")
-                    if file_values is None:
-                        continue
-                    for file_index, file_value in enumerate(file_values):
-                        build_file_id = self.scalar(
-                            file_value,
-                            f"source phase {phase_id}.files[{file_index}]",
-                        )
-                        build_file = objects.get(build_file_id) if build_file_id is not None else None
-                        if build_file is None or isa_by_id.get(build_file_id) != "PBXBuildFile":
-                            continue
-                        file_ref_id = self.single_scalar(
-                            build_file,
-                            "fileRef",
-                            f"build file {build_file_id}",
-                        )
-                        file_ref = objects.get(file_ref_id) if file_ref_id is not None else None
-                        if file_ref is None or isa_by_id.get(file_ref_id) != "PBXFileReference":
-                            continue
-                        path = self.single_scalar(file_ref, "path", f"file reference {file_ref_id}")
-                        if path is not None:
-                            source_paths.append(path)
-
-            if source_paths.count(expected_source_path) != 1:
-                self.error(
-                    context,
-                    f"must compile exactly one shared surface model source at {expected_source_path!r}",
+            for index, value in enumerate(package_values or []):
+                product_id = self.scalar(
+                    value,
+                    f"{context}.packageProductDependencies[{index}]",
                 )
+                product = objects.get(product_id) if product_id is not None else None
+                if product is None or isa_by_id.get(product_id) != "XCSwiftPackageProductDependency":
+                    self.error(context, "packageProductDependencies contains an invalid product link")
+                    continue
+                if self.single_scalar(product, "productName", f"package product {product_id}") == "SharedSurfaceKit":
+                    links_shared_surface = True
+            if not links_shared_surface:
+                self.error(context, "must link the SharedSurfaceKit package product for the shared surface model")
+
+            phase_values = self.single_array(target_object, "buildPhases", context)
+            for phase_index, phase_value in enumerate(phase_values or []):
+                phase_id = self.scalar(phase_value, f"{context}.buildPhases[{phase_index}]")
+                phase = objects.get(phase_id) if phase_id is not None else None
+                if phase is None or isa_by_id.get(phase_id) != "PBXSourcesBuildPhase":
+                    continue
+                for file_index, file_value in enumerate(self.single_array(phase, "files", f"source phase {phase_id}") or []):
+                    build_file_id = self.scalar(file_value, f"source phase {phase_id}.files[{file_index}]")
+                    build_file = objects.get(build_file_id) if build_file_id is not None else None
+                    if build_file is None or isa_by_id.get(build_file_id) != "PBXBuildFile":
+                        continue
+                    file_ref_id = self.single_scalar(build_file, "fileRef", f"build file {build_file_id}")
+                    file_ref = objects.get(file_ref_id) if file_ref_id is not None else None
+                    if file_ref is None or isa_by_id.get(file_ref_id) != "PBXFileReference":
+                        continue
+                    path = self.single_scalar(file_ref, "path", f"file reference {file_ref_id}")
+                    if path is not None and path.startswith(shared_prefix):
+                        self.error(context, f"compiles {path!r} directly as well as linking SharedSurfaceKit")
 
     def run(self):
         root_input = os.path.normpath(os.path.abspath(sys.argv[1]))

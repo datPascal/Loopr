@@ -179,6 +179,9 @@ public actor SerializedGenerationPinnedWriter {
     private var currentGeneration: UInt64?
     private var connected = false
     private var drainTask: Task<Void, Never>?
+    private var drainID: UUID?
+    private var disconnecting = false
+    private var disconnectWaiters: [CheckedContinuation<Void, Never>] = []
     private var activeRequestID: UInt64?
     private var nextRequestID: UInt64 = 0
 
@@ -198,7 +201,9 @@ public actor SerializedGenerationPinnedWriter {
 
     /// Starts (or replaces) the active session.  Generations must increase;
     /// accepting a reused value would permit stale callbacks to write.
-    public func begin(generation: UInt64) throws {
+    public func begin(generation: UInt64) async throws {
+        while disconnecting { await withCheckedContinuation { disconnectWaiters.append($0) } }
+        try Task.checkCancellation()
         if let currentGeneration, generation <= currentGeneration {
             throw SerializedWriterError.staleGeneration(
                 expected: generation,
@@ -220,8 +225,8 @@ public actor SerializedGenerationPinnedWriter {
     }
 
     /// Alias used by connection/session coordinators.
-    public func replaceGeneration(_ generation: UInt64) throws {
-        try begin(generation: generation)
+    public func replaceGeneration(_ generation: UInt64) async throws {
+        try await begin(generation: generation)
     }
 
     public func activeGeneration() -> UInt64? { currentGeneration }
@@ -331,14 +336,25 @@ public actor SerializedGenerationPinnedWriter {
     /// Marks the generation disconnected and cancels any pending transport
     /// operation.  The underlying adapter is asked to disconnect exactly once.
     public func disconnect() async {
+        if disconnecting {
+            await withCheckedContinuation { disconnectWaiters.append($0) }
+            return
+        }
+        disconnecting = true
         let oldGeneration = currentGeneration
         connected = false
         currentGeneration = nil
-        await diagnostics.append(.disconnected(generation: oldGeneration))
         failQueued(with: .disconnected)
         drainTask?.cancel()
         drainTask = nil
+        drainID = nil
+        activeRequestID = nil
         await transport.disconnect()
+        await diagnostics.append(.disconnected(generation: oldGeneration))
+        disconnecting = false
+        let waiters = disconnectWaiters
+        disconnectWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
     }
 
     private func invalidateQueuedWork(except generation: UInt64) {
@@ -362,14 +378,16 @@ public actor SerializedGenerationPinnedWriter {
 
     private func startDrainIfNeeded() {
         guard drainTask == nil else { return }
+        let id = UUID()
+        drainID = id
         drainTask = Task { [weak self] in
-            await self?.drain()
+            await self?.drain(id: id)
         }
     }
 
-    private func drain() async {
+    private func drain(id: UUID) async {
         while !queue.isEmpty {
-            if Task.isCancelled { break }
+            if Task.isCancelled || drainID != id { break }
             guard let request = queue.first else { break }
             queue.removeFirst()
             activeRequestID = request.id
@@ -428,11 +446,13 @@ public actor SerializedGenerationPinnedWriter {
             } catch {
                 request.continuation.resume(throwing: SerializedWriterError.transport(String(describing: error)))
             }
-            activeRequestID = nil
+            if drainID == id { activeRequestID = nil }
         }
 
         // Do not clear a newer task that has been installed while this task
         // was suspended.  In normal actor use this is the only drain task.
+        guard drainID == id else { return }
+        drainID = nil
         drainTask = nil
         if !queue.isEmpty, connected {
             startDrainIfNeeded()
@@ -544,7 +564,9 @@ public struct ClockCommandSequence: Equatable, Sendable {
         setSequence: UInt8,
         getSequence: UInt8
     ) throws {
-        let milliseconds = Int64((wallDate.timeIntervalSince1970 * 1_000).rounded(.down))
+        guard let milliseconds = Int64(exactly: (wallDate.timeIntervalSince1970 * 1_000).rounded(.down)) else {
+            throw ClockSequenceError.unrepresentableDate
+        }
         let seconds = milliseconds.dividedReportingOverflow(by: 1_000)
         guard !seconds.overflow, seconds.partialValue >= 0,
               seconds.partialValue <= Int64(UInt32.max) else {

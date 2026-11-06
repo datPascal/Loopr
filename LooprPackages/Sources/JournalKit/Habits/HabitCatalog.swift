@@ -26,6 +26,10 @@ public struct HabitCatalogItem: Codable, Equatable, Identifiable, Sendable {
 
 public enum HabitCatalog {
     public static let items: [HabitCatalogItem] = [
+        .init(id: "meal_within_two_hours", category: .nutrition, name: "Ate within 2 h of bed", question: "Ate in the final two hours before sleep?"),
+        .init(id: "screens_in_bed", category: .evening, name: "Screens in bed", question: "Used a screen while in bed?"),
+        .init(id: "feeling_sick", category: .context, name: "Feeling sick", question: "Felt sick today?"),
+        .init(id: "trained_today", category: .recovery, name: "Trained today", question: "Trained today?"),
         .init(id: "short_video_before_bed", category: .evening, name: "Short videos before bed", question: "Scrolled short videos in the final hour before sleep?"),
         .init(id: "screen_before_bed", category: .evening, name: "Screen before bed", question: "Used a screen in the final hour before sleep?"),
         .init(id: "worked_late", category: .evening, name: "Worked late", question: "Worked in the final two hours before sleep?"),

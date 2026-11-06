@@ -60,8 +60,8 @@ if [[ ! "$xcode_build" =~ ^[A-Za-z0-9]+$ ]]; then
 fi
 
 xcode_major="${xcode_version%%.*}"
-if (( xcode_major < 26 )); then
-    fail "Xcode $xcode_version is too old for the iOS 26 source requirements"
+if (( xcode_major < 27 )); then
+    fail "Xcode $xcode_version is too old: Loopr builds with the Xcode 27 SDK"
 fi
 
 if ! xcode_sdks="$("$xcodebuild_path" -showsdks 2>&1)"; then
@@ -82,7 +82,7 @@ function version_is_newer(a, b, ap, bp, na, nb, i, ai, bi) {
 
 {
     for (i = 1; i < NF; i++) {
-        if ($i == "-sdk" && $(i + 1) ~ /^iphonesimulator26([.][0-9]+)*$/) {
+        if ($i == "-sdk" && $(i + 1) ~ /^iphonesimulator27([.][0-9]+)*$/) {
             candidate_id = $(i + 1)
             candidate_version = candidate_id
             sub(/^iphonesimulator/, "", candidate_version)
@@ -99,7 +99,7 @@ END {
 }
 ' <<< "$xcode_sdks")"
 if [[ -z "$ios_simulator_sdk_record" ]]; then
-    fail "the active Xcode toolchain has no iphonesimulator 26 SDK identifier"
+    fail "the active Xcode toolchain has no iphonesimulator 27 SDK identifier"
 fi
 
 IFS=$'\t' read -r ios_simulator_sdk_identifier ios_simulator_sdk_expected_version <<< "$ios_simulator_sdk_record"
@@ -121,9 +121,9 @@ printf 'Xcode: %s (build %s)\n' "$xcode_version" "$xcode_build"
 printf 'iOS Simulator SDK: %s (version %s)\n' "$ios_simulator_sdk_identifier" "$ios_simulator_sdk_version"
 
 # This bounded seam permits the required missing-runtime check without editing the script.
-requested_ios_version="${LOOPR_BOOTSTRAP_IOS_VERSION:-26}"
-if [[ ! "$requested_ios_version" =~ ^26(\.[0-9]+){0,2}$ ]]; then
-    fail "LOOPR_BOOTSTRAP_IOS_VERSION must name an iOS 26 version (for example 26 or 26.2), got: $requested_ios_version"
+requested_ios_version="${LOOPR_BOOTSTRAP_IOS_VERSION:-27.0}"
+if [[ ! "$requested_ios_version" =~ ^27(\.[0-9]+){0,2}$ ]]; then
+    fail "LOOPR_BOOTSTRAP_IOS_VERSION must name an iOS 27 version (for example 27 or 27.0), got: $requested_ios_version"
 fi
 
 if ! available_devices_json="$("$xcrun_command" simctl list devices available --json 2>&1)"; then
@@ -137,7 +137,7 @@ if ! simulator_record="$(jq -r --arg requested "$requested_ios_version" '
   | .key as $runtime_key
   | select($runtime_key | test("^com\\.apple\\.CoreSimulator\\.SimRuntime\\.iOS-[0-9]+(-[0-9]+)*$"))
   | ($runtime_key | sub("^com\\.apple\\.CoreSimulator\\.SimRuntime\\.iOS-"; "") | split("-") | join(".")) as $runtime
-  | select(if $requested == "26" then ($runtime | test("^26(\\.[0-9]+)*$")) else $runtime == $requested end)
+  | select(if $requested == "27" then ($runtime | test("^27(\\.[0-9]+)*$")) else $runtime == $requested end)
   | .value[]
   | select(.isAvailable == true and (.deviceTypeIdentifier | startswith("com.apple.CoreSimulator.SimDeviceType.iPhone-")))
   | {runtime: $runtime, name: .name, udid: .udid}
@@ -148,7 +148,7 @@ if ! simulator_record="$(jq -r --arg requested "$requested_ios_version" '
 fi
 
 if [[ -z "$simulator_record" ]]; then
-    fail "no available iPhone simulator was found for OS $requested_ios_version; inspect 'xcrun simctl list devices available --json' or set LOOPR_BOOTSTRAP_IOS_VERSION to an installed iOS 26 version"
+    fail "no available iPhone simulator was found for OS $requested_ios_version; inspect 'xcrun simctl list devices available --json' or set LOOPR_BOOTSTRAP_IOS_VERSION to an installed iOS 27 version"
 fi
 
 IFS=$'\t' read -r selected_runtime selected_device selected_udid <<< "$simulator_record"

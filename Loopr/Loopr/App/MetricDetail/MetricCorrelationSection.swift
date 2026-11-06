@@ -20,7 +20,7 @@ struct MetricCorrelationSection: View {
     var body: some View {
         if state != .waiting {
             VStack(alignment: .leading, spacing: LooprSpacing.xs) {
-                MetricDetailEyebrow("What moves with this")
+                MetricDetailEyebrow("Other measurements")
                 content
                     .padding(LooprSpacing.formCardPadding)
                     .modifier(MetricDetailCardBackground())

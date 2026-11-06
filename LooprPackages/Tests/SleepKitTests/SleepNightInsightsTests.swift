@@ -125,17 +125,18 @@ struct SleepNightInsightsTests {
         let need = SleepTarget.resolve(needHours: 7.8333, goalMinutes: 480, history: history)
         #expect(need.source == .goal)
         #expect(need.provisionalNote == nil)
-        #expect(need.line(asleepMinutes: 432) == "7 h 12 m of 8 h needed")
+        #expect(need.line(asleepMinutes: 432) == "7 h 12 m of your 8 h sleep need")
 
         let goal = SleepTarget.resolve(needHours: nil, goalMinutes: 480, history: history)
         #expect(goal.source == .goal)
         #expect(goal.minutes == 480)
-        #expect(goal.line(asleepMinutes: 432) == "7 h 12 m of 8 h needed")
+        #expect(goal.line(asleepMinutes: 432) == "7 h 12 m of your 8 h sleep need")
 
         let recommended = SleepTarget.resolve(needHours: nil, goalMinutes: nil, history: history)
         #expect(recommended.source == .recommended)
         #expect(recommended.minutes == 480)
-        #expect(recommended.line(asleepMinutes: 452) == "7 h 32 m of 8 h needed")
+        #expect(recommended.line(asleepMinutes: 452) == "7 h 32 m of the default 8 h sleep need")
+        #expect(recommended.sectionTitle == "Against the default sleep need" && goal.sectionTitle == "Against your sleep need")
         #expect(recommended.ringScale.allowsOverflow == false)
         #expect(SleepTarget.resolve(needHours: .nan, goalMinutes: 0, history: history).source == .recommended)
     }
@@ -192,7 +193,7 @@ struct SleepNightInsightsTests {
         let ledger = SleepDebtLedger(history: history, target: SleepTarget(minutes: 450, source: .need), calendar: Self.calendar)
         #expect(ledger.netMinutes == -420)
         #expect(ledger.suggestion == .behind(minutes: 420, extraPerNight: 60))
-        #expect(ledger.headline == "7 h behind")
+        #expect(ledger.headline == "7 h under your need")
         #expect(ledger.actionLine == "Going to bed about 1 h earlier each night this week would make it up.")
 
         #expect(SleepDebtLedger.extraPerNight(forShortfall: 190) == 25)
@@ -212,7 +213,7 @@ struct SleepNightInsightsTests {
         #expect(even.headline == "Even")
         let ahead = ledger([8.5, 8.5, 8.5])
         #expect(ahead.suggestion == .ahead(minutes: 180))
-        #expect(ahead.headline == "3 h ahead")
+        #expect(ahead.headline == "3 h over your need")
         #expect(ahead.actionLine == "You slept 3 h more than the target over these nights. No catching up needed.")
     }
 

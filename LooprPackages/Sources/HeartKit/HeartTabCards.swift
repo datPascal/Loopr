@@ -90,7 +90,7 @@ struct HeartLiveCard: View {
                                     .scaleEffect(reduceMotion ? 1 : 1 + 0.28 * exp(-phase * 13))
                             }
                         }
-                        LooprText(isReconnecting ? "RECONNECTING" : "LIVE", style: .sectionLabel,
+                        LooprText(isReconnecting ? "Reconnecting" : "Live", style: .sectionLabel,
                                   color: isReconnecting ? .inkSecondary : (reading.zone?.textToken ?? .heart))
                             .contentTransition(.opacity)
                         Spacer(minLength: LooprSpacing.xs)
@@ -123,7 +123,7 @@ struct HeartLiveCard: View {
                         .frame(height: 56)
                         .opacity(isReconnecting ? 0.45 : 1)
                     HStack {
-                        LooprText("3 MIN AGO", style: .confidence, color: .inkMuted)
+                        LooprText("3 min ago", style: .confidence, color: .inkMuted)
                         Spacer()
                         LooprText("NOW", style: .confidence, color: .inkMuted)
                     }
@@ -266,7 +266,7 @@ struct HeartLiveStatusRow: View {
                         Circle()
                             .fill(Color.loopr(bandConnected ? .heart : .inkMuted))
                             .frame(width: 7, height: 7)
-                        LooprText(bandConnected ? "HEART RATE" : "BAND NOT CONNECTED",
+                        LooprText(bandConnected ? "Heart rate" : "Band not connected",
                                   style: .sectionLabel, color: .inkSecondary)
                         Spacer()
                         LooprChevron()

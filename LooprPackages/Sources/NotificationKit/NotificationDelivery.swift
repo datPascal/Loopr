@@ -46,10 +46,16 @@ public enum NotificationCategoryCatalog {
     public static let activity = "com.loopr.category.activity"
     public static let reminder = "com.loopr.category.reminder"
     public static let general = "com.loopr.category.general"
+    /// A protocol rule's own reminder, which the person can answer from the lock screen (ICP R3-HAB-02).
+    public static let protocolRule = "com.loopr.category.protocol-rule"
 
     /// Silences that heart alert kind until local midnight, without opening
     /// Loopr.
     public static let pauseForTodayAction = "com.loopr.action.pause-today"
+    /// Keeps the rule for the day the reminder came, without opening Loopr.
+    public static let ruleDoneAction = "com.loopr.action.rule-done"
+    /// Skips the rule for the day the reminder came, without opening Loopr.
+    public static let ruleSkipTodayAction = "com.loopr.action.rule-skip-today"
 
     public static let all: [NotificationCategoryDescriptor] = [
         NotificationCategoryDescriptor(identifier: heartAlert, actions: [
@@ -59,8 +65,18 @@ public enum NotificationCategoryCatalog {
         NotificationCategoryDescriptor(identifier: device, actions: []),
         NotificationCategoryDescriptor(identifier: activity, actions: []),
         NotificationCategoryDescriptor(identifier: reminder, actions: []),
-        NotificationCategoryDescriptor(identifier: general, actions: [])
+        NotificationCategoryDescriptor(identifier: general, actions: []),
+        NotificationCategoryDescriptor(identifier: protocolRule, actions: [
+            NotificationActionDescriptor(identifier: ruleDoneAction, title: "Done", opensApp: false),
+            NotificationActionDescriptor(identifier: ruleSkipTodayAction, title: "Skip today", opensApp: false)
+        ])
     ]
+
+    /// The category of one request. A protocol rule's reminder gets its own, with Done and Skip today; every other
+    /// request takes its family's.
+    public static func category(for request: NotificationRequest) -> String {
+        ProtocolRuleReminder.isRuleReminder(request) ? protocolRule : category(for: request.identity.family)
+    }
 
     public static func category(for family: NotificationFamily) -> String {
         switch family {
@@ -68,7 +84,7 @@ public enum NotificationCategoryCatalog {
         case .overnightCheck, .cardioFitness: overnightCheck
         case .battery, .chargeGuidance, .disconnect, .staleData: device
         case .detectedWorkouts, .workoutCompletion, .breathingCompletion: activity
-        case .journaling, .cycleReminders, .windDown, .hydration: reminder
+        case .journaling, .cycleReminders, .windDown, .hydration, .userReminders: reminder
         case .recoveryReadiness, .validatedHealthChanges, .goals, .briefings: general
         }
     }

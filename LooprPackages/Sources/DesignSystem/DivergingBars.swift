@@ -237,8 +237,8 @@ struct LooprDailyAxis: View {
 
     static func label(_ date: Date, dense: Bool) -> String {
         dense
-            ? date.formatted(.dateTime.day().month(.abbreviated)).uppercased()
-            : date.formatted(.dateTime.weekday(.narrow)).uppercased()
+            ? date.formatted(.dateTime.day().month(.abbreviated)).looprLabelCased
+            : date.formatted(.dateTime.weekday(.narrow)).looprLabelCased
     }
 
     static func readoutDate(_ date: Date) -> String {

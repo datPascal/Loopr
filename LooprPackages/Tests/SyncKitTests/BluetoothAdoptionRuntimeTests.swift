@@ -203,6 +203,13 @@ private final class BandCommandTestClock: BluetoothAdoptionClock, @unchecked Sen
         }
         pending.forEach { $0.resume() }
     }
+
+    var pendingBandCommandTimeoutCount: Int { lock.withLock { waiters.count } }
+
+    func fireFirstBandCommandTimeout() {
+        let first = lock.withLock { waiters.isEmpty ? nil : waiters.removeFirst() }
+        first?.resume()
+    }
 }
 
 /// Collects the result of a band action started on a detached task.
@@ -1663,15 +1670,15 @@ final class BluetoothAdoptionRuntimeTests: XCTestCase {
         // The band range must not collide with the live allocator's 0xA0...0xFF.
         XCTAssertTrue((0x60...0x7F).contains(request[1]))
 
-        // The bytes a real band sent on 2026-09-21 for an armed alarm, with
+        // The legacy WHOOP 4 captured layout, with
         // the band counter and this run's sequence echo substituted in. The
         // sequence we sent comes back at payload offset 2, never offset 0.
         let response = runtimeCommandResponseInner(
             opcode: 0x43,
             sequenceEcho: request[1],
-            body: [0x01, 0x01, 0x00]
+            body: [0x01, 0x01]
                 + runtimeLittleEndian(1_790_031_600)
-                + [0x00, 0x04, 0x00, 0x20],
+                + [0x00, 0x00, 0x04, 0x00, 0x20],
             bandCounter: 0xE2
         )
         _ = await runtime.handle(.value(HarvardBluetoothProfile.response, runtimeFrame(inner: response)))
@@ -1875,7 +1882,7 @@ final class BluetoothAdoptionRuntimeTests: XCTestCase {
         await runtime.stop()
     }
 
-    func testSetAlarmSendsTheRichFormShiftedIntoTheBandClockFrame() async throws {
+    func testSetAlarmSendsTheWhoop4RevisionOneFormShiftedIntoTheBandClockFrame() async throws {
         let peripheral = UUID()
         let transport = ScriptedTransport(events: runtimeSetupEvents(for: peripheral), retrievalResult: [peripheral])
         let clock = BandCommandTestClock()
@@ -1917,17 +1924,14 @@ final class BluetoothAdoptionRuntimeTests: XCTestCase {
         XCTAssertEqual(clearInner[3], 0x01)
         let setInner = try runtimeInner(transport.recordedWrites()[setupCount + 2].0)
         XCTAssertEqual(setInner[2], 0x42)
-        XCTAssertEqual(setInner[3], 0x04, "the rich form is the only form that fires")
-        XCTAssertEqual(setInner[4], 0x00)
-        let armed = UInt32(setInner[5])
-            | (UInt32(setInner[6]) << 8)
-            | (UInt32(setInner[7]) << 16)
-            | (UInt32(setInner[8]) << 24)
+        XCTAssertEqual(setInner[3], 0x01)
+        let armed = UInt32(setInner[4])
+            | (UInt32(setInner[5]) << 8)
+            | (UInt32(setInner[6]) << 16)
+            | (UInt32(setInner[7]) << 24)
         XCTAssertEqual(armed, UInt32(fireDate.timeIntervalSince1970) - 120)
-        XCTAssertEqual(Array(setInner[11..<23]), [47, 152, 0, 0, 0, 0, 0, 0, 0, 0, 7, 30])
-        // The 32-byte frame is the one write that exceeds a default MTU's
-        // 20-byte ATT payload; nothing in the writer truncates it.
-        XCTAssertEqual(transport.recordedWrites()[setupCount + 2].0.count, 32)
+        XCTAssertEqual(Array(setInner[8..<12]), [0, 0x10, 0, 0])
+        XCTAssertEqual(transport.recordedWrites()[setupCount + 2].0.count, 20)
 
         // The readback that follows is unconfirmed on real firmware, so its
         // timeout must not fail the set.
@@ -1938,6 +1942,23 @@ final class BluetoothAdoptionRuntimeTests: XCTestCase {
         case .success: break
         default: XCTFail("an unanswered readback must not fail the alarm set")
         }
+
+        // Event freshness must use the GET_CLOCK just read by this command.
+        // SET_CLOCK then invalidates that correlation without reconnecting.
+        let events = await runtime.bandEvents()
+        for id: UInt16 in [56, 16, 56] {
+            _ = await runtime.handle(.value(
+                HarvardBluetoothProfile.events,
+                runtimeBandEventFrame(eventID: id, epochSeconds: bandSeconds)
+            ))
+        }
+        var iterator = events.makeAsyncIterator()
+        let beforeClockSet = await iterator.next()
+        XCTAssertEqual(beforeClockSet?.occurredAt, BandCommandTestClock.value)
+        let clockSet = await iterator.next()
+        XCTAssertNil(clockSet?.occurredAt)
+        let afterClockSet = await iterator.next()
+        XCTAssertNil(afterClockSet?.occurredAt, "A clock set must invalidate the previous RTC frame")
         await runtime.stop()
     }
 
@@ -2151,6 +2172,205 @@ final class BluetoothAdoptionRuntimeTests: XCTestCase {
             .dropFirst(afterManualSync)
             .map { try runtimeInner($0.0)[2] }
         XCTAssertFalse(opcodes.contains(0x16), "the 900 s history cadence was stamped by the manual sync")
+        await runtime.stop()
+    }
+}
+
+extension BluetoothAdoptionRuntimeTests {
+    func testAnOldTimeoutCannotFailANewCommandAfterSequenceWraparound() async throws {
+        let peripheral = UUID()
+        let transport = ScriptedTransport(events: runtimeSetupEvents(for: peripheral), retrievalResult: [peripheral])
+        let clock = BandCommandTestClock()
+        defer { clock.fireBandCommandTimeouts() }
+        let runtime = await bandReadyRuntime(peripheral: peripheral, transport: transport, clock: clock)
+        let before = transport.recordedWrites().count
+        let first = BandActionProbe<Date?>()
+        Task {
+            do { await first.finish(.success(try await runtime.readBandAlarm())) }
+            catch { await first.finish(.failure(error)) }
+        }
+        let firstTimer = await waitForRuntime { clock.pendingBandCommandTimeoutCount == 1 }
+        XCTAssertTrue(firstTimer)
+        let originalSequence = try writeSequence(transport, at: before)
+        _ = await runtime.handle(.value(HarvardBluetoothProfile.response, runtimeFrame(inner: runtimeClockResponseInner(
+            sequence: originalSequence, timestamp: UInt32(BandCommandTestClock.value.timeIntervalSince1970)
+        ))))
+        let secondTimer = await waitForRuntime { clock.pendingBandCommandTimeoutCount == 2 }
+        XCTAssertTrue(secondTimer)
+        _ = await runtime.handle(.value(HarvardBluetoothProfile.response, runtimeFrame(inner: runtimeCommandResponseInner(
+            opcode: 0x43, sequenceEcho: try writeSequence(transport, at: before + 1),
+            body: [0x01, 0x01] + runtimeLittleEndian(1_790_031_600) + [0, 0, 4, 0, 0x20]
+        ))))
+        let firstFinished = await waitForRuntime { await first.result() != nil }
+        XCTAssertTrue(firstFinished)
+        for _ in 0..<30 { try await runtime.buzzBand() }
+
+        let next = BandActionProbe<Date?>()
+        Task {
+            do { await next.finish(.success(try await runtime.readBandAlarm())) }
+            catch { await next.finish(.failure(error)) }
+        }
+        let nextTimer = await waitForRuntime { clock.pendingBandCommandTimeoutCount == 3 }
+        XCTAssertTrue(nextTimer)
+        XCTAssertEqual(try writeSequence(transport, at: before + 32), originalSequence)
+        // This fake intentionally ignores Task.cancel(), exercising a late
+        // timer callback after its sequence has been reused.
+        clock.fireFirstBandCommandTimeout()
+        for _ in 0..<100 { await Task.yield() }
+        let prematureResult = await next.result()
+        XCTAssertNil(prematureResult)
+        XCTAssertEqual(transport.recordedWrites().count, before + 33,
+                       "An old timeout must not push the new clock read into its cached-clock fallback")
+        await runtime.stop()
+        let nextFinished = await waitForRuntime { await next.result() != nil }
+        XCTAssertTrue(nextFinished)
+    }
+
+    func testCancelledClockReadReturnsWithoutWaitingForTimeoutOrSendingAnAlarm() async throws {
+        let peripheral = UUID()
+        let transport = ScriptedTransport(events: runtimeSetupEvents(for: peripheral), retrievalResult: [peripheral])
+        let clock = BandCommandTestClock()
+        defer { clock.fireBandCommandTimeouts() }
+        let runtime = await bandReadyRuntime(peripheral: peripheral, transport: transport, clock: clock)
+        let before = transport.recordedWrites().count
+        let probe = BandActionProbe<Bool>()
+        let task = Task {
+            do {
+                try await runtime.setBandAlarm(fireDate: BandCommandTestClock.value.addingTimeInterval(3_600))
+                await probe.finish(.success(true))
+            } catch { await probe.finish(.failure(error)) }
+        }
+        let requested = await waitForRuntime { transport.recordedWrites().count > before }
+        XCTAssertTrue(requested)
+        task.cancel()
+        let cancelled = await waitForRuntime { await probe.result() != nil }
+        XCTAssertTrue(cancelled, "Cancellation must release the command before its six-second timeout")
+        if case .failure(let error) = await probe.result() { XCTAssertTrue(error is CancellationError) }
+        else { XCTFail("Expected cancellation") }
+        XCTAssertEqual(try transport.recordedWrites().dropFirst(before).map { try runtimeInner($0.0)[2] }, [0x0B])
+        await runtime.stop()
+    }
+
+    func testExhaustedCommandSequencesNeverOverwriteAnOutstandingCaller() async throws {
+        let peripheral = UUID()
+        let transport = ScriptedTransport(events: runtimeSetupEvents(for: peripheral), retrievalResult: [peripheral])
+        let clock = BandCommandTestClock()
+        defer { clock.fireBandCommandTimeouts() }
+        let runtime = await bandReadyRuntime(peripheral: peripheral, transport: transport, clock: clock)
+        let before = transport.recordedWrites().count
+        var probes: [BandActionProbe<Date?>] = []
+        for index in 0..<32 {
+            let probe = BandActionProbe<Date?>()
+            probes.append(probe)
+            Task {
+                do { await probe.finish(.success(try await runtime.readBandAlarm())) }
+                catch { await probe.finish(.failure(error)) }
+            }
+            let count = before + index + 1
+            let written = await waitForRuntime { transport.recordedWrites().count >= count }
+            XCTAssertTrue(written)
+        }
+        let overflow = BandActionProbe<Date?>()
+        Task {
+            do { await overflow.finish(.success(try await runtime.readBandAlarm())) }
+            catch { await overflow.finish(.failure(error)) }
+        }
+        let rejected = await waitForRuntime { await overflow.result() != nil }
+        XCTAssertTrue(rejected, "A full sequence range must reject new work instead of replacing a continuation")
+        if case .failure(let error) = await overflow.result() {
+            guard case .rejected = error as? BandCommandError else { return XCTFail("Expected a bounded command rejection") }
+        } else { XCTFail("Expected the extra request to fail") }
+        XCTAssertEqual(transport.recordedWrites().count, before + 32)
+        await runtime.stop()
+        for probe in probes {
+            let released = await waitForRuntime { await probe.result() != nil }
+            XCTAssertTrue(released, "Every original caller must still have a continuation to resume")
+        }
+    }
+
+    func testReadbackDistinguishesAnEmptyAlarmSlotFromAnUnsupportedReply() async throws {
+        for (body, expected): ([UInt8], BandAlarmStatus) in [
+            ([0x01, 0x00, 0, 0, 0, 0, 0, 0, 4, 0, 0x20], .empty),
+            ([0x99], .unknown)
+        ] {
+            let peripheral = UUID()
+            let transport = ScriptedTransport(events: runtimeSetupEvents(for: peripheral), retrievalResult: [peripheral])
+            let clock = BandCommandTestClock()
+            defer { clock.fireBandCommandTimeouts() }
+            let runtime = await bandReadyRuntime(peripheral: peripheral, transport: transport, clock: clock)
+            let before = transport.recordedWrites().count
+            let probe = BandActionProbe<BandAlarmStatus>()
+            Task {
+                do { await probe.finish(.success(try await runtime.readBandAlarmStatus())) }
+                catch { await probe.finish(.failure(error)) }
+            }
+            let clockRequested = await waitForRuntime { transport.recordedWrites().count > before }
+            XCTAssertTrue(clockRequested)
+            _ = await runtime.handle(.value(HarvardBluetoothProfile.response, runtimeFrame(inner: runtimeClockResponseInner(
+                sequence: try writeSequence(transport, at: before), timestamp: UInt32(BandCommandTestClock.value.timeIntervalSince1970)
+            ))))
+            let alarmRequested = await waitForRuntime { transport.recordedWrites().count > before + 1 }
+            XCTAssertTrue(alarmRequested)
+            _ = await runtime.handle(.value(HarvardBluetoothProfile.response, runtimeFrame(inner: runtimeCommandResponseInner(
+                opcode: 0x43, sequenceEcho: try writeSequence(transport, at: before + 1), body: body
+            ))))
+            let finished = await waitForRuntime { await probe.result() != nil }
+            XCTAssertTrue(finished)
+            if case .success(let status) = await probe.result() { XCTAssertEqual(status, expected) }
+            else { XCTFail("Expected a decoded readback status") }
+            await runtime.stop()
+        }
+    }
+
+    func testAnUnknownClockNeverSendsAnAlarmInThePhonesTimeFrame() async throws {
+        let peripheral = UUID()
+        let transport = ScriptedTransport(events: runtimeSetupEvents(for: peripheral), retrievalResult: [peripheral])
+        let clock = BandCommandTestClock()
+        let runtime = await bandReadyRuntime(peripheral: peripheral, transport: transport, clock: clock)
+        let before = transport.recordedWrites().count
+        let probe = BandActionProbe<Bool>()
+        Task {
+            do {
+                try await runtime.setBandAlarm(fireDate: BandCommandTestClock.value.addingTimeInterval(3_600))
+                await probe.finish(.success(true))
+            } catch { await probe.finish(.failure(error)) }
+        }
+        let requestedClock = await waitForRuntime { transport.recordedWrites().count > before }
+        XCTAssertTrue(requestedClock)
+        clock.fireBandCommandTimeouts()
+        let finished = await waitForRuntime { await probe.result() != nil }
+        XCTAssertTrue(finished)
+        if case .failure(let error) = await probe.result() {
+            XCTAssertEqual(error as? BandCommandError, .timedOut)
+        } else { XCTFail("A missing clock correlation must fail the arm") }
+        let opcodes = try transport.recordedWrites().dropFirst(before).map { try runtimeInner($0.0)[2] }
+        XCTAssertEqual(opcodes, [0x0B])
+        await runtime.stop()
+    }
+
+    func testDisconnectDuringClockReadDoesNotContinueWithAnAlarmWrite() async throws {
+        let peripheral = UUID()
+        let transport = ScriptedTransport(events: runtimeSetupEvents(for: peripheral), retrievalResult: [peripheral])
+        let runtime = await bandReadyRuntime(peripheral: peripheral, transport: transport, clock: BandCommandTestClock())
+        let before = transport.recordedWrites().count
+        let generation = await runtime.currentState().generation
+        let probe = BandActionProbe<Bool>()
+        Task {
+            do {
+                try await runtime.setBandAlarm(fireDate: BandCommandTestClock.value.addingTimeInterval(3_600))
+                await probe.finish(.success(true))
+            } catch { await probe.finish(.failure(error)) }
+        }
+        let requestedClock = await waitForRuntime { transport.recordedWrites().count > before }
+        XCTAssertTrue(requestedClock)
+        _ = await runtime.handle(.disconnected(peripheral, error: .disconnected), generation: generation)
+        let finished = await waitForRuntime { await probe.result() != nil }
+        XCTAssertTrue(finished)
+        if case .failure(let error) = await probe.result() {
+            XCTAssertEqual(error as? BandCommandError, .notReady)
+        } else { XCTFail("A disconnected arm must fail") }
+        let opcodes = try transport.recordedWrites().dropFirst(before).map { try runtimeInner($0.0)[2] }
+        XCTAssertFalse(opcodes.contains(0x42))
         await runtime.stop()
     }
 }

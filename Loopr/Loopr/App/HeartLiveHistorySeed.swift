@@ -1,6 +1,5 @@
 import Foundation
 import BluetoothKit
-import GRDB
 import HeartKit
 import StorageKit
 

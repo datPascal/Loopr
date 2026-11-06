@@ -239,7 +239,7 @@ public struct LooprMetricTrendChart: View {
                     Text(axisFormat(number))
                         .looprTypography(.confidence)
                         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                        .foregroundStyle(Color.loopr(.inkMuted))
+                        .foregroundStyle(Color.loopr(.inkSecondary))
                 }
             }
         }
@@ -440,9 +440,9 @@ enum LooprTrendAxis {
     /// view, "FRI" over "4 SEP" in the month view. Longer views label months.
     static func label(for date: Date, window: LooprChartWindow, calendar: Calendar = .current) -> String {
         switch window.dayCount {
-        case ...10: LooprChartDateText.string(date, "EEE'\n'd", calendar: calendar).uppercased()
-        case ...40: LooprChartDateText.string(date, "EEE'\n'd MMM", calendar: calendar).uppercased()
-        default: LooprChartDateText.string(date, "MMM", calendar: calendar).uppercased()
+        case ...10: LooprChartDateText.string(date, "EEE'\n'd", calendar: calendar).looprLabelCased
+        case ...40: LooprChartDateText.string(date, "EEE'\n'd MMM", calendar: calendar).looprLabelCased
+        default: LooprChartDateText.string(date, "MMM", calendar: calendar).looprLabelCased
         }
     }
 

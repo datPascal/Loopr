@@ -1,4 +1,5 @@
 import BluetoothKit
+import CoachKit
 import CycleKit
 import DeviceCenterKit
 import DataKit
@@ -7,6 +8,7 @@ import HealthKitBridge
 import OnboardingKit
 import ProfileKit
 import RouteKit
+import RoutineKit
 import StorageKit
 import Testing
 @testable import Loopr
@@ -122,6 +124,33 @@ struct PersistentDeletionTests {
     }
 
     @Test
+    func deleteAllClearsTheWeeklyReviewDeclinesAndSeenWeeks() async throws {
+        try await withDeletionGraph { graph in
+            let decisions = UserDefaultsWeeklyProposalDecisionStore(defaults: graph.defaults)
+            decisions.record(WeeklyProposalDecision(weekKey: "2026-10-19", ruleKey: RuleKey(rawValue: "kitchen"),
+                                                    outcome: .sleepHeartRate, missedNights: 9, gap: 5))
+            let seen = WeeklyReviewSeenStore(defaults: graph.defaults)
+            seen.markSeen("2026-W43")
+            graph.defaults.set(true, forKey: TodayFirstEveningStore.defaultsKey)
+            #expect(decisions.decisions().count == 1)
+            #expect(seen.hasSeen("2026-W43"))
+
+            let effects = PersistentOnboardingDataEffects(
+                profile: graph.profile, device: graph.device, onboarding: graph.onboarding, database: graph.database,
+                defaults: graph.defaults, accessoryProvisioningStore: graph.provisioning,
+                productStores: [NamedProductStore(name: "today", store: graph.productStore)])
+            let receipt = await effects.deleteAllDataWithReceipt()
+            #expect(receipt.isComplete)
+            #expect(receipt.clearedStores.contains("userDefaults.product-identifiers"))
+            #expect(graph.defaults.object(forKey: UserDefaultsWeeklyProposalDecisionStore.key) == nil)
+            #expect(graph.defaults.object(forKey: WeeklyReviewSeenStore.key) == nil)
+            #expect(graph.defaults.object(forKey: TodayFirstEveningStore.defaultsKey) == nil)
+            #expect(decisions.decisions().isEmpty)
+            #expect(!seen.hasSeen("2026-W43"))
+        }
+    }
+
+    @Test
     func standardDefaultsDeletionRegistryCoversEveryShippingWriter() {
         #expect(Set(ProductRepositoryKeys.allOwnedDefaultsKeys) == [
             "loopr.product.onboarding.v1",
@@ -134,10 +163,39 @@ struct PersistentDeletionTests {
             "com.loopr.onboarding.experimentalBandConsent.v1",
             "loopr.ai.provider.endpoint.v1",
             "loopr.ai.provider.model.v1",
+            "loopr.ai.providers.v2",
+            "loopr.ai.selected.v2",
             "loopr.launch.onboarding-completed.v1",
             "loopr.today.launch-snapshot.v1",
             "loopr.days.default-day.v1",
-            "loopr.today.preferences.v1"
+            "loopr.today.preferences.v1",
+            "loopr.shell.selected-tab.v1",
+            "loopr.health.pins.v1",
+            "loopr.agent-access.v1",
+            "loopr.files-backup.folder.v1",
+            "loopr.files-backup.enabled.v1",
+            "loopr.files-backup.last-success.v1",
+            "loopr.files-backup.folder-name.v1",
+            "loopr.device-center.double-tap-action",
+            "loopr.alarm.phone-layer-enabled",
+            "loopr.alarm.phone-backup-outcome",
+            "loopr.device-center.alarm-armed-fire-date",
+            "loopr.device-center.alarm-armed-generation",
+            "loopr.device-center.alarm-armed-at",
+            "loopr.device-center.alarm-verified-at",
+            "loopr.device-center.alarm-last-readback",
+            "loopr.device-center.alarm-last-readback-at",
+            "loopr.device-center.alarm-confirmed-by-event",
+            "loopr.device-center.alarm-write-failed",
+            "loopr.device-center.alarm-process-session",
+            "loopr.device-center.alarm-disable-pending",
+            "loopr.device-center.alarm-last-fired-date",
+            "loopr.weeklyReview.declinedProposals",
+            "loopr.weeklyReview.seenWeeks",
+            "loopr.today.firstEveningDismissed",
+            "loopr.today.no-band-banner-hidden.v1",
+            "loopr.whats-new.longevity.v1",
+            "loopr.launch-appearance"
         ])
     }
 

@@ -376,7 +376,7 @@ public struct HapticCommand: Equatable, Sendable {
     }
 }
 
-/// The exact 12-byte waveform block carried by the rich Gen 4 alarm form.
+/// The exact 12-byte waveform block carried by the rich reference alarm form.
 /// Byte for byte the reference's `kDefaultAlarmHaptics`: eight waveform effect
 /// slots, a u16 little-endian per-effect loop control, an overall loop count,
 /// and a maximum duration in seconds.
@@ -420,13 +420,9 @@ public struct AlarmHapticPattern: Equatable, Sendable {
 /// source-described forms and rejects unknown forms.
 public struct AlarmCommand: Equatable, Sendable {
     public enum Operation: Equatable, Sendable {
-        /// The seven-byte time-only form. The band accepts and ACKs it but
-        /// never fires it because it ships no waveform to play. Kept for
-        /// diagnostics and reference parity only, exactly as the reference
-        /// keeps `cmdSetAlarmSimple`.
+        /// WHOOP 4 revision 1, including the two captured trailing zero bytes.
         case setupSimple(epochSeconds: UInt32, subsecondTicks: UInt16)
-        /// The twenty-byte rich form, the only form the reference says fires
-        /// on real hardware. This is what `setup` builds.
+        /// The rich reference form. Do not send this to a WHOOP 4.
         case setupRichReference(index: UInt8, epochSeconds: UInt32, subsecondTicks: UInt16, pattern: AlarmHapticPattern)
         case readback
         case test
@@ -441,22 +437,17 @@ public struct AlarmCommand: Equatable, Sendable {
         self.operation = operation
     }
 
-    /// Arms a firing alarm. The rich twenty-byte form is the only form the
-    /// reference says the band actually executes, so the index and waveform
-    /// arguments are carried through rather than discarded.
+    /// WHOOP 4 uses revision 1. The newer rich form can latch and read back
+    /// on that band without executing. See the 2026-10-11 reference audit.
     public static func setup(
         sequence: UInt8 = 0,
-        index: UInt8 = 0,
         epochSeconds: UInt32,
-        subsecondTicks: UInt16,
-        pattern: AlarmHapticPattern = .default
+        subsecondTicks: UInt16
     ) -> Self {
-        setupRichReference(
+        setupSimple(
             sequence: sequence,
-            index: index,
             epochSeconds: epochSeconds,
-            subsecondTicks: subsecondTicks,
-            pattern: pattern
+            subsecondTicks: subsecondTicks
         )
     }
 
@@ -480,8 +471,7 @@ public struct AlarmCommand: Equatable, Sendable {
         )
     }
 
-    /// Builds the sourced simple SET_ALARM_TIME form. The band ACKs this form,
-    /// but without a waveform it has no haptic/buzz effect and never fires.
+    /// Builds the captured WHOOP 4 SET_ALARM_TIME form.
     public static func setupSimple(
         sequence: UInt8 = 0,
         epochSeconds: UInt32,
@@ -524,6 +514,7 @@ public struct AlarmCommand: Equatable, Sendable {
             var bytes = Data([0x23, sequence, 0x42, 0x01])
             bytes.append(contentsOf: littleEndian(epochSeconds))
             bytes.append(contentsOf: littleEndian(subsecondTicks))
+            bytes.append(contentsOf: [0x00, 0x00])
             return bytes
         case .setupRichReference(let index, let epochSeconds, let subsecondTicks, let pattern):
             var bytes = Data([0x23, sequence, 0x42, 0x04, index])
@@ -570,18 +561,28 @@ public struct AlarmCommand: Equatable, Sendable {
     /// identical `[flag][index][u32 epoch][0x00]` record with no leading
     /// revision byte and no trailing bytes.
     ///
-    /// Uncertainty that this decoder deliberately does not paper over:
-    /// * Body byte 1 is read as "armed". Every capture had an alarm armed, so
-    ///   a cleared band has never been observed here; `isArmed` may be a
-    ///   constant on some firmware. Callers must not treat `false` as proof
-    ///   the band holds no alarm, only as "the band did not say it is armed".
+    /// This is the indexed reference layout. The WHOOP 4 revision-1 captures
+    /// instead place the epoch at body offset 2, with no index. Callers must
+    /// select the layout explicitly; both forms can begin `01 01`.
+    ///
+    /// Remaining uncertainty:
+    /// * The legacy captures include a cleared slot with flag 0 and epoch 0.
+    ///   The indexed reference captures only cover armed slots.
     /// * The byte after the epoch (`0x00`) and the trailing `04 00 20` are not
     ///   identified. There is no subsecond field the capture can justify, so
     ///   none is decoded; `SET_ALARM_TIME` was sent with ticks 0 and nothing in
     ///   the reply reads back as 0.
     /// * Only the `0x01` readback revision is accepted. Any other leading byte
     ///   fails closed rather than guessing an epoch offset.
-    public static func decodeReadbackResponse(_ raw: Data) throws -> AlarmReadback {
+    public enum ReadbackLayout: Sendable {
+        case indexedReference
+        case whoop4Revision1
+    }
+
+    public static func decodeReadbackResponse(
+        _ raw: Data,
+        layout: ReadbackLayout = .indexedReference
+    ) throws -> AlarmReadback {
         guard raw.count >= CommandResponseLayout.bodyOffset else {
             throw ProtocolDecodeError.outOfBounds(
                 offset: raw.count,
@@ -600,6 +601,9 @@ public struct AlarmCommand: Equatable, Sendable {
                 reason: "expected alarm readback opcode 0x43"
             )
         }
+        guard raw[4] == 0x01 else {
+            throw ProtocolDecodeError.invalidValue(offset: 4, reason: "alarm readback command failed")
+        }
 
         let bodyOffset = CommandResponseLayout.bodyOffset
         let body = Data(raw.dropFirst(bodyOffset))
@@ -617,16 +621,21 @@ public struct AlarmCommand: Equatable, Sendable {
                 reason: "unsupported alarm readback revision 0x\(String(body[0], radix: 16))"
             )
         }
-        let epochSeconds = readUInt32LE(body, offset: 3)
-        guard CommandResponseLayout.isPlausibleUnixSeconds(epochSeconds) else {
+        guard body[1] <= 1 else {
+            throw ProtocolDecodeError.invalidValue(offset: bodyOffset + 1, reason: "unknown alarm stored flag")
+        }
+        let epochOffset = layout == .whoop4Revision1 ? 2 : 3
+        let epochSeconds = readUInt32LE(body, offset: epochOffset)
+        guard (body[1] == 0 && epochSeconds == 0)
+            || CommandResponseLayout.isPlausibleUnixSeconds(epochSeconds) else {
             throw ProtocolDecodeError.invalidValue(
-                offset: bodyOffset + 3,
+                offset: bodyOffset + epochOffset,
                 reason: "alarm readback epoch \(epochSeconds) is not a plausible Unix time"
             )
         }
         return AlarmReadback(
             isArmed: body[1] != 0,
-            index: body[2],
+            index: layout == .whoop4Revision1 ? 0 : body[2],
             epochSeconds: epochSeconds,
             body: body
         )

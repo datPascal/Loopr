@@ -1,46 +1,67 @@
 import XCTest
 
 /// Repeatable gestures for comparing scroll work in the same simulator and
-/// build configuration. Run a single test at a time to keep other UI tests
+/// build configuration. The five tab roots (Today, Food, Fitness, Protocol, Data), the Sleep, Heart
+/// and Body screens pushed on Data, the metric detail and the method page each get one test. Run a single test at a time to keep other UI tests
 /// from changing the simulator's workload during a sample.
 final class ScrollPerformanceUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
 
+    // The five tab roots, then the Health screens pushed on Data.
     @MainActor func testTodayRoot() { measureRoot("Today", id: "today-screen") }
+    @MainActor func testFoodRoot() { measureRoot("Food", id: "food-screen") }
+    @MainActor func testFitnessRoot() { measureRoot("Fitness", id: "workouts-screen") }
+    @MainActor func testProtocolRoot() { measureRoot("Protocol", id: "journal-screen") }
+    @MainActor func testDataRoot() { measureRoot("Data", id: "health-screen") }
     @MainActor func testSleepRoot() { measureRoot("Sleep", id: "sleep-screen") }
     @MainActor func testHeartRoot() { measureRoot("Heart", id: "heart-screen") }
     @MainActor func testBodyRoot() { measureRoot("Body", id: "body-screen") }
-    @MainActor func testWorkoutsRoot() { measureRoot("Workouts", id: "workouts-screen") }
 
     @MainActor func testLiveTodayRoot() { measureRoot("Today", id: "today-screen", live: true) }
+    @MainActor func testLiveFoodRoot() { measureRoot("Food", id: "food-screen", live: true) }
+    @MainActor func testLiveFitnessRoot() { measureRoot("Fitness", id: "workouts-screen", live: true) }
+    @MainActor func testLiveProtocolRoot() { measureRoot("Protocol", id: "journal-screen", live: true) }
+    @MainActor func testLiveDataRoot() { measureRoot("Data", id: "health-screen", live: true) }
     @MainActor func testLiveSleepRoot() { measureRoot("Sleep", id: "sleep-screen", live: true) }
     @MainActor func testLiveHeartRoot() { measureRoot("Heart", id: "heart-screen", live: true) }
     @MainActor func testLiveBodyRoot() { measureRoot("Body", id: "body-screen", live: true) }
-    @MainActor func testLiveWorkoutsRoot() { measureRoot("Workouts", id: "workouts-screen", live: true) }
 
     @MainActor
     func testMetricDetail() {
         let app = launch(extra: ["--loopr-metric-history-fixture"])
-        selectTab(app, "Heart", id: "heart-screen")
-        open(app, identifier: "heart-vital-rmssd", id: "metric-detail-screen")
+        selectTab(app, "Data", id: "health-screen")
+        open(app, identifier: "health-tile-rmssd", id: "metric-detail-screen")
         measureScroll(app, id: "metric-detail-screen")
     }
 
     @MainActor
     func testLiveMetricDetail() {
         let app = launch(extra: ["--loopr-performance-live", "--loopr-metric-history-fixture"])
-        selectTab(app, "Heart", id: "heart-screen")
-        open(app, identifier: "heart-vital-rmssd", id: "metric-detail-screen")
+        selectTab(app, "Data", id: "health-screen")
+        open(app, identifier: "health-tile-rmssd", id: "metric-detail-screen")
         measureScroll(app, id: "metric-detail-screen")
+    }
+
+    @MainActor
+    func testMethodPage() {
+        let app = launchMethod()
+        measureScroll(app, id: "method-screen")
+    }
+
+    @MainActor
+    func testLiveMethodPage() {
+        let app = launchMethod(extra: ["--loopr-performance-live"])
+        measureScroll(app, id: "method-screen")
     }
 
     @MainActor
     func testSleepTrends() {
         let app = launch()
         selectTab(app, "Sleep", id: "sleep-screen")
-        open(app, label: "Sleep trends", id: "sleep-trends-screen")
+        // Sleep opens on the night; its range picker shows the trends on the same page.
+        open(app, identifier: "sleep-scope-month", id: "sleep-trends-screen")
         measureScroll(app, id: "sleep-trends-screen")
     }
 
@@ -48,7 +69,8 @@ final class ScrollPerformanceUITests: XCTestCase {
     func testLiveSleepTrends() {
         let app = launch(extra: ["--loopr-performance-live"])
         selectTab(app, "Sleep", id: "sleep-screen")
-        open(app, label: "Sleep trends", id: "sleep-trends-screen")
+        // Sleep opens on the night; its range picker shows the trends on the same page.
+        open(app, identifier: "sleep-scope-month", id: "sleep-trends-screen")
         measureScroll(app, id: "sleep-trends-screen")
     }
 
@@ -82,15 +104,15 @@ final class ScrollPerformanceUITests: XCTestCase {
 
     @MainActor
     func testStressDetail() {
-        let app = launch()
-        open(app, identifier: "today-metric-stress", id: "stress-screen")
+        let app = launch(extra: ["--loopr-deep-link=today/stress"])
+        XCTAssertTrue(app.descendants(matching: .any)["stress-screen"].firstMatch.waitForExistence(timeout: 30))
         measureScroll(app, id: "stress-screen")
     }
 
     @MainActor
     func testLiveStressDetail() {
-        let app = launch(extra: ["--loopr-performance-live"])
-        open(app, identifier: "today-metric-stress", id: "stress-screen")
+        let app = launch(extra: ["--loopr-performance-live", "--loopr-deep-link=today/stress"])
+        XCTAssertTrue(app.descendants(matching: .any)["stress-screen"].firstMatch.waitForExistence(timeout: 30))
         measureScroll(app, id: "stress-screen")
     }
 
@@ -116,8 +138,8 @@ final class ScrollPerformanceUITests: XCTestCase {
         let options = XCTMeasureOptions()
         options.iterationCount = 2
         measure(metrics: [XCTCPUMetric(application: app)], options: options) {
-            for (tab, id) in [("Sleep", "sleep-screen"), ("Heart", "heart-screen"),
-                              ("Body", "body-screen"), ("Workouts", "workouts-screen"),
+            for (tab, id) in [("Food", "food-screen"), ("Fitness", "workouts-screen"),
+                              ("Protocol", "journal-screen"), ("Data", "health-screen"),
                               ("Today", "today-screen")] {
                 selectTab(app, tab, id: id)
             }
@@ -166,14 +188,34 @@ final class ScrollPerformanceUITests: XCTestCase {
     @MainActor
     private func launch(extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--loopr-launch-mode=populated", "-AppleInterfaceStyle", "Dark"] + extra
+        // The entrance has its own suite (`EntrancePerformanceUITests`). Here it shows its final
+        // state, so a first-visit animation never lands inside a scroll sample.
+        app.launchArguments = ["--loopr-launch-mode=populated", "--loopr-entrance-final-state",
+                               "-AppleInterfaceStyle", "Dark"] + extra
         app.launch()
         XCTAssertTrue(element(app, "main-tab-shell").waitForExistence(timeout: 15))
         return app
     }
 
+    /// The PhenoAge method page, which opens on Data's stack from the DEBUG `--loopr-method=` argument.
+    @MainActor
+    private func launchMethod(extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--loopr-launch-mode=populated", "--loopr-entrance-final-state",
+                               "-AppleInterfaceStyle", "Dark", "--loopr-your-data-fixture",
+                               "--loopr-method=phenoage", "--loopr-method-fixture"] + extra
+        app.launch()
+        XCTAssertTrue(element(app, "five-tab-fixture-loading").waitForNonExistence(timeout: 180))
+        XCTAssertTrue(element(app, "main-tab-shell").waitForExistence(timeout: 30))
+        XCTAssertTrue(element(app, "method-screen").waitForExistence(timeout: 30))
+        return app
+    }
+
     @MainActor
     private func selectTab(_ app: XCUIApplication, _ name: String, id: String) {
+        // Sleep, Heart and Body are pushed on Data.
+        if ["Sleep", "Heart", "Body"].contains(name) { _ = app.openLooprArea(name); return }
+
         let button = app.tabBars.buttons[name].firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         button.tap()

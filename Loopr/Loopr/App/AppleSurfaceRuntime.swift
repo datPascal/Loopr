@@ -23,9 +23,14 @@ actor LooprLiveActivityRuntime {
     private var freshnessTask: Task<Void, Never>?
     private var pendingSynchronization: Task<Void, Never>?
     private var endedWorkoutIDs: Set<UUID> = []
+    /// Rest and set text a strength session adds to its activity, by workout.
+    private var trainOverlays: [UUID: TrainActivityOverlay] = [:]
 
     func setPrivacyReader(_ reader: any LooprSurfacePrivacyReading) {
         privacy = reader
+        // The bedtime activity reads its switch from the same settings. It runs on its own runtime because it has no
+        // workout session to follow.
+        Task { await BedtimeActivityRuntime.shared.attachSettings(reader) }
     }
 
     func allowsLiveActivities() async -> Bool { await isAllowed() }
@@ -33,6 +38,12 @@ actor LooprLiveActivityRuntime {
     private func isAllowed() async -> Bool {
         guard let privacy else { return true }
         return await privacy.currentSurfacePrivacy().liveActivity
+    }
+
+    /// Sets or clears the strength session text on the activity, then publishes it. A nil overlay removes it.
+    func updateTrainOverlay(_ overlay: TrainActivityOverlay?, workout: WorkoutRecord) async {
+        if let overlay { trainOverlays[workout.id] = overlay } else { trainOverlays.removeValue(forKey: workout.id) }
+        await synchronize(workout)
     }
 
     func synchronize(_ workout: WorkoutRecord, zones: HeartRateZoneSet? = nil) async {
@@ -63,8 +74,10 @@ actor LooprLiveActivityRuntime {
                       isStale: (activity.content.staleDate ?? .distantFuture) <= now)
             }, session: session
         )
+        let overlay: TrainActivityOverlay?
+        if case .running = session { overlay = trainOverlays[workout.id] } else { overlay = nil }
         let state = LooprWorkoutActivityProjection.state(
-            for: workout, zones: zonesByWorkout[workout.id], now: now
+            for: workout, zones: zonesByWorkout[workout.id], now: now, train: overlay
         )
         switch session {
         case .running: break
@@ -92,6 +105,7 @@ actor LooprLiveActivityRuntime {
         }
         guard case .running = session else {
             zonesByWorkout.removeValue(forKey: workout.id)
+            trainOverlays.removeValue(forKey: workout.id)
             return
         }
         let content = ActivityContent(state: state, staleDate: now.addingTimeInterval(90))
@@ -149,6 +163,7 @@ actor LooprLiveActivityRuntime {
         }
         lastPublishedAt.removeAll()
         zonesByWorkout.removeAll()
+        trainOverlays.removeAll()
     }
 
     private func scheduleHeartRateExpiry(workoutID: UUID, observedAt: Date?) {
@@ -197,7 +212,9 @@ actor LooprLiveActivityRuntime {
             distanceMeters: old.distanceMeters,
             paceSecondsPerKilometer: old.paceSecondsPerKilometer,
             targetName: old.targetName,
-            targetStatus: old.targetStatus?.hasPrefix("Warm-up") == true ? old.targetStatus : "No heart rate"
+            targetStatus: old.targetStatus?.hasPrefix("Warm-up") == true ? old.targetStatus : "No heart rate",
+            restEndsAt: old.restEndsAt,
+            setSummary: old.setSummary
         )
         await activity.update(ActivityContent(state: expired, staleDate: Date().addingTimeInterval(90)))
         lastPublishedAt[workoutID] = Date()
@@ -216,6 +233,8 @@ actor LooprLiveActivityRuntime {
         elapsedSinceUpdate: TimeInterval
     ) -> Bool {
         if previous.status != next.status || previous.zone != next.zone || previous.targetName != next.targetName { return true }
+        // A rest starting, ending or growing, and the set moving on, must reach the lock screen at once.
+        if previous.restEndsAt != next.restEndsAt || previous.setSummary != next.setSummary { return true }
         // Countdown and bpm offsets change every second. Publish position changes
         // immediately; keep numeric changes on the existing heart-rate cadence.
         let previousPosition = previous.targetStatus?.split(separator: " ").first
@@ -381,6 +400,7 @@ enum LooprNativeSurfaceProbe {
     static let environmentKey = "LOOPR_NATIVE_SURFACE_PROBE"
 
     static func startIfRequested(environment: [String: String] = ProcessInfo.processInfo.environment) async {
+        await BedtimeActivityProbe.startIfRequested(environment: environment)
         guard let probe = environment[environmentKey] else { return }
         if probe == "widget" {
             await seedWidgetSnapshot()

@@ -143,6 +143,21 @@ public enum StorageMigrations {
         registerV24ADCFieldsMigration(on: &migrator, applicationVersion: applicationVersion)
         registerMetricSeriesSourceMigration(on: &migrator, applicationVersion: applicationVersion)
         registerSkinTemperatureMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerFoodMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerFoodOverviewMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerFoodCaptureMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerFoodReviewMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerTrainMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerFoodWeightMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerRoutineMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerLabsMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerFoodLongevityMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerCapacityMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerExperimentsMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerBodyCompositionMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerLabValueComparatorMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerRoutineCheckSkippedMigration(on: &migrator, applicationVersion: applicationVersion)
+        registerRoutineCheckAnsweredFromMigration(on: &migrator, applicationVersion: applicationVersion)
         return migrator
     }
 }

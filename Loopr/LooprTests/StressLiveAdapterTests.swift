@@ -6,6 +6,37 @@ import Testing
 @testable import Loopr
 
 struct StressLiveAdapterTests {
+    @Test func releaseDuringAcquisitionDisposesLateSubscription() async throws {
+        let runtime = StressRuntimeFixture()
+        let gate = StressAcquisitionGate()
+        await runtime.pauseNextAcquisition(gate)
+        let consumer = SyncKitStressLiveConsumer(runtime: runtime)
+        let generation = UUID()
+        let acquisition = Task { try await consumer.acquire(generation: generation) }
+        await gate.wait()
+        await consumer.release(generation: generation)
+        await gate.open(); _ = try? await acquisition.value
+        #expect(await consumer.activeGenerationCount() == 0)
+        #expect(await runtime.consumerCount() == 0)
+    }
+
+    @Test func concurrentAcquisitionCannotReplaceSameGenerationLease() async throws {
+        let runtime = StressRuntimeFixture()
+        let gate = StressAcquisitionGate()
+        await runtime.pauseNextAcquisition(gate)
+        let consumer = SyncKitStressLiveConsumer(runtime: runtime)
+        let generation = UUID()
+        let first = Task { try await consumer.acquire(generation: generation) }
+        await gate.wait()
+        do {
+            _ = try await consumer.acquire(generation: generation)
+            Issue.record("A pending generation accepted a second subscription")
+        } catch StressError.staleGeneration {}
+        await gate.open(); _ = try await first.value
+        await consumer.release(generation: generation)
+        #expect(await runtime.consumerCount() == 0)
+    }
+
     @Test
     func missingRuntimeFailsClosedForBothStressCapabilities() async {
         let liveConsumer = StressLiveAdapter.liveConsumer(runtime: nil)
@@ -67,13 +98,17 @@ struct StressLiveAdapterTests {
 private actor StressRuntimeFixture: LooprHeartLiveRuntime {
     private let manager = LiveStreamManager(historySafetyPassed: true)
     let generation: UInt64 = 7
+    private var acquisitionGate: StressAcquisitionGate?
+    func pauseNextAcquisition(_ gate: StressAcquisitionGate) { acquisitionGate = gate }
 
     func acquireLiveStream(kind: LiveStreamKind, consumer: LiveStreamConsumer) async throws -> LiveStreamConsumerHandle {
         try await manager.acquire(kind: kind, consumer: consumer)
     }
 
     func acquireLiveEventStream(kind: LiveStreamKind, consumer: LiveStreamConsumer) async throws -> LiveStreamEventSubscription {
-        try await manager.acquireEventStream(kind: kind, consumer: consumer, generation: generation)
+        let subscription = try await manager.acquireEventStream(kind: kind, consumer: consumer, generation: generation)
+        if let gate = acquisitionGate { acquisitionGate = nil; await gate.pause() }
+        return subscription
     }
 
     func bufferedLiveSamples(for kind: LiveStreamKind) async -> [LiveStreamSample] {
@@ -92,6 +127,21 @@ private actor StressRuntimeFixture: LooprHeartLiveRuntime {
     func consumerCount() async -> Int {
         await manager.consumerCount(for: .compactHeartRateRR)
     }
+}
+
+private actor StressAcquisitionGate {
+    private var entered = false
+    private var waiting: CheckedContinuation<Void, Never>?
+    private var opening: CheckedContinuation<Void, Never>?
+    func pause() async {
+        entered = true; waiting?.resume(); waiting = nil
+        await withCheckedContinuation { opening = $0 }
+    }
+    func wait() async {
+        if entered { return }
+        await withCheckedContinuation { waiting = $0 }
+    }
+    func open() { opening?.resume(); opening = nil }
 }
 
 private func compactHeartRatePayload() -> Data {

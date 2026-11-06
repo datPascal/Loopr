@@ -1,16 +1,17 @@
+import AIKit
 import Combine
 import Foundation
 import ProtocolKit
 import SyncKit
 import BodyKit
 import BluetoothKit
-import CoachKit
 import CycleKit
 import DataKit
 import ImportKit
 import DesignSystem
 import DeviceCenterKit
 import DomainKit
+import FoodKit
 import HeartKit
 import HealthKitBridge
 import JournalKit
@@ -23,6 +24,7 @@ import SettingsKit
 import SleepKit
 import StorageKit
 import StressKit
+import TrainKit
 import SwiftUI
 import TodayKit
 import UniformTypeIdentifiers
@@ -41,6 +43,8 @@ enum AppTodayRoute: Hashable {
     case stress(StressKit.StressRoute)
     case startBreathing(bandPacing: Bool, requestID: UUID)
     case wakeAlarm
+    /// FT-05: the Patterns screen, pushed from Today's pattern card or opened from an Ask source.
+    case patterns
 }
 
 /// App-owned workout routes carry the canonical record identity across detail,
@@ -50,8 +54,13 @@ nonisolated enum AppWorkoutRoute: Hashable {
     case catalog
     case intervals
     case log
+    /// The quick log with a type chosen.
+    case logActivity(ActivityType)
+    /// The WOD log. A name fills it from the last result with that name.
+    case wod(String?)
     case edit(UUID?)
     case startPicker
+    case prepare(ActivityType)
     case live(UUID?, ActivityType)
     case finish(UUID?)
     case detail(UUID?)
@@ -59,6 +68,7 @@ nonisolated enum AppWorkoutRoute: Hashable {
     case route(UUID?)
     case sharePreview(UUID?)
     case detectedReview(DetectedWorkout)
+    case train(TrainRoute)
 }
 
 enum AppWorkoutPathTransition {
@@ -109,6 +119,29 @@ final class ProductRepositoryContainer: ObservableObject {
     let environment: AppEnvironment
     let heartLiveRuntime: (any LooprHeartLiveRuntime)?
     let heartLiveHistory = HeartLiveHistoryStore()
+    #if DEBUG
+    let fixtureJournalStore = JournalRepository()
+    lazy var fixtureFoodRepository = AppFoodRepository(environment: environment)
+    /// The populated launch carries the Train fixture's plans, so Fitness plans the Upper A that Food's allowance and
+    /// Today name for the fixture day (R2-UPG-1).
+    lazy var fixtureTrainRepository = AppTrainRepository(
+        environment: environment, seedsFixture: AppTrainFixtures.isRequested() || environment.composition == .populated)
+    /// The launch's one profile. Profile saves into it, and Data and Fitness read it, so the birth year typed in Profile
+    /// unlocks the age rulers (R2-UPG-2). The populated launch is Alex, born 1985; the other launches start without one,
+    /// or with what onboarding saved in this launch (R3-NEW-1).
+    lazy var fixtureProfile: InMemoryProfileRepository = ProductFixtureProfile.shellRepository(for: environment.composition)
+    let fixtureHabitStore: InMemoryHabitStore = {
+        if let mode = FiveTabJournalFixture.mode {
+            let store = FiveTabJournalFixture.makeStore(insights: mode == "insights")
+            FiveTabJournalFixture.precomputeComparisons(store)
+            return store
+        }
+        let prefix = "--loopr-habit-insight-state="
+        let state = ProcessInfo.processInfo.arguments.first { $0.hasPrefix(prefix) }
+            .flatMap { HabitInsightStatus(rawValue: String($0.dropFirst(prefix.count))) }
+        return HabitFixtures.store(status: state ?? .collecting)
+    }()
+    #endif
     @Published private(set) var persistent: PersistentProductRepositories?
     @Published private(set) var storageFailure: ProductStorageInitializationFailure?
     /// Changes whenever production storage is reopened. Storage-gated roots
@@ -175,15 +208,36 @@ final class ProductRepositoryContainer: ObservableObject {
         guard environment.composition == .production else {
             persistent = nil
             storageFailure = nil
+            // A fresh launch (onboarding, pairing, empty) has recorded no workout yet (R3-NEW-3).
+            let fresh = environment.composition.startsFresh
             #if DEBUG
-            let workouts = DebugCaptureFixtures.siStoreFixture ? SIPolishFixtureWorld.workouts : [WorkoutFixtures.completedRun, WorkoutFixtures.interrupted]
+            var workouts = FoodAssociationFixtures.enabled ? FoodAssociationFixtures.workouts(endingOn: environment.dateProvider.now())
+                : DebugCaptureFixtures.siStoreFixture ? SIPolishFixtureWorld.workouts
+                : fresh ? [] : [WorkoutFixtures.completedRun, WorkoutFixtures.interrupted]
+            // The Train fixture's finished sessions point at these records, so the shared store needs them too.
+            if AppTrainFixtures.isRequested() { workouts += AppTrainFixtures.workoutRecords + WorkoutLogFixtures.records }
+            if WorkoutPageFixtures.isRequested { workouts += WorkoutPageFixtures.records }
             #else
-            let workouts = [WorkoutFixtures.completedRun, WorkoutFixtures.interrupted]
+            let workouts = fresh ? [] : [WorkoutFixtures.completedRun, WorkoutFixtures.interrupted]
             #endif
             let store = InMemoryWorkoutStore(workouts: workouts)
             workoutStore = store
-            detectedWorkouts = InMemoryDetectedWorkoutRepository(detections: [WorkoutFixtures.detectedRun])
-            workoutSession = WorkoutSessionController(store: store, liveSource: workoutLiveSampleSource)
+            // A cold start has recorded nothing, so it has nothing to review. Only the populated fixtures carry a detection.
+            let emptyComposition = fresh
+            #if DEBUG
+            // The absent Fitness fixture takes every source away, a detected workout included.
+            let coldStart = emptyComposition || FitnessFixtures.isAbsentRequested()
+            #else
+            let coldStart = emptyComposition
+            #endif
+            detectedWorkouts = InMemoryDetectedWorkoutRepository(detections: coldStart ? [] : [WorkoutFixtures.detectedRun])
+            // A Train fixture session runs on the fixture's day, so its workout record must too.
+            #if DEBUG
+            let workoutClock = AppTrainFixtures.isRequested() ? TrainLiveRuntime.makeClock(fixtureStart: AppTrainFixtures.now) : { Date() }
+            #else
+            let workoutClock: @Sendable () -> Date = { Date() }
+            #endif
+            workoutSession = WorkoutSessionController(store: store, now: workoutClock, liveSource: workoutLiveSampleSource)
             return
         }
         persistent = nil
@@ -217,6 +271,9 @@ final class ProductRepositoryContainer: ObservableObject {
             workoutStore = repositories.workouts
             detectedWorkouts = repositories.workouts
             workoutSession = WorkoutSessionController(store: repositories.workouts, liveSource: workoutLiveSampleSource)
+            // Moves Journal habits into protocol version 1 once. A finished or empty run costs one small read.
+            let routineMigrationTime = environment.dateProvider.now()
+            Task { await RoutineJournalMigration.runOnce(database: repositories.database, habits: repositories.habits, now: routineMigrationTime) }
             if !AppHabitFeatureGate.currentStage.exposesEntryPoints {
                 Task { try? await repositories.habitReminderScheduler.cancel() }
             }
@@ -239,7 +296,7 @@ struct ProductStorageUnavailableView: View {
         VStack(spacing: LooprSpacing.none) {
             StickyHeader(
                 title: "Loopr",
-                meta: "LOCAL STORAGE",
+                meta: "Local storage",
                 status: StatusChip(
                     MetricState.destructiveFailure.title,
                     symbol: MetricState.destructiveFailure.symbol,
@@ -437,9 +494,8 @@ enum ProductFeatureViewModelFactory {
                 repository: persistent.today,
                 goalsRepository: persistent.todayGoals,
                 coachPlanRepository: persistent.coach,
-                // Today redesign: history, recovery split and pinned numbers.
-                contextRepository: TodayContextSourceFactory.make(environment: environment, repositories: repositories),
-                preferencesStore: TodayPreferencesStore()
+                // History and the recovery split.
+                contextRepository: TodayContextSourceFactory.make(environment: environment, repositories: repositories)
             )
         }
         let summary = ProductFixture.summary(for: environment.composition)
@@ -462,6 +518,32 @@ enum ProductFeatureViewModelFactory {
 /// link that is still down once the grace window closes is worth saying.
 nonisolated enum TodayBandConnectionCopy {
     static let title = "Band not connected"
+
+    // The pairing alert behind Today's Connect (R3-NEW-7). It names the band Loopr pairs with and has a way out for
+    // someone without one.
+    static let pairingTitle = "Connect a WHOOP 4.0 band?"
+    static let pairingMessage = AccessoryProvisioningController.ownershipExplanationShort
+        + "\n\nNo band? Food, Fitness, Protocol and Apple Health work without one."
+    static let noBandButton = "I don't have a band"
+    static let noBandResult = "Food, Fitness, Protocol and Apple Health work without a band. If you get one later, tap Connect band on Today, or open Settings, then Band."
+    static let resultTitle = "Band"
+
+    /// What to say once Continue hands over to the system's band picker. Nil while the picker or the connection is under
+    /// way, or after the person cancelled it, since those already show themselves.
+    static func result(after status: BluetoothApplicationStatus?) -> String? {
+        guard let status else { return "This iPhone cannot look for a band right now. Try again after restarting Loopr." }
+        switch status {
+        case .pickerPresented, .preparing, .retrieving, .scanning, .connecting, .discovering, .subscribing, .connected,
+             .cancelled:
+            return nil
+        case .bluetoothOff:
+            return "Bluetooth is off. Turn it on in Control Center, then try again."
+        case .failed(let reason), .disconnected(_, let reason):
+            return reason
+        case .checkingProvisioning, .needsPairing, .explanationRequired, .removing, .removed:
+            return "Loopr could not open the band picker. Wake the band until its side light pulses blue, then try again."
+        }
+    }
     static let bluetoothOffTitle = "Bluetooth is off"
     static let bluetoothOffMessage = "Turn on Bluetooth to sync your band."
 
@@ -525,19 +607,38 @@ struct TodayFeatureRoot: View {
     @StateObject private var viewModel: TodayViewModel
     @State private var externalHabitInsight: TodayExternalInsight?
     @State private var isConnectExplanationPresented = false
+    /// What happened after the pairing alert, so Continue or "I don't have a band" never just closes (R3-NEW-7).
+    @State private var connectResult: String?
     /// Opens the wake alarm screen from the card under the day's content.
     private let openWakeAlarm: (() -> Void)?
+    /// Opens the tab or screen behind a row, a timeline moment or the pattern card.
+    private let openAgent: @MainActor (TodayAgentDestination) -> Void
+    @Environment(\.metricHistoryProvider) private var metricHistory
+    @Environment(\.healthMetricPins) private var pins
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.looprOpenWeeklyReview) private var openWeeklyReview
+    @State private var agent = TodayAgentContent.empty
+    @State private var agentLoadedOnce = false
+    @State private var agentRefresh = 0
+    /// The day dial's inputs and stickers (DEC-12.3), read with the rest of Today's slots.
+    @State private var dial: TodayDialContent?
+    /// The coach note, the protocol rail and the experiment strip under the dial (LV-04 step 3).
+    @State private var companion: TodayCompanionContent?
+    /// The meal a dial card's Edit opened in Food's editor, over Today.
+    @State private var mealEdit: TodayMealEdit?
 
     init(
         environment: AppEnvironment,
         route: @escaping (TodayKit.TodayRoute) -> Void,
         repositories: ProductRepositoryContainer? = nil,
-        openWakeAlarm: (() -> Void)? = nil
+        openWakeAlarm: (() -> Void)? = nil,
+        openAgent: @escaping @MainActor (TodayAgentDestination) -> Void = { _ in }
     ) {
         self.environment = environment
         self.route = route
         self.repositories = repositories
         self.openWakeAlarm = openWakeAlarm
+        self.openAgent = openAgent
         self.deviceRepository = repositories?.persistent?.device
         _viewModel = StateObject(wrappedValue: ProductFeatureViewModelFactory.makeToday(
             environment: environment,
@@ -558,25 +659,69 @@ struct TodayFeatureRoot: View {
             bandModelName: bandLink?.bandModelName,
             bandIsExperimental: bandLink?.bandIsExperimental ?? false,
             onConnectBand: connectBand,
-            accessory: wakeAlarmCard
+            accessory: wakeAlarmCard,
+            pinnedNumbers: pins?.isCustomised == true
+                ? AnyView(HealthPinnedSection(identifier: "today-numbers", limit: 4, showAll: { openAgent(.allMetrics) })) : nil,
+            agent: TodayAgentSlotBuilder.withoutProtocolRow(agent),
+            onAgentAction: handleAgentAction,
+            dial: dial,
+            dialCompanion: companion.map { AnyView(TodayCompanionView(content: $0, actions: companionActions)) },
+            dialCompanionMore: companion.flatMap { content in
+                TodayCompanionView.hasMore(content)
+                    ? AnyView(TodayCompanionView(content: content, actions: companionActions, part: .more)) : nil
+            }
         )
+            .environment(\.todayDialActions, dialActions)
+            .sheet(item: $mealEdit) { edit in mealEditor(edit) }
+            .task(id: AgentLoadKey(day: currentDay, refresh: agentRefresh, generation: repositories?.storageGeneration, alarm: showsAlarmRow)) {
+                guard repositories?.storageFailure == nil else { return }
+                // The dial loads beside the rows, not after them, so its placeholder gives way as soon as it can
+                // (ICP R3-PAS-1).
+                async let dialLoaded: Void = loadDial()
+                await loadAgent()
+                await dialLoaded
+                agentLoadedOnce = true
+            }
+            .onAppear { if agentLoadedOnce { agentRefresh += 1 } }
+            .onChange(of: scenePhase) { _, phase in if phase == .active, agentLoadedOnce { agentRefresh += 1 } }
+            #if canImport(UserNotifications)
+            // Done or Skip today on a rule reminder while Loopr is open: Up next drops the rule at once (ICP round 4, HAB).
+            .onReceive(NotificationCenter.default.publisher(for: ProtocolRuleReminderResponder.answered).receive(on: RunLoop.main)) { _ in
+                if agentLoadedOnce { agentRefresh += 1 }
+            }
+            #endif
             .alert(
-                "Connect your band?",
+                TodayBandConnectionCopy.pairingTitle,
                 isPresented: $isConnectExplanationPresented
             ) {
-                Button("Cancel", role: .cancel) {
-                    isConnectExplanationPresented = false
-                    bluetoothModel?.cancelExplanation()
-                }
                 Button("Continue") {
                     Task {
                         await bluetoothModel?.continueAfterExplanation()
                         isConnectExplanationPresented = false
+                        connectResult = TodayBandConnectionCopy.result(after: bluetoothModel?.status)
                     }
                 }
                 .accessibilityIdentifier("today-connect-continue")
+                Button(TodayBandConnectionCopy.noBandButton) {
+                    isConnectExplanationPresented = false
+                    bluetoothModel?.cancelExplanation()
+                    connectResult = TodayBandConnectionCopy.noBandResult
+                }
+                .accessibilityIdentifier("today-connect-no-band")
+                Button("Cancel", role: .cancel) {
+                    isConnectExplanationPresented = false
+                    bluetoothModel?.cancelExplanation()
+                }
             } message: {
-                Text(AccessoryProvisioningController.ownershipExplanationShort)
+                Text(TodayBandConnectionCopy.pairingMessage)
+            }
+            .alert(
+                TodayBandConnectionCopy.resultTitle,
+                isPresented: Binding(get: { connectResult != nil }, set: { if !$0 { connectResult = nil } })
+            ) {
+                Button("OK", role: .cancel) { connectResult = nil }
+            } message: {
+                Text(connectResult ?? "")
             }
             .looprDayScopedLoad(enabled: repositories?.storageFailure == nil, fallbackDay: fallbackDay) { day in
                 await viewModel.load(day: day)
@@ -612,6 +757,181 @@ struct TodayFeatureRoot: View {
 
     private var fallbackDay: DayIdentity { environment.productDay(fixture: TodayFixtures.day) }
     private var currentDay: DayIdentity { looprCurrentDay(daySelection, fallback: fallbackDay) }
+
+    private struct AgentLoadKey: Hashable {
+        let day: DayIdentity
+        let refresh: Int
+        let generation: UInt64?
+        let alarm: Bool
+    }
+
+    /// The Timeline's alarm row follows the Sleep card: nowhere to open it, or an experimental band, means no row.
+    private var showsAlarmRow: Bool { openWakeAlarm != nil && bandLink?.bandIsExperimental != true }
+
+    private var agentLoader: TodayAgentLoader {
+        TodayAgentLoader(environment: environment, repositories: repositories, history: metricHistory)
+    }
+
+    private func loadAgent() async {
+        let isToday = daySelection.map { $0.day == $0.today } ?? true
+        let loaded = await agentLoader.load(day: currentDay, isToday: isToday, includesAlarm: showsAlarmRow)
+        if loaded != agent { agent = loaded }
+    }
+
+    /// The history the dial and the note read. Production uses the app's metric history; the populated fixture uses one
+    /// coherent fixture series, so the readout, the dial and the note's receipt read the same nights.
+    private var todayHistory: any MetricHistoryProviding {
+        #if DEBUG
+        if let fixture = TodayFixtureHistorySeam.history(environment: environment, repositories: repositories) { return fixture }
+        #endif
+        return metricHistory
+    }
+
+    private var dialLoader: TodayDialLoader {
+        TodayDialLoader(environment: environment, repositories: repositories, history: todayHistory,
+                        bandName: bandLink?.bandModelName ?? "")
+    }
+
+    private var noteRailLoader: TodayNoteRailLoader {
+        TodayNoteRailLoader(sources: TodayNoteRailSources.live(environment: environment, repositories: repositories,
+                                                              history: todayHistory, bandName: bandLink?.bandModelName ?? ""))
+    }
+
+    /// The rail evaluates the protocol once; the dial draws the same checks. The on-device rewording follows on its own,
+    /// so the rule text shows at once and is replaced only by a rewording whose numbers matched.
+    private func loadDial() async {
+        TodayBedtimeWiring.attachIfNeeded(environment: environment, repositories: repositories)
+        let day = currentDay
+        let dialLoader = dialLoader
+        let clock = dialLoader.clock(for: day)
+        let isToday = TodayDialClock(day: day, calendar: clock.calendar)?.contains(clock.now) ?? false
+        let railLoader = noteRailLoader
+        let loaded = await railLoader.load(day: day, now: clock.now, calendar: clock.calendar, isToday: isToday,
+                                           isClockPinned: clock.isPinned)
+        dial = await dialLoader.load(day: day, protocolDay: loaded.protocolDay?.dialDay)
+        var content = loaded.content
+        content.weekReview = weekReviewOffer(content: content, now: clock.now, calendar: clock.calendar)
+        if content != companion { companion = content }
+        Task { @MainActor in
+            guard var reworded = await railLoader.reworded(loaded), day == currentDay else { return }
+            reworded.weekReview = companion?.weekReview
+            companion = reworded
+        }
+    }
+
+    /// The weekly review card's window, on today's content with a protocol, while the week is unseen.
+    private func weekReviewOffer(content: TodayCompanionContent, now: Date, calendar: Calendar) -> TodayWeekReviewOffer? {
+        guard openWeeklyReview != nil, content.isToday, case .rules? = content.rail else { return nil }
+        let seen = WeeklyReviewSeenStore.standard(persisting: repositories?.persistent != nil)
+        guard let window = WeeklyReviewSchedule.todayWindow(at: now, calendar: calendar, hasSeen: seen.hasSeen) else { return nil }
+        return TodayWeekReviewOffer(weekKey: window.week.isoKey, opens: window.opens, closes: window.closes,
+                                    title: WeeklyReviewCopy.todayTitle, detail: WeeklyReviewCopy.todayDetail)
+    }
+
+    private var companionActions: TodayCompanionActions {
+        TodayCompanionActions(
+            note: { action in
+                switch TodayCompanionRouting.route(for: action) {
+                case .destination(let destination): openAgent(destination)
+                case .today(let today): route(today)
+                case .startWindDown: Task { await BedtimeActivityPreference.set(true) }
+                }
+            },
+            tick: { key in
+                let day = currentDay
+                let now = dialLoader.clock(for: day).now
+                let kept = await noteRailLoader.tick(key, day: day, now: now)
+                await loadDial()
+                return kept
+            },
+            untick: { key in
+                let day = currentDay
+                let clock = dialLoader.clock(for: day)
+                let gone = await noteRailLoader.untick(key, day: day, now: clock.now, timeZone: clock.calendar.timeZone)
+                await loadDial()
+                return gone
+            },
+            openProtocol: { openAgent(.tab(.protocol)) },
+            openExperiment: { openAgent(TodayCompanionRouting.experimentStrip) },
+            openWeekReview: {
+                companion?.weekReview = nil
+                openWeeklyReview?.run()
+            },
+            firstEvening: { start in
+                if start {
+                    Task {
+                        await BedtimeActivityPreference.set(true)
+                        await loadDial()
+                    }
+                } else {
+                    TodayFirstEveningStore.dismiss(persisting: repositories?.isFixtureComposition == false)
+                    companion?.offersFirstEvening = false
+                }
+            })
+    }
+
+    /// What the dial's cards can do in place: edit a meal in Food's editor over Today, tick a manual rule.
+    private var dialActions: TodayDialActions {
+        var actions = TodayDialActions()
+        if foodRepository != nil {
+            let edit: @MainActor (String) -> Void = { id in openMealEditor(id: id) }
+            actions.editMeal = edit
+        }
+        let tick: @MainActor (String) async -> Bool = companionActions.tick
+        actions.tickRule = tick
+        return actions
+    }
+
+    private var foodRepository: AppFoodRepository? {
+        if let persistent = repositories?.persistent { return AppFoodRepository(store: persistent.food, environment: environment) }
+        #if DEBUG
+        return repositories?.fixtureFoodRepository
+        #else
+        return nil
+        #endif
+    }
+
+    private func openMealEditor(id: String) {
+        guard let repository = foodRepository, let mealID = UUID(uuidString: id) else { return }
+        Task {
+            guard let draft = try? await repository.editDraft(id: mealID) else { return }
+            mealEdit = TodayMealEdit(draft: draft, repository: repository)
+        }
+    }
+
+    /// Food's own editor, so every change it allows works here too. Saving redraws the dial under the open card.
+    private func mealEditor(_ edit: TodayMealEdit) -> some View {
+        let now = environment.dateProvider.now()
+        return NavigationStack {
+            FoodReviewView(draft: edit.draft, repository: edit.repository, now: now,
+                           fixture: repositories?.isFixtureComposition != false,
+                           delete: edit.draft.expectedRevision.map { revision in { @MainActor @Sendable in
+                               try await edit.repository.deleteMeal(id: edit.draft.id, expectedRevision: revision)
+                               mealEdit = nil
+                               await loadDial()
+                           } },
+                           cancel: { @MainActor @Sendable in mealEdit = nil }) { @MainActor @Sendable draft in
+                try await edit.repository.confirm(draft, at: now)
+                mealEdit = nil
+                await loadDial()
+            }
+        }
+    }
+
+    private func handleAgentAction(_ action: TodayAgentAction) {
+        if TodayAgentDestination.opensWakeAlarm(action) {
+            openWakeAlarm?()
+            return
+        }
+        if case .startPatternTest(let candidateID) = action {
+            Task {
+                _ = await agentLoader.startTest(candidateID: candidateID)
+                openAgent(.patterns)
+            }
+            return
+        }
+        if let destination = TodayAgentDestination.destination(for: action) { openAgent(destination) }
+    }
 
     /// Only a link still down after the grace window, Bluetooth being off, or
     /// something to fix earns a card. A blip shows nothing.
@@ -737,6 +1057,7 @@ private final class SleepViewModelHolder: ObservableObject {
 private struct SleepWakeAlarmAccessory: View {
     @ObservedObject var viewModel: SleepViewModel
     let repositories: ProductRepositoryContainer?
+    var compact = false
     let open: () -> Void
 
     var body: some View {
@@ -744,6 +1065,7 @@ private struct SleepWakeAlarmAccessory: View {
             repositories: repositories,
             suggestion: WakeAlarmSuggestion(viewModel.snapshot?.suggestedAlarm),
             accessibilityIdentifier: "sleep-wake-alarm-card",
+            compact: compact,
             open: open
         )
     }
@@ -757,7 +1079,11 @@ struct SleepFeatureRoot: View {
     /// The debounced band state; the root reads only `bandIsExperimental`.
     @Environment(\.looprBandLink) private var bandLink
     @Environment(\.looprDaySelection) private var daySelection
+    @Environment(\.looprAsk) private var ask
+    @Environment(\.metricHistoryProvider) private var metricHistory
     @StateObject private var holder: SleepViewModelHolder
+    /// How the night differed from the last 28 days, with the night it was worked out for.
+    @State private var difference: (day: DayIdentity, comparison: SleepNightComparison)?
     private var viewModel: SleepViewModel { holder.viewModel }
 
     init(environment: AppEnvironment, route: @escaping (SleepKit.SleepRoute) -> Void = { _ in }, repositories: ProductRepositoryContainer? = nil) {
@@ -775,7 +1101,28 @@ struct SleepFeatureRoot: View {
             repositories: repositories,
             // The suggested alarm route is the wake alarm screen now.
             open: { route(.suggestedAlarm) }
-        )))
+        )), tonightAccessory: bandLink?.bandIsExperimental == true ? nil : AnyView(SleepWakeAlarmAccessory(
+            viewModel: viewModel, repositories: repositories, compact: true,
+            open: { route(.suggestedAlarm) }
+        )), differenceAccessory: differenceCard,
+            // Sleep opens on the whole night. The summary that only led to it on a second tap is gone (Data ICP R1).
+            showsNightDetails: true,
+            footer: AnyView(NavigationLink(value: AppHealthRoute.method(.sleepStages)) {
+                LooprCard(density: .flush) {
+                    LooprRow(title: "How sleep is worked out", subtitle: "What goes into stages, need and debt, and where they stop being reliable",
+                             symbol: "function", accent: .inkSecondary)
+                        .padding(.horizontal, LooprSpacing.md)
+                }
+            }
+            .buttonStyle(.looprPressableRow)
+            .accessibilityIdentifier("sleep-method")))
+            .task(id: SleepDifferenceKey(day: looprCurrentDay(daySelection, fallback: fallbackDay), generation: repositories?.storageGeneration)) {
+                guard repositories?.storageFailure == nil else { return }
+                let day = looprCurrentDay(daySelection, fallback: fallbackDay)
+                let loader = SleepComparisonLoader(environment: environment, repositories: repositories, history: metricHistory)
+                let comparison = await loader.load(night: day)
+                difference = comparison.map { (day, $0) }
+            }
             .environment(\.connectedEmptyDetail, "Your band is connected. Wear it while you sleep, then open Loopr after you wake up to sync your night.")
             .looprDayScopedLoad(enabled: repositories?.storageFailure == nil, fallbackDay: fallbackDay) { day in
                 await viewModel.load(day: day)
@@ -791,6 +1138,19 @@ struct SleepFeatureRoot: View {
     }
 
     private var fallbackDay: DayIdentity { environment.productDay(fixture: SleepFixtures.day) }
+
+    private struct SleepDifferenceKey: Hashable {
+        let day: DayIdentity
+        let generation: UInt64?
+    }
+
+    /// Between Stages and Tonight, only for the night it was worked out for. Opens Ask about that night.
+    private var differenceCard: AnyView? {
+        guard let difference, difference.day == looprCurrentDay(daySelection, fallback: fallbackDay) else { return nil }
+        return AnyView(SleepDifferenceCard(comparison: difference.comparison) {
+            ask?.open("Sleep", prompt: SleepDifferenceCard.prompt)
+        })
+    }
 }
 
 /// Canonical detail destinations for Sleep. The shell supplies the typed route;
@@ -801,12 +1161,15 @@ struct SleepDestinationFeatureRoot: View {
     let environment: AppEnvironment
     let route: SleepKit.SleepRoute
     let repositories: ProductRepositoryContainer?
+    let navigate: (SleepKit.SleepRoute) -> Void
     @StateObject private var viewModel: SleepViewModel
 
-    init(environment: AppEnvironment, route: SleepKit.SleepRoute, repositories: ProductRepositoryContainer? = nil) {
+    init(environment: AppEnvironment, route: SleepKit.SleepRoute, repositories: ProductRepositoryContainer? = nil,
+         navigate: @escaping (SleepKit.SleepRoute) -> Void) {
         self.environment = environment
         self.route = route
         self.repositories = repositories
+        self.navigate = navigate
         _viewModel = StateObject(wrappedValue: SleepNightDetails.viewModel(environment: environment, repositories: repositories))
     }
 
@@ -817,7 +1180,7 @@ struct SleepDestinationFeatureRoot: View {
             case .coach:
                 CoachFeatureRoot(environment: environment, repositories: repositories)
             case .day:
-                SleepScreen(viewModel: viewModel)
+                SleepScreen(viewModel: viewModel, route: navigate, showsNightDetails: true)
                     .looprHeaderInNavigationBar()
             case .hypnogram:
                 if let snapshot = viewModel.snapshot { SleepHypnogramScreen(snapshot: snapshot, heartRate: viewModel.heartRate) }
@@ -874,6 +1237,7 @@ struct HeartFeatureRoot: View {
     let environment: AppEnvironment
     let route: (HeartKit.HeartRoute) -> Void
     let repositories: ProductRepositoryContainer?
+    var layout: HeartScreenLayout = HeartScreenLayout()
     @Environment(\.looprDaySelection) private var daySelection
     @Environment(\.bandConnected) private var bandConnected
     // Descendants observe only the day or live samples they render. The
@@ -883,8 +1247,10 @@ struct HeartFeatureRoot: View {
     @StateObject private var model: HeartViewModelHolder
     private var viewModel: HeartViewModel { model.viewModel }
 
-    init(environment: AppEnvironment, route: @escaping (HeartKit.HeartRoute) -> Void = { _ in }, repositories: ProductRepositoryContainer? = nil) {
+    init(environment: AppEnvironment, layout: HeartScreenLayout = HeartScreenLayout(), route: @escaping (HeartKit.HeartRoute) -> Void = { _ in },
+         repositories: ProductRepositoryContainer? = nil) {
         self.environment = environment
+        self.layout = layout
         self.route = route
         self.repositories = repositories
         _model = StateObject(wrappedValue: HeartViewModelHolder(HeartViewModelFactory.make(
@@ -896,7 +1262,7 @@ struct HeartFeatureRoot: View {
     }
 
     var body: some View {
-        HeartScreen(viewModel: viewModel, route: route)
+        HeartScreen(viewModel: viewModel, layout: layout, route: route)
             #if DEBUG
             .modifier(SIHeartnavAccessibilityCapture())
             #endif
@@ -1215,7 +1581,7 @@ private struct ProductHeartSpotCheckPresentation: View {
         case .notPaired:
             "Connect your band from Today, then return here to start a measurement."
         case .needsAttention:
-            "Your band could not connect. Open Settings, then Device Center to check the connection."
+            "Your band could not connect. Open Settings, then Band, to check the connection."
         default:
             "Loopr is connecting to your band. Keep it near your iPhone. You can start a measurement once it is ready."
         }
@@ -1377,7 +1743,7 @@ private struct ProductHeartSpotCheckPresentation: View {
             HairlineMetricRow(
                 id: "heart-spot-check-sdnn",
                 title: "SDNN",
-                confidence: result.resolvedAvailability == .insufficientQuality ? "LOW CONFIDENCE" : nil,
+                confidence: result.resolvedAvailability == .insufficientQuality ? "Low confidence" : nil,
                 value: sdnn ?? state.title,
                 unit: sdnn == nil ? nil : "ms",
                 accent: sdnn == nil ? .inkSecondary : .heart
@@ -1399,9 +1765,9 @@ private struct ProductHeartSpotCheckPresentation: View {
     private func resultConfidence(for result: HeartSpotCheckResult) -> String? {
         switch result.resolvedAvailability {
         case .complete:
-            return result.state == .lowConfidence ? "LOW CONFIDENCE" : nil
+            return result.state == .lowConfidence ? "Low confidence" : nil
         case .insufficientQuality:
-            return "LOW CONFIDENCE"
+            return "Low confidence"
         case .unavailable:
             return nil
         }
@@ -1469,21 +1835,25 @@ struct BodyFeatureRoot: View {
     let environment: AppEnvironment
     let route: (BodyKit.BodyRoute) -> Void
     let repositories: ProductRepositoryContainer?
+    let focus: BodyScreenFocus
     @Environment(\.looprDaySelection) private var daySelection
     @Environment(\.metricHistoryProvider) private var metricHistoryProvider
     @StateObject private var viewModel: BodyViewModel
 
-    init(environment: AppEnvironment, route: @escaping (BodyKit.BodyRoute) -> Void = { _ in }, repositories: ProductRepositoryContainer? = nil) {
+    init(environment: AppEnvironment, focus: BodyScreenFocus = .all, route: @escaping (BodyKit.BodyRoute) -> Void = { _ in },
+         repositories: ProductRepositoryContainer? = nil) {
         self.environment = environment
+        self.focus = focus
         self.route = route
         self.repositories = repositories
         _viewModel = StateObject(wrappedValue: BodyViewModelFactory.make(environment: environment, repositories: repositories))
     }
 
     var body: some View {
-        BodyScreen(viewModel: viewModel, route: route)
+        BodyScreen(viewModel: viewModel, focus: focus, route: route)
             .modifier(CardioAgeHealthSamplesModifier(enabled: environment.composition == .production,
                                                     runtime: repositories?.persistent?.healthSync))
+            .modifier(BodyLogSummaryModifier(environment: environment, repositories: repositories))
             .environment(\.connectedEmptyDetail, "Your band is connected. Keep wearing it during the day and overnight. Body estimates appear once enough activity and sleep data has been collected.")
             .looprDayScopedLoad(enabled: repositories?.storageFailure == nil, fallbackDay: fallbackDay) { day in
                 viewModel.historyProvider = historyProvider
@@ -1535,6 +1905,7 @@ struct BodyDestinationFeatureRoot: View {
             switch route {
             case .day:
                 BodyScreen(viewModel: viewModel)
+                    .modifier(BodyLogSummaryModifier(environment: environment, repositories: repositories))
                     .looprHeaderInNavigationBar()
             case .load:
                 if let snapshot = viewModel.snapshot { BodyLoadScreen(snapshot: snapshot, history: viewModel.history) }
@@ -1588,31 +1959,169 @@ struct BodyDestinationFeatureRoot: View {
 
 @MainActor
 struct CoachFeatureRoot: View {
+    /// Why the coach did not open. Both offer Try again (ICP R2-UPG-21): a store that failed to open can open on the
+    /// next try, and one that was not ready yet usually is a moment later.
+    fileprivate enum OpenFailure: Equatable {
+        case couldNotOpen
+        case noStore
+
+        var message: String {
+            switch self {
+            case .couldNotOpen: "Loopr could not open your saved chats. Your chats are still on this iPhone."
+            case .noStore: "Your chats are not ready yet. Try again in a moment."
+            }
+        }
+    }
+
     let environment: AppEnvironment
     let repositories: ProductRepositoryContainer?
-    @StateObject private var viewModel: CoachViewModel
+    /// The briefing a notification announced. The coach opens it instead of
+    /// the latest chat.
+    let origin: AskOrigin?
+    let openChatID: UUID?
+    /// Called once the coach has taken the request, so coming back to the coach later opens the latest chat.
+    let consumeOpenChatID: () -> Void
+    /// The sheet's Done. Nil when Ask is pushed instead of presented.
+    let onDone: (@MainActor @Sendable () -> Void)?
+    /// The camera button. Nil hides it.
+    let attachPhoto: (@MainActor @Sendable () -> Void)?
+    /// A source button under an answer. The shell closes Ask and opens the record. Nil leaves the strip out.
+    let openSource: (@MainActor @Sendable (AgentSourceLink) -> Void)?
+    @State private var chatModel: CoachChatViewModel?
+    @State private var chatFailure: OpenFailure?
+    @State private var attempt = 0
+    @State private var haptic: LooprHaptic?
 
-    init(environment: AppEnvironment, repositories: ProductRepositoryContainer? = nil) {
+    init(
+        environment: AppEnvironment,
+        repositories: ProductRepositoryContainer? = nil,
+        openChatID: UUID? = nil,
+        origin: AskOrigin? = nil,
+        consumeOpenChatID: @escaping () -> Void = {},
+        onDone: (@MainActor @Sendable () -> Void)? = nil,
+        attachPhoto: (@MainActor @Sendable () -> Void)? = nil,
+        openSource: (@MainActor @Sendable (AgentSourceLink) -> Void)? = nil
+    ) {
         self.environment = environment
         self.repositories = repositories
-        let input = CoachFixtures.input(for: ProductFixture.metricState(for: environment.composition))
-        let service: CoachService
-        if let persistent = repositories?.persistent {
-            service = CoachService(inputs: persistent.coach, history: persistent.coach)
-        } else {
-            let values = repositories?.isFixtureComposition == false ? [:] : [CoachFixtures.day: input]
-            service = CoachService(inputs: InMemoryCoachInputRepository(values: values), history: InMemoryCoachRecommendationHistoryRepository())
-        }
-        _viewModel = StateObject(wrappedValue: CoachViewModel(service: service))
+        self.openChatID = openChatID
+        self.origin = origin
+        self.consumeOpenChatID = consumeOpenChatID
+        self.onDone = onDone
+        self.attachPhoto = attachPhoto
+        self.openSource = openSource
     }
 
     var body: some View {
-        CoachScreen(viewModel: viewModel)
-            .task {
-                guard repositories?.storageFailure == nil else { return }
-                await viewModel.load(day: environment.productDay(fixture: CoachFixtures.day))
+        Group {
+            if let chatModel { AppCoachScreen(model: chatModel, attachPhoto: attachPhoto, openSource: openSource) }
+            else if let chatFailure { failureView(chatFailure) }
+            else { loadingView }
+        }
+            .task(id: attempt) { await open() }
+            // A briefing notification can arrive while the coach is open.
+            .onChange(of: openChatID) { _, id in
+                if let id { openRequested(id) }
             }
+            .toolbar {
+                if let onDone {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Done") { onDone() }.accessibilityIdentifier("ask-close")
+                    }
+                }
+            }
+            .looprHaptic(haptic)
             .productStorageGate(repositories)
+    }
+
+    private var loadingView: some View {
+        ScrollView {
+            LooprLoadingPlaceholder(.cards(3))
+        }
+        .scrollIndicators(.hidden)
+        .background(Color.loopr(.background).ignoresSafeArea())
+        .navigationTitle("Ask")
+        .navigationBarTitleDisplayMode(.inline)
+        .accessibilityIdentifier("coach-opening")
+    }
+
+    private func failureView(_ failure: OpenFailure) -> some View {
+        ScrollView {
+            LooprCard(style: .warning) {
+                VStack(alignment: .leading, spacing: LooprSpacing.md) {
+                    HStack(alignment: .top, spacing: LooprSpacing.sm) {
+                        Image(systemName: "exclamationmark.bubble")
+                            .looprTypography(.rowTitle)
+                            .foregroundStyle(Color.loopr(.warning))
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
+                            LooprText("Ask did not open", style: .rowTitle)
+                                .accessibilityAddTraits(.isHeader)
+                            LooprText(failure.message, style: .prose, color: .inkSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Button("Try again") {
+                        haptic = .light
+                        chatFailure = nil
+                        attempt += 1
+                    }
+                    .buttonStyle(LooprPrimaryButtonStyle())
+                    .accessibilityIdentifier("coach-open-retry")
+                }
+            }
+            .padding(.horizontal, LooprSpacing.screenGutter)
+            .padding(.top, LooprSpacing.md)
+        }
+        .scrollIndicators(.hidden)
+        .background(Color.loopr(.background).ignoresSafeArea())
+        .navigationTitle("Ask")
+        .navigationBarTitleDisplayMode(.inline)
+        .tint(Color.loopr(.brand))
+        .accessibilityIdentifier("coach-open-failure")
+        .onAppear {
+            haptic = .error
+            AccessibilityNotification.Announcement("Ask did not open. \(failure.message)").post()
+        }
+    }
+
+    private func open() async {
+        guard repositories?.storageFailure == nil else { return }
+        if chatModel == nil, let persistent = repositories?.persistent {
+            do {
+                chatModel = CoachChatViewModel(repository: try SQLiteCoachConversationRepository(database: persistent.database),
+                    context: LooprCoachContextBuilder(repositories: persistent), origin: origin,
+                    agent: try? LooprAgentRuntime.shared.configure(persistent),
+                    sharingFilter: { @Sendable (sharing: CoachSharing) -> CoachSharing in AgentAccessGate.effective(sharing, defaults: .standard) })
+            } catch { chatFailure = .couldNotOpen }
+        }
+        #if DEBUG
+        // The scripted agent (AgentUITestFixtures). Checked first, so it wins over the plain coach fixture.
+        if chatModel == nil, environment.composition != .production,
+           ProcessInfo.processInfo.arguments.contains("--loopr-agent-fixture") {
+            chatModel = try? await AgentUITestFixtures.model(origin: origin)
+        }
+        if chatModel == nil, environment.composition != .production,
+           ProcessInfo.processInfo.arguments.contains("--loopr-coach-fixture") {
+            chatModel = try? await CoachUITestFixtures.model(origin: origin)
+        }
+        // Every other fixture launch has no database, so Ask used to stop at "Ask did not open" (ICP R2-NEW-1). It
+        // opens on a chat store that lives for the launch and the app's own provider settings instead, so Ask looks as
+        // it does on a fresh install: without a key it asks for one and links to the providers.
+        if chatModel == nil, environment.composition != .production, repositories?.persistent == nil {
+            chatModel = CoachChatViewModel(repository: CoachLaunchChatStore.shared,
+                                           context: CoachFixtureContext(hasData: environment.composition == .populated),
+                                           origin: origin)
+        }
+        #endif
+        if chatModel == nil, chatFailure == nil { chatFailure = .noStore }
+        if let openChatID { openRequested(openChatID) }
+    }
+
+    private func openRequested(_ id: UUID) {
+        guard let chatModel else { return }
+        chatModel.requestOpen(id)
+        consumeOpenChatID()
     }
 }
 
@@ -1620,15 +2129,33 @@ struct CoachFeatureRoot: View {
 struct WorkoutFeatureRoot: View {
     let route: (WorkoutKit.WorkoutRoute) -> Void
     let selectedRoute: ((WorkoutKit.WorkoutRoute, WorkoutRecord?) -> Void)?
+    /// Pushes a template, program or session screen. The shell wraps it in `AppWorkoutRoute.train`.
+    let trainRoute: ((TrainRoute) -> Void)?
+    /// Starts a strength session from a template. The shell starts the recording and shows the set screen.
+    let startTemplateSession: ((TrainLiveSetup) -> Void)?
+    /// Starts a recording for a cardio template through the same path as the start picker.
+    let startRecordingSession: ((ActivityType) -> Void)?
+    /// Switches to the Protocol tab, where the weekly targets are set.
+    let openProtocol: (() -> Void)?
     let repositories: ProductRepositoryContainer?
     private let store: any WorkoutStore
     private let seedFixtures: Bool
     private let session: WorkoutSessionController
     @StateObject private var viewModel: WorkoutViewModel
+    @StateObject private var train: TrainOverviewLoader
+    @StateObject private var fitness = FitnessOverviewLoader()
+    @Environment(\.looprAsk) private var ask
+    @Environment(\.metricHistoryProvider) private var metricHistoryProvider
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var trainActionError: String?
 
     init(
         route: @escaping (WorkoutKit.WorkoutRoute) -> Void = { _ in },
         selectedRoute: ((WorkoutKit.WorkoutRoute, WorkoutRecord?) -> Void)? = nil,
+        trainRoute: ((TrainRoute) -> Void)? = nil,
+        startTemplateSession: ((TrainLiveSetup) -> Void)? = nil,
+        startRecordingSession: ((ActivityType) -> Void)? = nil,
+        openProtocol: (() -> Void)? = nil,
         repositories: ProductRepositoryContainer? = nil
     ) {
         // Seed before SwiftUI creates the observed view model. A tab's task can
@@ -1640,27 +2167,160 @@ struct WorkoutFeatureRoot: View {
             store = sharedStore
             seedFixtures = false
         } else {
-            let workouts = repositories?.isFixtureComposition == false ? [] : [
-                WorkoutFixtures.completedRun,
-                WorkoutFixtures.interrupted,
-            ]
+            var workouts = repositories?.isFixtureComposition == false || repositories?.environment.composition.startsFresh == true
+                ? [] : [WorkoutFixtures.completedRun, WorkoutFixtures.interrupted]
+            #if DEBUG
+            if repositories?.isFixtureComposition != false, AppTrainFixtures.isRequested() {
+                workouts += AppTrainFixtures.workoutRecords + WorkoutLogFixtures.records
+                if WorkoutPageFixtures.isRequested { workouts += WorkoutPageFixtures.records }
+            }
+            #endif
             store = InMemoryWorkoutStore(workouts: workouts)
-            seedFixtures = repositories?.isFixtureComposition ?? true
+            seedFixtures = (repositories?.isFixtureComposition ?? true) && repositories?.environment.composition.startsFresh != true
         }
         self.store = store
         self.seedFixtures = seedFixtures
         self.route = route
         self.selectedRoute = selectedRoute
+        self.trainRoute = trainRoute
+        self.startTemplateSession = startTemplateSession
+        self.startRecordingSession = startRecordingSession
+        self.openProtocol = openProtocol
         self.repositories = repositories
         let session = repositories?.workoutSession ?? WorkoutSessionController(store: store)
         self.session = session
         let detectedRepository: (any DetectedWorkoutRepository)? = repositories?.detectedWorkouts
-            ?? (seedFixtures ? InMemoryDetectedWorkoutRepository(detections: [WorkoutFixtures.detectedRun]) : nil)
+            ?? (seedFixtures && !(repositories.map { $0.environment.composition.startsFresh } ?? false)
+                ? InMemoryDetectedWorkoutRepository(detections: [WorkoutFixtures.detectedRun]) : nil)
         _viewModel = StateObject(wrappedValue: WorkoutViewModel(
             controller: session,
             detectedRepository: detectedRepository,
             finalizationHooks: repositories?.workoutFinalizationHooks ?? .init()
         ))
+        _train = StateObject(wrappedValue: TrainOverviewLoader(
+            repository: Self.trainRepository(for: repositories), workouts: store))
+    }
+
+    /// Production reads the app's own database. Every other composition reads a separate temporary one.
+    private static func trainRepository(for repositories: ProductRepositoryContainer?) -> AppTrainRepository {
+        if let repositories, let persistent = repositories.persistent {
+            return AppTrainRepository(store: persistent.train, environment: repositories.environment)
+        }
+        #if DEBUG
+        if let repositories { return repositories.fixtureTrainRepository }
+        return AppTrainRepository(environment: .make(arguments: ["--loopr-launch-mode=populated"], environment: [:]))
+        #else
+        return AppTrainRepository(environment: repositories?.environment ?? .production())
+        #endif
+    }
+
+    /// Fixture launches pin the clock and the zone so the week and today never drift. The populated launch reads
+    /// Today's clock, so Fitness, Today and Food show one day.
+    private var trainClock: (now: Date, calendar: Calendar) {
+        var calendar = Calendar(identifier: .gregorian)
+        #if DEBUG
+        if repositories?.isFixtureComposition != false, AppTrainFixtures.isRequested() {
+            // A named clock (`--loopr-today-clock=`) moves the Train fixture's hour with Today's (ICP R3-OPT-5).
+            let named = TodayDialFixtureClock.isRequested(arguments: ProcessInfo.processInfo.arguments)
+            return (named ? TodayDialFixtureClock.now(sameDayAs: AppTrainFixtures.now, calendar: AppTrainFixtures.calendar)
+                          : AppTrainFixtures.now, AppTrainFixtures.calendar)
+        }
+        if let repositories, FitnessFixtureDaySeam.applies(environment: repositories.environment, repositories: repositories) {
+            return FitnessFixtureDaySeam.clock(environment: repositories.environment, repositories: repositories)
+        }
+        #endif
+        calendar.timeZone = repositories?.environment.timeZoneProvider.timeZone ?? .current
+        return (repositories?.environment.dateProvider.now() ?? Date(), calendar)
+    }
+
+    private var trainHistory: any MetricHistoryProviding {
+        #if DEBUG
+        if repositories?.isFixtureComposition != false, AppTrainFixtures.isRequested() { return TrainFixtureMetricHistory() }
+        if let repositories, FitnessFixtureDaySeam.applies(environment: repositories.environment, repositories: repositories),
+           let history = FitnessFixtureDaySeam.history(environment: repositories.environment, repositories: repositories) {
+            return history
+        }
+        #endif
+        return metricHistoryProvider
+    }
+
+    private func loadTrain() async {
+        guard repositories?.storageFailure == nil else { return }
+        let clock = trainClock
+        // Workouts other apps saved to Apple Health (R1-VET-01). The list loads again when the import changed it.
+        if let persistent = repositories?.persistent,
+           await HealthWorkoutImport.refresh(workouts: persistent.workouts, healthSync: persistent.healthSync,
+                                             now: clock.now, calendar: clock.calendar).changed {
+            await viewModel.load(query: WorkoutLogQuery(range: .all, now: fixtureWorkoutQueryNow), detail: .listing)
+        }
+        let dailyZone2 = TrainDailyZone2(rules: await fitnessSources.rules?() ?? [])
+        await train.load(now: clock.now, calendar: clock.calendar, history: trainHistory, dailyZone2: dailyZone2)
+        await loadFitness()
+    }
+
+    /// Where the Fitness tab's dose, gauge and capacity tests read from. Fixture launches with the Train
+    /// fixture read the Fitness fixture; the populated launch reads the day Today and Food read
+    /// (`FitnessFixtureDaySeam`); other fixture launches have no readings, so the tab shows its
+    /// absent states.
+    private var fitnessSources: FitnessSources {
+        #if DEBUG
+        if repositories?.isFixtureComposition != false, AppTrainFixtures.isRequested() {
+            var sources = FitnessFixtures.sources
+            if let repositories, !FitnessFixtures.isAbsentRequested() {
+                // The Protocol tab's rules lead, so the zone 2 week is the protocol's rule (R2-OPT-16), and the age
+                // bar reads the launch's one profile, the one Data reads (R2-OPT-23).
+                let readProtocol = FitnessFixtureDaySeam.protocolRules(environment: repositories.environment)
+                let extras = FitnessFixtures.rules
+                sources.rules = { FitnessFixtureDaySeam.rules(protocol: await readProtocol(), extras: extras) }
+                sources.profile = LooprAgeSource.fitnessProfile(repositories)
+                sources.vo2Max = LooprAgeSource.vo2Max(repositories) ?? sources.vo2Max
+            }
+            return sources
+        }
+        if let repositories, FitnessFixtureDaySeam.applies(environment: repositories.environment, repositories: repositories) {
+            return FitnessFixtureDaySeam.sources(environment: repositories.environment, repositories: repositories)
+        }
+        if let repositories, repositories.isFixtureComposition {
+            // The other fixture launches start like a new install: no readings, the launch's one profile (what
+            // onboarding saved, R3-NEW-1) and a capacity store in memory, so a first test saves as it does on a phone
+            // instead of failing with "could not save" (R3-NEW-4).
+            return FitnessSources(profile: LooprAgeSource.fitnessProfile(repositories), recorder: FitnessFixtures.launchRecorder)
+        }
+        #endif
+        guard let persistent = repositories?.persistent else { return FitnessSources() }
+        return .live(persistent)
+    }
+
+    /// Where the capacity tests save and which clock their timers read. Nil when this composition has no
+    /// capacity store, so the tests open read only. Fixture launches time on the fixture's clock.
+    private var capacityActions: FitnessCapacityActions? {
+        guard repositories?.storageFailure == nil, let recorder = fitnessSources.recorder else { return nil }
+        var now: @Sendable () -> Date = { Date() }
+        #if DEBUG
+        if repositories?.isFixtureComposition != false, AppTrainFixtures.isRequested() { now = FitnessFixtures.clock }
+        else if let repositories, FitnessFixtureDaySeam.applies(environment: repositories.environment, repositories: repositories) {
+            now = FitnessFixtureDaySeam.capacityClock(start: trainClock.now)
+        }
+        #endif
+        return FitnessCapacityActions(
+            saveResults: { results in
+                try await recorder.save(results)
+                NotificationCenter.default.post(name: looprCapacityRecordsChanged, object: nil)
+            },
+            saveGoal: { goal in
+                try await recorder.save(goal)
+                NotificationCenter.default.post(name: looprCapacityRecordsChanged, object: nil)
+            },
+            now: now, timeZoneIdentifier: trainClock.calendar.timeZone.identifier)
+    }
+
+    /// Rebuilds the dose, the VO₂max gauge and the capacity tiles from what is stored now, with the
+    /// sessions Train and the workout list already loaded.
+    private func loadFitness() async {
+        guard repositories?.storageFailure == nil else { return }
+        let clock = trainClock
+        await fitness.load(sources: fitnessSources, now: clock.now, calendar: clock.calendar,
+                           train: train.input?.sessions ?? [], workouts: viewModel.snapshot.value ?? [])
     }
 
     private var fixtureWorkoutQueryNow: Date {
@@ -1672,13 +2332,29 @@ struct WorkoutFeatureRoot: View {
     }
 
     var body: some View {
-        WorkoutScreen(viewModel: viewModel, route: handleRoute, selectedRoute: handleSelectedRoute)
+        TrainScreen(viewModel: viewModel, overview: train.overview, fitness: fitness.overview,
+                    capacityActions: capacityActions, failure: train.failure,
+                    swap: { id in train.swap(to: id) }, action: handleTrainAction)
+            .task { await loadTrain() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { Task { await loadTrain() } }
+            }
+            .alert("Fitness", isPresented: Binding(get: { trainActionError != nil }, set: { if !$0 { trainActionError = nil } })) {
+                Button("OK", role: .cancel) { trainActionError = nil }
+            } message: {
+                Text(trainActionError ?? "")
+            }
             .task {
                 guard repositories?.storageFailure == nil else { return }
                 if seedFixtures {
                     do {
                         try await store.save(WorkoutFixtures.completedRun)
                         try await store.save(WorkoutFixtures.interrupted)
+                        #if DEBUG
+                        if AppTrainFixtures.isRequested() {
+                            for record in AppTrainFixtures.workoutRecords + WorkoutLogFixtures.records + (WorkoutPageFixtures.isRequested ? WorkoutPageFixtures.records : []) { try await store.save(record) }
+                        }
+                        #endif
                     } catch {
                         // Fixture stores are only used by DEBUG launch modes.
                     }
@@ -1689,14 +2365,234 @@ struct WorkoutFeatureRoot: View {
                     query: WorkoutLogQuery(range: .all, now: fixtureWorkoutQueryNow),
                     detail: .listing
                 )
+                // Mobility sessions come from the workout list, so the dose reads it once it is in.
+                await loadFitness()
             }
-            .onAppear { LooprPerformance.tabRootDidAppear() }
+            // A band sync or a finished workout derives the day again; new zone minutes fly into the dose.
+            .onReceive(NotificationCenter.default.publisher(for: looprDerivedGenerationUpdated).receive(on: RunLoop.main)) { _ in
+                Task { await loadFitness() }
+            }
+            // A capacity test or a goal for 85 was saved.
+            .onReceive(NotificationCenter.default.publisher(for: looprCapacityRecordsChanged).receive(on: RunLoop.main)) { _ in
+                Task { await loadFitness() }
+            }
+            // A birth year saved in Profile places the age bar.
+            .onReceive(NotificationCenter.default.publisher(for: looprProfileChanged).receive(on: RunLoop.main)) { _ in
+                Task { await loadFitness() }
+            }
+            .onAppear {
+                LooprPerformance.tabRootDidAppear()
+                // Coming back from the builder, a program or a log screen, so a saved change shows. The list is read
+                // again first: the dose counts logged workouts from it.
+                if train.overview != nil {
+                    Task {
+                        await viewModel.load(query: WorkoutLogQuery(range: .all, now: fixtureWorkoutQueryNow), detail: .listing)
+                        await loadTrain()
+                    }
+                }
+            }
             .onReceive(NotificationCenter.default.publisher(for: looprAccountHistoryImported)) { _ in
                 Task {
                     await viewModel.load(query: WorkoutLogQuery(range: .all, now: repositories?.environment.dateProvider.now() ?? Date()), detail: .listing)
+                    await loadTrain()
                 }
             }
             .productStorageGate(repositories)
+    }
+
+    private func handleTrainAction(_ action: TrainOverviewAction) {
+        switch action {
+        case .workoutRoute(let destination):
+            handleRoute(destination)
+        case .workout(let destination, let workout):
+            handleSelectedRoute(destination, workout)
+        case .startSession(let plan):
+            startSession(plan)
+        case .startWorkout(let templateID):
+            startWorkout(templateID: templateID)
+        case .startTemplate(let id):
+            startTemplate(id)
+        case .openSession(let id):
+            openTrain(.summary(id))
+        case .openExercises:
+            openTrain(.exercises)
+        case .openMuscleVolume:
+            openTrain(.muscleVolume)
+        case .openTemplate(let id):
+            openTrain(.template(id))
+        case .newTemplate:
+            openTrain(.template(nil))
+        case .openProgram(let id):
+            openTrain(.program(id))
+        case .newProgram:
+            openTrain(.programEditor(nil))
+        case .acceptDraft(let draft):
+            decide(draft, accept: true)
+        case .discardDraft(let draft):
+            decide(draft, accept: false)
+        case .openProtocol:
+            openProtocol?()
+        case .useStarterWeek:
+            useStarterWeek()
+        case .startStarterRoutine:
+            startStarterRoutine()
+        }
+    }
+
+    /// Saves the beginner's workout as the person's own, then starts it like any saved workout (R3-NEW-01).
+    private func startStarterRoutine() {
+        let clock = trainClock
+        Task { @MainActor in
+            do {
+                let saved = try await train.saveTemplate(TrainStarterRoutine.template(now: clock.now), at: clock.now)
+                await loadTrain()
+                startWorkout(templateID: saved.id)
+            } catch {
+                trainActionError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Saves the starter week into the protocol and reloads the dose, which then shows it as targets. A launch without
+    /// stored data has nowhere to save it, so it opens Protocol instead.
+    private func useStarterWeek() {
+        guard let persistent = repositories?.persistent else {
+            openProtocol?()
+            return
+        }
+        let now = trainClock.now
+        Task { @MainActor in
+            do {
+                try await Task.detached(priority: .userInitiated) {
+                    try FitnessSources.addStarterWeek(persistent, now: now)
+                }.value
+                await loadTrain()
+            } catch {
+                trainActionError = "Could not save the starter week. \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// Accept or discard an agent draft from the overview. Nothing is scheduled before Accept.
+    private func decide(_ draft: TrainDraftSummary, accept: Bool) {
+        let clock = trainClock
+        let history = trainHistory
+        Task { @MainActor in
+            let problem = accept
+                ? await train.accept(draft, now: clock.now, calendar: clock.calendar, history: history)
+                : await train.discard(draft, now: clock.now, calendar: clock.calendar, history: history)
+            trainActionError = problem
+        }
+    }
+
+    private func openTrain(_ destination: TrainRoute) {
+        trainRoute?(destination)
+    }
+
+    /// Starts today's session. A strength template hands the shell a `TrainLiveSetup`, and the shell
+    /// starts the recording on the existing live workout path and opens the set screen, so zone alerts, the
+    /// Live Activity and the mini-player behave as they do for any workout. A cardio template records its
+    /// activity and opens the normal live screen.
+    private func startSession(_ plan: TrainTodayPlan) {
+        Task { @MainActor in
+            // The week's rule decisions are on record before the person trains.
+            await train.recordProgramAdjustments()
+            if plan.kind == .strength, let startTemplateSession {
+                guard let template = train.input?.templates.first(where: { $0.id == plan.templateID }) else {
+                    trainActionError = TrainError.missingRecord.localizedDescription
+                    return
+                }
+                guard !template.exercises.isEmpty else {
+                    trainActionError = TrainLiveError.emptyTemplate.localizedDescription
+                    return
+                }
+                let history = train.input?.sessions.filter { $0.status == .completed } ?? []
+                startTemplateSession(TrainLiveSetup(
+                    template: template, recoveryScore: plan.recoveryScore, programID: plan.programID, programWeek: plan.programWeek,
+                    history: history,
+                    expectedStrain: ExpectedStrain.estimate(templateID: template.id, history: train.input?.strainSamples ?? []),
+                    timeZoneIdentifier: trainClock.calendar.timeZone.identifier))
+                return
+            }
+            let activity: ActivityType
+            switch plan.kind {
+            case .strength: activity = .strength
+            case .cardio:
+                let template = train.input?.templates.first { $0.id == plan.templateID }
+                activity = template?.cardio?.activity ?? .cardio
+            }
+            if let startRecordingSession {
+                startRecordingSession(activity)
+            } else {
+                await startRecording(activity: activity)
+            }
+        }
+    }
+
+    /// Starts a gym workout from any strength template, or an empty one built as it goes. It runs on the same
+    /// live path as today's session, so heart rate, strain and the Live Activity work the same.
+    private func startWorkout(templateID: UUID?) {
+        guard let startTemplateSession else {
+            Task { await startRecording(activity: .strength) }
+            return
+        }
+        let history = train.input?.sessions.filter { $0.status == .completed } ?? []
+        let zone = trainClock.calendar.timeZone.identifier
+        guard let templateID else {
+            startTemplateSession(.freeform(history: history, timeZoneIdentifier: zone))
+            return
+        }
+        guard let template = train.input?.templates.first(where: { $0.id == templateID }) else {
+            trainActionError = TrainError.missingRecord.localizedDescription
+            return
+        }
+        guard !template.exercises.isEmpty else {
+            trainActionError = TrainLiveError.emptyTemplate.localizedDescription
+            return
+        }
+        startTemplateSession(TrainLiveSetup(
+            template: template, history: history,
+            expectedStrain: ExpectedStrain.estimate(templateID: template.id, history: train.input?.strainSamples ?? []),
+            timeZoneIdentifier: zone))
+    }
+
+    /// Starts a saved workout from its play button: a strength one opens the set log, a cardio one records its activity.
+    private func startTemplate(_ id: UUID) {
+        guard let template = train.input?.templates.first(where: { $0.id == id }) else {
+            trainActionError = TrainError.missingRecord.localizedDescription
+            return
+        }
+        switch template.kind {
+        case .strength:
+            startWorkout(templateID: id)
+        case .cardio:
+            let activity = template.cardio?.activity ?? .cardio
+            if let startRecordingSession {
+                startRecordingSession(activity)
+            } else {
+                Task { await startRecording(activity: activity) }
+            }
+        }
+    }
+
+    /// The recording-only start, for a root with no shell listening, such as a preview.
+    private func startRecording(activity: ActivityType) async {
+        do {
+            var workout = try await session.start(activity: activity, source: .live)
+            switch workout.state {
+            case .selectedActivity:
+                _ = try await session.transition(to: .preparing)
+                workout = try await session.transition(to: .active)
+            case .preparing:
+                workout = try await session.transition(to: .active)
+            default:
+                break
+            }
+            await LooprHeartAlertsRuntime.shared.noteWorkout(id: workout.id.uuidString, start: workout.startedAt ?? Date(), end: nil)
+            handleSelectedRoute(.live(activity), workout)
+        } catch {
+            trainActionError = error.localizedDescription
+        }
     }
 
     private func handleRoute(_ destination: WorkoutKit.WorkoutRoute) {
@@ -1749,6 +2645,7 @@ struct WorkoutFeatureRoot: View {
 
 @MainActor
 struct WorkoutDestinationFeatureRoot: View {
+    @Environment(\.looprMeasurementSystem) private var measurementSystem
     let recovery: Bool
     let workoutID: UUID?
     let route: (WorkoutDetailRoute) -> Void
@@ -1758,6 +2655,9 @@ struct WorkoutDestinationFeatureRoot: View {
     private let fixtureWorkout: WorkoutRecord?
     private let seedFixture: Bool
     @StateObject private var viewModel: WorkoutViewModel
+    /// The requested workout read by id, for one outside the list's three-month window.
+    @State private var requestedWorkout: WorkoutRecord?
+    @State private var hasLoaded = false
 
     init(recovery: Bool, workoutID: UUID? = nil, route: @escaping (WorkoutDetailRoute) -> Void = { _ in }, repositories: ProductRepositoryContainer? = nil) {
         let store: any WorkoutStore
@@ -1791,10 +2691,7 @@ struct WorkoutDestinationFeatureRoot: View {
         Group {
             if let fixtureWorkout {
                 destination(for: fixtureWorkout)
-            } else if let workout = viewModel.snapshot.value?.first(where: { workout in
-                guard workoutID == nil || workout.id == workoutID else { return false }
-                return recovery ? workout.state == .interruptedAndRecoverable : workout.state == .completed
-            }) {
+            } else if let workout = viewModel.snapshot.value?.first(where: matches) ?? requestedWorkout.flatMap({ matches($0) ? $0 : nil }) {
                 destination(for: workout)
             } else if viewModel.snapshot.state == .loading {
                 ProgressView("Loading workout")
@@ -1814,11 +2711,30 @@ struct WorkoutDestinationFeatureRoot: View {
                 do { try await store.save(fixtureWorkout) } catch { }
             }
             if let workoutID {
-                _ = try? await session.select(id: workoutID)
+                requestedWorkout = try? await session.select(id: workoutID)
             }
-            await viewModel.load(query: WorkoutLogQuery(range: .threeMonths, now: repositories?.isFixtureComposition == false ? (repositories?.environment.dateProvider.now() ?? Date()) : Date(timeIntervalSince1970: 1_700_002_000)))
+            await viewModel.load(query: detailQuery)
+            hasLoaded = true
+        }
+        .onAppear {
+            // Back from Edit: read the record again so the detail shows the change.
+            guard hasLoaded else { return }
+            Task {
+                if let workoutID { requestedWorkout = await session.workout(id: workoutID) }
+                await viewModel.load(query: detailQuery)
+            }
         }
         .productStorageGate(repositories)
+    }
+
+    private var detailQuery: WorkoutLogQuery {
+        WorkoutLogQuery(range: .threeMonths, now: repositories?.isFixtureComposition == false
+            ? (repositories?.environment.dateProvider.now() ?? Date()) : Date(timeIntervalSince1970: 1_700_002_000))
+    }
+
+    private func matches(_ workout: WorkoutRecord) -> Bool {
+        guard workoutID == nil || workout.id == workoutID else { return false }
+        return recovery ? workout.state == .interruptedAndRecoverable : workout.state == .completed
     }
 
     private var workoutRecoveryProvider: (any WorkoutHeartRateRecoveryProviding)? {
@@ -1836,6 +2752,8 @@ struct WorkoutDestinationFeatureRoot: View {
         } else {
             WorkoutDetailScreen(workout: workout, viewModel: viewModel, route: route)
                 .environment(\.workoutHeartRateRecoveryProvider, workoutRecoveryProvider)
+                .environment(\.workoutDetailContextProvider, HealthWorkoutDetailContextProvider.make(repositories: repositories))
+                .environment(\.workoutPageProvider, AppWorkoutPageProvider.make(repositories: repositories, usesMiles: measurementSystem == .imperial))
                 .modifier(WorkoutGPXShareAction(workout: workout, routes: repositories?.persistent?.routes))
         }
     }
@@ -1896,17 +2814,37 @@ struct WorkoutShareDestinationFeatureRoot: View {
 
 }
 
+/// A screen the Protocol tab pushes: one of JournalKit's Protocol screens, or Patterns.
+enum ProtocolTabPush: Hashable {
+    case screen(ProtocolRoute)
+    case patterns
+}
+
 @MainActor
 struct JournalFeatureRoot: View {
     let route: (JournalKit.JournalRoute) -> Void
+    /// Appends a Protocol push to the host stack's path. Nil on a stack whose path cannot hold it (Today's), where the
+    /// push is presented with `navigationDestination(item:)` instead.
+    let push: ((ProtocolTabPush) -> Void)?
     let repositories: ProductRepositoryContainer?
+    /// A segment the shell asked for, such as Experiments from Today's experiment strip.
+    var segmentRequest: ProtocolSegmentRequest?
+    @Environment(\.looprOpenWeeklyReview) private var openWeeklyReview
     private let repository: any JournalStore
     private let habitStore: any HabitStore
     private let seedFixture: Bool
     @StateObject private var viewModel: JournalViewModel
     @StateObject private var habitViewModel: HabitViewModel
+    /// The Protocol tab root's rosettes, deck and patterns (LV-07.1). It shares the habit model with the Journal sections.
+    @StateObject private var protocolModel: ProtocolTabModel
+    @State private var noteDraft: JournalNoteDraft?
+    /// The push on a stack without `push`.
+    @State private var presentedPush: ProtocolTabPush?
 
-    init(route: @escaping (JournalKit.JournalRoute) -> Void = { _ in }, repositories: ProductRepositoryContainer? = nil) {
+    init(route: @escaping (JournalKit.JournalRoute) -> Void = { _ in }, push: ((ProtocolTabPush) -> Void)? = nil,
+         repositories: ProductRepositoryContainer? = nil, segmentRequest: ProtocolSegmentRequest? = nil) {
+        self.segmentRequest = segmentRequest
+        self.push = push
         let repository: any JournalStore
         let habitStore: any HabitStore
         let seedFixture: Bool
@@ -1915,8 +2853,13 @@ struct JournalFeatureRoot: View {
             habitStore = persistent.habits
             seedFixture = false
         } else {
+            #if DEBUG
+            repository = repositories?.fixtureJournalStore ?? JournalRepository()
+            habitStore = repositories?.fixtureHabitStore ?? InMemoryHabitStore()
+            #else
             repository = JournalRepository()
             habitStore = InMemoryHabitStore()
+            #endif
             seedFixture = repositories?.isFixtureComposition ?? true
         }
         self.repository = repository
@@ -1924,27 +2867,138 @@ struct JournalFeatureRoot: View {
         self.seedFixture = seedFixture
         self.route = route
         self.repositories = repositories
+        let autoFill: AppJournalAutoFillProvider?
+        if let persistent = repositories?.persistent {
+            let food = AppFoodJournalProvider(repository: AppFoodRepository(store: persistent.food, environment: repositories!.environment), sleep: persistent.sleep)
+            autoFill = AppJournalAutoFillProvider(readTraining: { @Sendable [store = persistent.workouts] in
+                try await store.journalAutoFillRecords()
+            }, readFood: { @Sendable day, zone in try await food.foodDay(for: day, timeZoneID: zone) })
+        } else if let store = repositories?.workoutStore {
+            #if DEBUG
+            let food = repositories.map { AppFoodJournalProvider(repository: $0.fixtureFoodRepository, sleep: nil) }
+            autoFill = AppJournalAutoFillProvider(readTraining: { @Sendable [store] in await store.all() },
+                readFood: food.map { provider in { @Sendable day, zone in try await provider.foodDay(for: day, timeZoneID: zone) } })
+            #else
+            autoFill = AppJournalAutoFillProvider(readTraining: { @Sendable [store] in await store.all() })
+            #endif
+        } else { autoFill = nil }
+        let prepareInsights: (@Sendable () async throws -> Void)?
+        if let persistent = repositories?.persistent {
+            let preparation = AppJournalInsightPreparation(store: habitStore, resolver: AppHabitOutcomeResolver(
+                today: persistent.today, sleep: persistent.sleep, heart: persistent.heart,
+                calendar: repositories?.environment.calendarProvider ?? SystemCalendarProvider(),
+                dateProvider: repositories?.environment.dateProvider ?? SystemDateProvider()))
+            prepareInsights = { @Sendable in try await preparation.refresh() }
+        } else {
+            #if DEBUG
+            // The fixture's comparisons are worked out at launch; the screen waits for them (ICP R3-HAB-04).
+            prepareInsights = FiveTabJournalFixture.mode == nil ? nil : { @Sendable in await FiveTabJournalFixture.waitForComparisons() }
+            #else
+            prepareInsights = nil
+            #endif
+        }
         _viewModel = StateObject(wrappedValue: JournalViewModel(repository: repository))
-        _habitViewModel = StateObject(wrappedValue: HabitViewModel(
+        let habits = HabitViewModel(
             store: habitStore,
+            dateProvider: repositories?.environment.dateProvider ?? SystemDateProvider(),
+            calendarProvider: repositories?.environment.calendarProvider ?? SystemCalendarProvider(),
+            timeZoneProvider: seedFixture ? SystemTimeZoneProvider(timeZone: TimeZone(identifier: "Australia/Perth")!) : repositories?.environment.timeZoneProvider ?? SystemTimeZoneProvider(),
             journalStore: repository,
             reminderScheduler: repositories?.persistent?.habitReminderScheduler ?? NoOpHabitReminderScheduler(),
-            featureStageOverride: AppHabitFeatureGate.currentStage
-        ))
+            featureStageOverride: AppHabitFeatureGate.currentStage,
+            autoFill: autoFill,
+            prepareInsights: prepareInsights,
+            ruleHabitIDs: ProtocolTabComposition.ruleHabitIDs(repositories)
+        )
+        _habitViewModel = StateObject(wrappedValue: habits)
+        _protocolModel = StateObject(wrappedValue: ProtocolTabComposition.model(repositories: repositories, habits: habits))
     }
 
     var body: some View {
-        JournalScreen(viewModel: viewModel, habitViewModel: habitViewModel, route: route)
+        // The tab root is the Protocol screen. Every Journal destination stays reachable from its Journal sections.
+        let model = protocolModel
+        ProtocolScreen(model: protocolModel, journal: viewModel, route: route, push: { open(.screen($0)) },
+                       editNote: { entry, day, dictate in
+            let now = repositories?.environment.dateProvider.now() ?? Date()
+            noteDraft = JournalNoteDraft(entry: entry ?? JournalEntry(day: day.habitKey, createdAt: now), dictate: dictate)
+        }, openPatterns: {
+            if repositories != nil { open(.patterns) }
+        }, weeklyReview: weeklyReviewEntry)
+            .environment(\.protocolCheckInReminder, ProtocolTabComposition.checkInReminder(repositories: repositories))
+            .onChange(of: segmentRequest, initial: true) { _, request in
+                if let request { protocolModel.requestedSegment = request.segment }
+            }
+            #if canImport(UserNotifications)
+            // A rule answered from its reminder's Done or Skip today shows the next time the tab is seen (ICP R3-HAB-02).
+            .onReceive(NotificationCenter.default.publisher(for: ProtocolRuleReminderResponder.answered).receive(on: RunLoop.main)) { _ in
+                Task { await protocolModel.load() }
+            }
+            #endif
+            // Pushed by value on the Protocol tab's path. A `navigationDestination(isPresented:)` push froze the app
+            // until AttributeGraph had described the destination's type, up to minutes after launch.
+            .navigationDestination(for: ProtocolTabPush.self) { destination($0, model: model) }
+            .navigationDestination(item: $presentedPush) { destination($0, model: model) }
+            .sheet(item: $noteDraft) { draft in
+                JournalNoteEditor(draft: draft) { entry in
+                    var saved = entry
+                    saved.updatedAt = repositories?.environment.dateProvider.now() ?? Date()
+                    _ = try await repository.save(saved)
+                    await viewModel.load()
+                }
+            }
             .task {
                 guard repositories?.storageFailure == nil else { return }
                 if seedFixture {
-                    do { _ = try await repository.save(JournalFixtures.privateEntry) } catch { }
+                    #if DEBUG
+                    let entry = FiveTabJournalFixture.mode == nil ? JournalFixtures.privateEntry : FiveTabJournalFixture.note
+                    #else
+                    let entry = JournalFixtures.privateEntry
+                    #endif
+                    do { _ = try await repository.save(entry) } catch { }
                 }
                 await viewModel.load()
-                await habitViewModel.load()
             }
             .productStorageGate(repositories)
     }
+}
+
+extension JournalFeatureRoot {
+    private func open(_ target: ProtocolTabPush) {
+        if let push { push(target) } else { presentedPush = target }
+    }
+
+    @ViewBuilder
+    private func destination(_ target: ProtocolTabPush, model: ProtocolTabModel) -> some View {
+        switch target {
+        case .screen(let route): ProtocolRouteDestination(model: model, route: route)
+        case .patterns:
+            if let repositories {
+                PatternsFeatureRoot(environment: repositories.environment, repositories: repositories)
+            }
+        }
+    }
+
+    /// "This week's review", naming the week the review covers. Nil when the shell cannot open it.
+    private var weeklyReviewEntry: ProtocolWeeklyReviewEntry? {
+        guard let openWeeklyReview, repositories != nil else { return nil }
+        var calendar = Calendar.current
+        if let zone = repositories?.environment.timeZoneProvider.timeZone { calendar.timeZone = zone }
+        let now = repositories?.environment.dateProvider.now() ?? Date()
+        let week = WeeklyReviewSchedule.reviewWeek(at: now, calendar: calendar)
+        let monday = week.map { WeeklyReviewSchedule.mondayText($0, calendar: calendar) }
+        return ProtocolWeeklyReviewEntry(
+            title: WeeklyReviewCopy.protocolTitle,
+            detail: monday.map(WeeklyReviewCopy.protocolDetail(monday:)) ?? WeeklyReviewCopy.todayDetail,
+            monday: week?.monday,
+            open: { openWeeklyReview.run() })
+    }
+}
+
+/// One request for a Protocol segment. A new request with the same segment still switches, so a second tap on Today's
+/// strip after the person moved to Rules opens Experiments again.
+struct ProtocolSegmentRequest: Equatable {
+    let segment: ProtocolSegment
+    let id = UUID()
 }
 
 @MainActor
@@ -2008,7 +3062,7 @@ struct CycleFeatureRoot: View {
         CycleScreen(viewModel: viewModel, route: handleRoute)
             .task {
                 guard repositories?.storageFailure == nil else { return }
-                await viewModel.load(today: CycleDate.string(Date()))
+                await viewModel.load(today: CycleDate.localDay(Date()))
             }
             .productStorageGate(repositories)
     }
@@ -2762,6 +3816,7 @@ struct DataDestinationFeatureRoot: View {
     @StateObject private var viewModel: DataViewModel
     @State private var actionMessage: String?
     @State private var preparedBackupURL: URL?
+    @State private var preparedSpreadsheetURLs: [URL] = []
     @State private var legacyMigrationState: LegacyMigrationState = .notAvailable
 
     init(route: DataKit.DataRoute, repositories: ProductRepositoryContainer? = nil) {
@@ -2876,12 +3931,12 @@ struct DataDestinationFeatureRoot: View {
                     let removed = try await sqlite.removeHealthKitSamplesReportingCount()
                     await viewModel.load()
                     actionMessage = removed == 1
-                        ? "Removed 1 sample Loopr wrote to Health."
-                        : "Removed \(removed) samples Loopr wrote to Health."
+                        ? "Removed 1 sample Loopr wrote to Apple Health."
+                        : "Removed \(removed) samples Loopr wrote to Apple Health."
                 } else {
                     try await repository.removeHealthKitSamplesChecked()
                     await viewModel.load()
-                    actionMessage = "Removed the samples Loopr wrote to Health."
+                    actionMessage = "Removed the samples Loopr wrote to Apple Health."
                 }
             } catch {
                 actionMessage = "HealthKit removal failed: \(error.localizedDescription)"
@@ -3084,7 +4139,7 @@ struct CycleDestinationFeatureRoot: View {
                     export: CycleExport(entries: viewModel.history, settings: viewModel.settings),
                     onLog: { entry in
                         Task {
-                            await viewModel.log(entry, today: CycleDate.string(Date()))
+                            await viewModel.log(entry, today: CycleDate.localDay(Date()))
                         }
                     },
                     onExport: {},
@@ -3100,7 +4155,7 @@ struct CycleDestinationFeatureRoot: View {
         }
         .task {
             guard repositories?.storageFailure == nil else { return }
-            await viewModel.load(today: CycleDate.string(Date()))
+            await viewModel.load(today: CycleDate.localDay(Date()))
         }
         .productStorageGate(repositories)
     }
@@ -3119,12 +4174,12 @@ struct CycleDestinationFeatureRoot: View {
 
 }
 
-enum AppHabitOutcomeResolution: Sendable, Equatable {
+nonisolated enum AppHabitOutcomeResolution: Sendable, Equatable {
     case outcome(HabitOutcomeSnapshot)
     case excluded(HabitOutcomeExclusionRecord)
 }
 
-struct AppHabitOutcomeResolver: Sendable {
+nonisolated struct AppHabitOutcomeResolver: Sendable {
     let today: any TodayRepository
     let sleep: any SleepRepository
     let heart: any HeartRepository
@@ -3178,6 +4233,10 @@ struct AppHabitOutcomeResolver: Sendable {
         if let duration = typedSleepMetric(sleepSnapshot, id: "duration", expected: .minutes) {
             metrics[.sleepDuration] = duration
         }
+        if let deep = typedSleepMetric(sleepSnapshot, id: "deep", expected: .minutes),
+           deep >= 0, deep <= Double(session.durationMinutes) {
+            metrics[.deepSleepMinutes] = deep
+        }
         if let efficiency = typedSleepMetric(sleepSnapshot, id: "efficiency", expected: .percentagePoints) {
             metrics[.sleepEfficiency] = efficiency
         }
@@ -3187,9 +4246,11 @@ struct AppHabitOutcomeResolver: Sendable {
         guard !metrics.isEmpty else {
             return excluded(hasIncompatibleUnit(today: todaySnapshot, sleep: sleepSnapshot, heart: heartSnapshot) ? .incompatibleMetricVersion : .missingMetric)
         }
-        let strain = todaySnapshot.flatMap { typedTodayMetric($0, ids: [.strain], expected: .strainScore) }
+        let behaviorSnapshot = try? await today.readSummary(for: record.behaviorDay)
+        let strain = behaviorSnapshot.flatMap { typedTodayMetric($0, ids: [.strain], expected: .strainScore) }
         var versions: [String: String] = [:]
         versions["today"] = todaySnapshot?.metrics.compactMap(\.algorithmVersion).sorted().joined(separator: ",") ?? "missing"
+        versions["priorDayStrain"] = behaviorSnapshot?.metric(.strain)?.algorithmVersion ?? "missing"
         versions["sleep"] = sleepSnapshot.algorithmVersion ?? "unknown"
         versions["heart"] = heartSnapshot?.algorithmVersion ?? "missing"
         return .outcome(HabitOutcomeSnapshot(
@@ -3251,7 +4312,7 @@ struct AppHabitOutcomeResolver: Sendable {
             $0.numericValue != nil && [TodayMetricID.recovery, .readiness].contains($0.id) && $0.numericUnit != .scorePoints
         } == true
         let sleepExpected: [String: SleepMetricUnitID] = [
-            "score": .scorePoints, "duration": .minutes,
+            "score": .scorePoints, "duration": .minutes, "deep": .minutes,
             "efficiency": .percentagePoints, "consistency": .scorePoints
         ]
         let sleepMismatch = sleep.metrics.contains { metric in
@@ -3293,17 +4354,21 @@ struct JournalDestinationFeatureRoot: View {
             habitStore = persistent.habits
             seedFixture = false
         } else {
+            #if DEBUG
+            repository = repositories?.fixtureJournalStore ?? JournalRepository()
+            #else
             repository = JournalRepository()
+            #endif
             #if DEBUG
             let statePrefix = "--loopr-habit-insight-state="
             let requestedState = ProcessInfo.processInfo.arguments
                 .first(where: { $0.hasPrefix(statePrefix) })
                 .map { String($0.dropFirst(statePrefix.count)) }
                 .flatMap(HabitInsightStatus.init(rawValue:))
+            habitStore = repositories?.fixtureHabitStore ?? HabitFixtures.store(status: requestedState ?? .collecting)
             #else
-            let requestedState: HabitInsightStatus? = nil
+            habitStore = InMemoryHabitStore()
             #endif
-            habitStore = HabitFixtures.store(status: requestedState ?? .collecting)
             seedFixture = repositories?.isFixtureComposition ?? true
         }
         self.route = route
@@ -3316,7 +4381,8 @@ struct JournalDestinationFeatureRoot: View {
             store: habitStore,
             journalStore: repository,
             reminderScheduler: repositories?.persistent?.habitReminderScheduler ?? NoOpHabitReminderScheduler(),
-            featureStageOverride: AppHabitFeatureGate.currentStage
+            featureStageOverride: AppHabitFeatureGate.currentStage,
+            ruleHabitIDs: ProtocolTabComposition.ruleHabitIDs(repositories)
         ))
     }
 
@@ -3338,7 +4404,7 @@ struct JournalDestinationFeatureRoot: View {
                     onDelete: { deleteJournalEntry($0) }
                 )
             case .habits:
-                HabitManagementScreen(viewModel: habitViewModel)
+                HabitManagementScreen(viewModel: habitViewModel, onChoose: { navigate(.habitSetup) })
             case .habitSetup:
                 HabitSetupScreen(viewModel: habitViewModel)
             case .checkIn(let day):
@@ -4282,7 +5348,7 @@ actor ProfileBackedSettingsRepository: SettingsRepository {
     /// so a completely empty profile section stays a no-op.
     private static func carriesProfileData(_ value: ProfileSettings) -> Bool {
         if value.displayName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false { return true }
-        return value.age != nil
+        return value.birthYear != nil
             || value.heightCentimeters != nil
             || value.weightKilograms != nil
             || value.biologicalSex != nil
@@ -4307,10 +5373,9 @@ actor ProfileBackedSettingsRepository: SettingsRepository {
     }
 
     private static func settingsProfile(from profile: Profile) -> ProfileSettings {
-        let currentYear = Calendar(identifier: .gregorian).component(.year, from: Date())
-        return ProfileSettings(
+        ProfileSettings(
             displayName: profile.displayName,
-            age: profile.birthYear.map { max(0, currentYear - $0) },
+            birthYear: profile.birthYear,
             heightCentimeters: profile.heightCentimeters,
             weightKilograms: profile.weightKilograms,
             biologicalSex: profile.biologicalSex?.rawValue
@@ -4318,7 +5383,6 @@ actor ProfileBackedSettingsRepository: SettingsRepository {
     }
 
     private static func profileDraft(from value: ProfileSettings, existing: Profile?, units: SettingsKit.UnitSystem) -> ProfileDraft {
-        let currentYear = Calendar(identifier: .gregorian).component(.year, from: Date())
         let unitSystem: ProfileKit.UnitSystem = units == .metric ? .metric : .imperial
         // Settings owns every field it carries, so a nil here is an explicit
         // clear and must not fall back to the stored value; otherwise an age
@@ -4329,7 +5393,7 @@ actor ProfileBackedSettingsRepository: SettingsRepository {
         // has no Settings field at all and is likewise preserved.
         return ProfileDraft(
             displayName: value.displayName ?? existing?.displayName,
-            birthYear: value.age.map { currentYear - $0 },
+            birthYear: value.birthYear,
             biologicalSex: value.biologicalSex.flatMap(BiologicalSex.init(rawValue:)),
             heightCentimeters: value.heightCentimeters,
             weightKilograms: value.weightKilograms,
@@ -4343,20 +5407,95 @@ private func makeSettingsRepository(_ repositories: ProductRepositoryContainer?)
     if let persistent = repositories?.persistent {
         return ProfileBackedSettingsRepository(settings: persistent.settings, profile: persistent.profile)
     }
-    let settings = repositories?.isFixtureComposition == false ? SettingsSnapshot() : SettingsFixtures.darkPrivate
-    return InMemorySettingsRepository(initial: capturedAppearance.map(settings.withAppearance) ?? settings)
+    if repositories?.isFixtureComposition == false {
+        return InMemorySettingsRepository(initial: SettingsSnapshot())
+    }
+    let fixture = SettingsFixtures.darkPrivate.withAppearance(capturedAppearance ?? .system)
+    #if DEBUG
+    // The profile lives in the launch's one fixture profile, which Data and Fitness read too (R2-UPG-2).
+    if let repositories {
+        var settings = fixture
+        settings.profile = ProfileSettings()
+        return ProfileBackedSettingsRepository(settings: InMemorySettingsRepository(initial: settings),
+                                               profile: repositories.fixtureProfile)
+    }
+    #endif
+    return InMemorySettingsRepository(initial: fixture)
 }
 
-/// The fixture settings snapshot pins a dark appearance override, and loading
-/// it applies that override to the whole design system. That makes every screen
-/// behind Settings render dark whatever the device is set to, so the light
-/// appearance of a third of the app could never be screenshotted.
-///
-/// A visual capture run always passes `--loopr-phase06-screen=`. Under that
-/// argument the fixture stops overriding the appearance and the app follows the
-/// simulator, so `simctl ui appearance` controls the capture. An explicit
-/// `--loopr-appearance=` still wins, which keeps the dark override testable.
-/// Normal launches pass neither and keep the fixture exactly as it was.
+/// Posted after Profile saves or resets, so the screens that read the profile (the Data and Fitness age rulers) read
+/// it again instead of waiting for the next sync.
+nonisolated let looprProfileChanged = Notification.Name("com.loopr.profile-changed")
+
+/// Applies what Settings stores when the shell opens, so the app starts in the appearance, units and accessibility
+/// choices Settings shows. Before, they applied only once Settings was opened, and opening it flipped the whole app to
+/// the fixture's Dark (R2-UPG-5). Fixture launches set the appearance only: capture fixtures own the rest of the state.
+@MainActor
+func applyStoredDesignSystem(_ repositories: ProductRepositoryContainer?) async {
+    guard let repositories, repositories.storageFailure == nil else { return }
+    let snapshot = await makeSettingsRepository(repositories).snapshot()
+    if repositories.environment.composition == .production {
+        try? await LooprDesignSystemTokenBridge(remembersForLaunch: true).apply(DesignSystemTokenState(snapshot))
+    } else {
+        var state = DesignSystemRuntime.state()
+        state.appearance = LooprAppearanceOverride(rawValue: snapshot.appearance.rawValue) ?? .system
+        DesignSystemRuntime.apply(state)
+    }
+}
+
+extension DesignSystemTokenState {
+    init(_ snapshot: SettingsSnapshot) {
+        self.init(appearance: snapshot.appearance,
+                  increasedContrastPreview: snapshot.accessibility.increasedContrastPreview,
+                  reduceMotionOverride: snapshot.accessibility.reduceMotionOverride,
+                  units: snapshot.units,
+                  voiceOverHints: snapshot.accessibility.voiceOverHints)
+    }
+}
+
+/// The appearance Settings last applied in production, kept in UserDefaults so the first frame of the next launch
+/// already has it and a dark choice never opens on a light frame first.
+nonisolated enum LooprLaunchAppearance {
+    static let key = "loopr.launch-appearance"
+
+    static func remember(_ choice: AppearanceChoice, defaults: UserDefaults = .standard) {
+        defaults.set(choice.rawValue, forKey: key)
+    }
+
+    static func remembered(defaults: UserDefaults = .standard) -> LooprAppearanceOverride? {
+        defaults.string(forKey: key).flatMap(LooprAppearanceOverride.init(rawValue:))
+    }
+
+    /// The appearance a launch opens in. Production: what Settings last applied. A fixture launch: its
+    /// `--loopr-appearance=` argument, the same one its Settings snapshot takes, so the argument, the in-app setting
+    /// and the system setting resolve through one source (R2-LAB-23). Nil follows the system.
+    static func launchAppearance(composition: AppEnvironment.Composition,
+                                 arguments: [String] = ProcessInfo.processInfo.arguments,
+                                 defaults: UserDefaults = .standard) -> LooprAppearanceOverride? {
+        guard composition != .production else { return remembered(defaults: defaults) }
+        let prefix = "--loopr-appearance="
+        return arguments.first { $0.hasPrefix(prefix) }
+            .flatMap { LooprAppearanceOverride(rawValue: String($0.dropFirst(prefix.count))) }
+    }
+
+    /// Applied in `LooprApp.init`, before the first frame. The root then sets the window's scheme from it
+    /// (`RootGate`), so every tab and every sheet takes it.
+    @MainActor
+    static func applyRemembered(composition: AppEnvironment.Composition, defaults: UserDefaults = .standard) {
+        guard let appearance = launchAppearance(composition: composition, defaults: defaults) else { return }
+        var state = DesignSystemRuntime.state()
+        guard state.appearance != appearance else { return }
+        state.appearance = appearance
+        DesignSystemRuntime.apply(state)
+    }
+}
+
+/// The fixture settings snapshot used to pin a dark appearance override, and
+/// loading it applied that override to the whole design system, so opening
+/// Settings turned a light simulator's app dark. Fixture launches now follow
+/// the simulator's appearance, so `simctl ui appearance` and
+/// `-AppleInterfaceStyle` decide. An explicit `--loopr-appearance=` still
+/// wins, which keeps the dark override testable.
 /// True when the process was launched by the Phase 06 visual capture lane.
 var isVisualCaptureRun: Bool {
     ProcessInfo.processInfo.arguments.contains { $0.hasPrefix("--loopr-phase06-screen=") }
@@ -4392,10 +5531,15 @@ private extension SettingsSnapshot {
 /// are present; a missing adapter must never look like granted permission.
 actor LooprDesignSystemTokenBridge: DesignSystemTokenBridge {
     private var value = DesignSystemTokenState()
+    /// Production keeps the appearance for the next launch's first frame (`LooprLaunchAppearance`).
+    private let remembersForLaunch: Bool
+
+    init(remembersForLaunch: Bool = false) { self.remembersForLaunch = remembersForLaunch }
 
     func state() async -> DesignSystemTokenState { value }
     func apply(_ state: DesignSystemTokenState) async throws {
         value = state
+        if remembersForLaunch { LooprLaunchAppearance.remember(state.appearance) }
         DesignSystemRuntime.apply(.init(
             appearance: LooprAppearanceOverride(rawValue: state.appearance.rawValue) ?? .system,
             increasedContrast: state.increasedContrastPreview,
@@ -4437,7 +5581,7 @@ private struct AppSettingsComposition {
 
     init(repositories: ProductRepositoryContainer?) {
         repository = makeSettingsRepository(repositories)
-        tokenBridge = LooprDesignSystemTokenBridge()
+        tokenBridge = LooprDesignSystemTokenBridge(remembersForLaunch: repositories?.environment.composition == .production)
         if repositories?.environment.composition == .production {
             integrations = SettingsIntegrationClients(
                 healthKit: LooprHealthKitSettingsEntryPoint(runtime: repositories?.persistent?.healthSync),
@@ -4483,10 +5627,13 @@ struct SettingsFeatureRoot: View {
     /// The debounced band state, so the row does not flip to "Not connected"
     /// on a reconnect that takes a second.
     @Environment(\.looprBandLink) private var bandLink
+    /// What every tab's band button shows, and whether the shell stands for a paired band.
+    @Environment(\.looprBandIndicator) private var shownBand
+    @Environment(\.bandPaired) private var bandPaired
     @State private var wakeAlarmSummary: String?
 
     private var bandSummary: String {
-        bandLink?.settingsSummary ?? "Not paired"
+        BandLinkPresentation.settingsSummary(link: bandLink, shown: shownBand, paired: bandPaired)
     }
 
     init(route: @escaping (SettingsRouteDestination) -> Void = { _ in }, repositories: ProductRepositoryContainer? = nil) {
@@ -4594,6 +5741,8 @@ struct SettingsDestinationFeatureRoot: View {
     @State private var integrationMessage: String?
     @State private var notificationPreferences: [NotificationPreferenceSetting] = []
 
+    static let profileSavedMessage = "Profile saved."
+
     init(destination: SettingsRouteDestination, repositories: ProductRepositoryContainer? = nil) {
         let composition = AppSettingsComposition(repositories: repositories)
         self.destination = destination
@@ -4633,10 +5782,15 @@ struct SettingsDestinationFeatureRoot: View {
                 Task {
                     do {
                         let ageChanged = destination == .profile
-                            && viewModel.snapshot.profile.age != snapshot.profile.age
+                            && viewModel.snapshot.profile.birthYear != snapshot.profile.birthYear
                         try await settingsCoordinator.update(snapshot)
                         await viewModel.load()
                         if ageChanged { await HeartZonePreferences.shared.profileAgeChanged() }
+                        if destination == .profile {
+                            NotificationCenter.default.post(name: looprProfileChanged, object: nil)
+                            // Save keeps the sheet open, so say it worked (R3-NEW-1, R3-LAB-5).
+                            integrationMessage = Self.profileSavedMessage
+                        }
                     } catch {
                         integrationMessage = "Settings could not be saved: \(error.localizedDescription)"
                     }
@@ -4648,6 +5802,7 @@ struct SettingsDestinationFeatureRoot: View {
                         try await settingsCoordinator.resetProfileChecked()
                         await viewModel.load()
                         await HeartZonePreferences.shared.profileAgeChanged()
+                        NotificationCenter.default.post(name: looprProfileChanged, object: nil)
                         integrationMessage = "Your profile and goals were reset."
                     } catch {
                         integrationMessage = "Profile reset failed: \(error.localizedDescription)"
@@ -4811,6 +5966,8 @@ enum SettingsFlowRoute: Hashable {
     case cycle(CycleKit.CycleRoute)
     case data(DataKit.DataRoute)
     case destructiveActions
+    case provider(CoachProvider)
+    case settingsHome
 }
 
 /// Owns the sheet's typed navigation path independently of the value view.
@@ -4840,35 +5997,59 @@ struct SettingsFlowRoot: View {
     let dismiss: () -> Void
     let repositories: ProductRepositoryContainer?
     let focusesAge: Bool
+    let startsWithYourData: Bool
+    let usesBackButton: Bool
+    let openTab: (MainTab) -> Void
+    private let initialPath: [SettingsFlowRoute]
 
-    init(dismiss: @escaping () -> Void = {}, repositories: ProductRepositoryContainer? = nil, initialPath: [SettingsFlowRoute] = [], focusesAge: Bool = false) {
+    init(dismiss: @escaping () -> Void = {}, repositories: ProductRepositoryContainer? = nil, initialPath: [SettingsFlowRoute] = [], focusesAge: Bool = false, startsWithYourData: Bool = false, usesBackButton: Bool = false, openTab: @escaping (MainTab) -> Void = { _ in }) {
+        self.initialPath = initialPath
         self.dismiss = dismiss
         self.repositories = repositories
         self.focusesAge = focusesAge
+        self.startsWithYourData = startsWithYourData
+        self.usesBackButton = usesBackButton
+        self.openTab = openTab
         _navigationModel = StateObject(wrappedValue: SettingsNavigationModel(path: initialPath))
     }
 
     var body: some View {
         NavigationStack(path: $navigationModel.path) {
-            SettingsFeatureRoot(route: { navigationModel.navigate(to: .settings($0)) }, repositories: repositories)
+            Group {
+                if startsWithYourData {
+                    YourDataScreen(repositories: repositories, route: navigationModel.navigate, openTab: openTab)
+                } else {
+                    SettingsFeatureRoot(route: { navigationModel.navigate(to: .settings($0)) }, repositories: repositories)
+                }
+            }
                 .toolbar {
                     // Reset and delete lives under Advanced now; a destructive
                     // screen one tap from the sheet's corner was too easy to hit.
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done", action: dismiss)
+                    if usesBackButton, navigationModel.path.isEmpty {
+                        ToolbarItem(placement: .topBarLeading) {
+                            LooprHeaderActionButton(action: .init(symbol: "chevron.left", label: "Back", identifier: "your-data-back", run: dismiss))
+                        }
+                        .sharedBackgroundVisibility(.hidden)
+                    } else if !usesBackButton {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done", action: dismiss)
+                        }
                     }
                 }
                 .navigationDestination(for: SettingsFlowRoute.self) { route in
-                    flowDestination(route, navigationModel: navigationModel)
+                    flowDestination(route, navigate: navigationModel.navigate(to:))
                 }
         }
         .environment(\.profileAgeFocusRequested, focusesAge)
+        // A sheet presented while its path was being set could start at the root; open the requested screen.
+        .task { if navigationModel.path.isEmpty, !initialPath.isEmpty { navigationModel.path = initialPath } }
     }
 
     @ViewBuilder
-    private func settingsDestination(
+    /// The screens Settings opens. Data builds the same screens on its own stack, so `navigate` pushes wherever the host does.
+    func settingsDestination(
         _ destination: SettingsRouteDestination,
-        navigationModel: SettingsNavigationModel
+        navigate: @escaping (SettingsFlowRoute) -> Void
     ) -> some View {
         switch SettingsDestinationTarget.resolve(
             destination,
@@ -4877,19 +6058,19 @@ struct SettingsFlowRoot: View {
         ) {
         case .deviceCenter:
             DeviceCenterFeatureRoot(
-                route: { navigationModel.navigate(to: .device($0)) },
+                route: { navigate(.device($0)) },
                 repositories: repositories
             )
         case .wakeAlarm:
             WakeAlarmFeatureRoot(repositories: repositories)
         case .cycle:
             CycleFeatureRoot(
-                route: { navigationModel.navigate(to: .cycle($0)) },
+                route: { navigate(.cycle($0)) },
                 repositories: repositories
             )
         case .data:
             DataFeatureRoot(
-                route: { navigationModel.navigate(to: .data($0)) },
+                route: { navigate(.data($0)) },
                 repositories: repositories
             )
         case .dataDiagnostics:
@@ -4897,7 +6078,7 @@ struct SettingsFlowRoot: View {
         case .heartAlerts:
             HeartAlertsSettingsScreen()
         case .notifications:
-            LooprNotificationSettingsScreen(openHeartAlerts: { navigationModel.navigate(to: .settings(.heartAlerts)) })
+            LooprNotificationSettingsScreen(openHeartAlerts: { navigate(.settings(.heartAlerts)) })
         case .aiProvider:
             // The provider screen is production only, which meant the visual
             // capture lane never reached it: a form that takes an API key and
@@ -4921,23 +6102,27 @@ struct SettingsFlowRoot: View {
     }
 
     @ViewBuilder
-    private func flowDestination(
+    func flowDestination(
         _ route: SettingsFlowRoute,
-        navigationModel: SettingsNavigationModel
+        navigate: @escaping (SettingsFlowRoute) -> Void
     ) -> some View {
         switch route {
         case .settings(let destination):
-            settingsDestination(destination, navigationModel: navigationModel)
+            settingsDestination(destination, navigate: navigate)
         case .device(let destination):
             DeviceCenterDestinationFeatureRoot(route: destination, repositories: repositories)
         case .cycle(let destination):
             CycleDestinationFeatureRoot(
                 route: destination,
                 repositories: repositories,
-                navigate: { navigationModel.navigate(to: .cycle($0)) }
+                navigate: { navigate(.cycle($0)) }
             )
         case .data(let destination):
             DataDestinationFeatureRoot(route: destination, repositories: repositories)
+        case .settingsHome:
+            SettingsFeatureRoot(route: { navigate(.settings($0)) }, repositories: repositories)
+        case .provider(let provider):
+            AppAIProviderSettingsScreen(initialProvider: provider)
         case .destructiveActions:
             OnboardingDestructiveActionsFeatureRoot(repositories: repositories)
         }
@@ -4978,4 +6163,11 @@ enum ProductFixture {
             ? TodayFixtures.populated
             : TodayFixtures.summary(for: metricState(for: composition))
     }
+}
+
+/// A meal open in Food's editor from a Today dial card.
+struct TodayMealEdit: Identifiable {
+    let draft: FoodMealDraft
+    let repository: AppFoodRepository
+    var id: UUID { draft.id }
 }

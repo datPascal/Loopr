@@ -155,7 +155,8 @@ public enum ExportMetricKind: String, CaseIterable, Codable, Hashable, Sendable 
 public enum ExportFirewallError: Error, Equatable, Sendable { case forbiddenMetric(String) }
 public enum HealthExportFirewall {
     public static let forbidden = Set(["readiness", "strain", "stress", "rmssd",
-        "uncalibratedOpticalOxygen", "relativeTemperature", "cardioAge", "looprAge"])
+        "uncalibratedOpticalOxygen", "relativeTemperature", "cardioAge", "looprAge",
+        "bloodAge", "phenoAge", "recovery", "looprScore"])
     public static func metric(named name: String) throws -> ExportMetricKind {
         guard let metric = ExportMetricKind(rawValue: name) else {
             throw ExportFirewallError.forbiddenMetric(name)

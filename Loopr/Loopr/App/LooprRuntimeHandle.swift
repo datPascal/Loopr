@@ -89,6 +89,10 @@ nonisolated final class LooprRuntimeHandle: LooprDeviceCenterRuntime, @unchecked
         try await require().readBandAlarm()
     }
 
+    func readBandAlarmStatus() async throws -> BandAlarmStatus {
+        try await require().readBandAlarmStatus()
+    }
+
     func testBandAlarm() async throws {
         try await require().testBandAlarm()
     }

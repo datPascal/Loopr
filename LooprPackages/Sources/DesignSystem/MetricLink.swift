@@ -47,6 +47,8 @@ public enum LooprMetricLinkID {
     public static let strain = "strain"
     public static let stress = "stress"
     public static let sleepDuration = "sleep_duration"
+    public static let sleepPerformance = "sleep_performance"
+    public static let sleepDebt = "sleep_debt"
     public static let sleepEfficiency = "sleep_efficiency"
     public static let deepSleep = "deep_sleep"
     public static let remSleep = "rem_sleep"
@@ -59,6 +61,6 @@ public enum LooprMetricLinkID {
     public static let all: [String] = [
         restingHeartRate, rmssd, sdnn, pNN50, respiratoryRate, sleepingHeartRate, heartRateDip,
         oxygenSaturation, skinTemperatureDeviation, recovery, strain, stress, sleepDuration,
-        sleepEfficiency, deepSleep, remSleep, sleepConsistency, vo2Max, maxHeartRate, activeEnergy, steps
+        sleepPerformance, sleepDebt, sleepEfficiency, deepSleep, remSleep, sleepConsistency, vo2Max, maxHeartRate, activeEnergy, steps
     ]
 }

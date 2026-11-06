@@ -32,16 +32,20 @@ public struct HealthSyncPreferences: Codable, Equatable, Sendable {
     public var disabledRead: Set<HealthHistoryQuantity>
     public var sleepReadEnabled: Bool
     public var disabledWrite: Set<ExportMetricKind>
+    /// The Apple Health source reads (DEC-12.16) the person switched off. VO₂ max
+    /// and steps follow `disabledRead` instead, so they never appear here.
+    public var disabledSources: Set<AppleHealthSourceKind>
     /// Pin export day assignment so travelling cannot duplicate cumulative totals.
     public let timeZoneIdentifier: String
     public init(enabled: Bool = true, disabledRead: Set<HealthHistoryQuantity> = [], sleepReadEnabled: Bool = true,
-                disabledWrite: Set<ExportMetricKind> = [], timeZoneIdentifier: String = TimeZone.current.identifier) {
+                disabledWrite: Set<ExportMetricKind> = [], disabledSources: Set<AppleHealthSourceKind> = [],
+                timeZoneIdentifier: String = TimeZone.current.identifier) {
         self.enabled = enabled; self.disabledRead = disabledRead; self.sleepReadEnabled = sleepReadEnabled
-        self.disabledWrite = disabledWrite
+        self.disabledWrite = disabledWrite; self.disabledSources = disabledSources
         self.timeZoneIdentifier = timeZoneIdentifier
     }
 
-    private enum CodingKeys: String, CodingKey { case enabled, disabledRead, sleepReadEnabled, disabledWrite, timeZoneIdentifier }
+    private enum CodingKeys: String, CodingKey { case enabled, disabledRead, sleepReadEnabled, disabledWrite, disabledSources, timeZoneIdentifier }
 
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -49,6 +53,7 @@ public struct HealthSyncPreferences: Codable, Equatable, Sendable {
         disabledRead = try values.decodeIfPresent(Set<HealthHistoryQuantity>.self, forKey: .disabledRead) ?? []
         sleepReadEnabled = try values.decodeIfPresent(Bool.self, forKey: .sleepReadEnabled) ?? true
         disabledWrite = try values.decodeIfPresent(Set<ExportMetricKind>.self, forKey: .disabledWrite) ?? []
+        disabledSources = try values.decodeIfPresent(Set<AppleHealthSourceKind>.self, forKey: .disabledSources) ?? []
         timeZoneIdentifier = try values.decode(String.self, forKey: .timeZoneIdentifier)
     }
 }
@@ -107,11 +112,14 @@ public actor HealthSyncEngine {
     }
 
     public func synchronize(key: String, metric: ExportMetricKind, samples: [HealthSyncSample], now: Date) async throws -> HealthSyncReport {
-        while processing { await withCheckedContinuation { attemptWaiters.append($0) } }
+        try Task.checkCancellation()
+        while processing {
+            await withCheckedContinuation { attemptWaiters.append($0) }
+            try Task.checkCancellation()
+        }
         guard !stopped, try store.preferences().enabled,
               !(try store.preferences()).disabledWrite.contains(metric) else { return HealthSyncReport() }
-        guard samples.allSatisfy({ $0.metric == metric && $0.value.isFinite && $0.start <= $0.end }),
-              Set(samples.map(\.identifier)).count == samples.count else { throw HealthSyncError.invalidSamples }
+        guard Self.validSamples(samples, metric: metric) else { throw HealthSyncError.invalidSamples }
         processing = true
         defer {
             processing = false
@@ -123,6 +131,13 @@ public actor HealthSyncEngine {
             for waiter in attempts { waiter.resume() }
         }
         var partition = try store.partition(key)
+        if let partition {
+            let identifiers = Set(partition.samples.map(\.identifier))
+            guard partition.version > 0, Self.validSamples(partition.samples, metric: metric),
+                  partition.saved.isSubset(of: identifiers), partition.obsolete.isDisjoint(with: identifiers) else {
+                throw HealthSyncError.invalidSamples
+            }
+        }
         if partition == nil && samples.isEmpty { return HealthSyncReport() }
         if partition?.samples != samples {
             let previous = partition
@@ -133,7 +148,9 @@ public actor HealthSyncEngine {
                 previous?.saved.contains($0.identifier) == true && previousSamples[$0.identifier] == $0
             }.map(\.identifier))
             // Wall-clock versions also remain newer after local data is reset.
-            let version = max((previous?.version ?? 0) + 1, Int(now.timeIntervalSince1970 * 1_000_000))
+            guard let clockVersion = Int(exactly: (now.timeIntervalSince1970 * 1_000_000).rounded(.down)),
+                  (previous?.version ?? 0) < Int.max else { throw HealthSyncError.invalidSamples }
+            let version = max((previous?.version ?? 0) + 1, clockVersion)
             partition = HealthSyncPartition(samples: samples, version: version, saved: unchanged,
                 obsolete: previousIDs.subtracting(nextIDs), lastError: nil, completedAt: nil)
             try store.savePartition(partition!, key: key)
@@ -193,6 +210,14 @@ public actor HealthSyncEngine {
         }
         report.pending = current.pendingCount
         return report
+    }
+    private static func validSamples(_ samples: [HealthSyncSample], metric: ExportMetricKind) -> Bool {
+        Set(samples.map(\.identifier)).count == samples.count && samples.allSatisfy {
+            !$0.identifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            $0.metric == metric && $0.value.isFinite &&
+            $0.start.timeIntervalSinceReferenceDate.isFinite && $0.end.timeIntervalSinceReferenceDate.isFinite &&
+            $0.start <= $0.end
+        }
     }
 }
 

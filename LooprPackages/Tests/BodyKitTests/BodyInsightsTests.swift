@@ -73,21 +73,21 @@ private func history(strain: [Double?], endingOn end: DayIdentity = anchor, reco
         #expect(hero.strain == 8.6)
         #expect(hero.target?.text == "14 to 18")
         #expect(hero.position == .below)
-        #expect(hero.verdict == "Below suggested range")
-        #expect(hero.rangeLegend == "Suggested 14 to 18 · recovery 74")
+        #expect(hero.verdict == "Below the range for your recovery")
+        #expect(hero.rangeLegend == "14 to 18 · Loopr's range for recovery 74")
         #expect(hero.sentence(isToday: true) == "There is room for more today.")
         #expect(hero.sentence(isToday: false) == nil)
         #expect(hero.accessibilityLabel(isToday: true)
-                == "Strain 8.6 of 21. Below suggested range. Suggested 14 to 18, from recovery 74. There is room for more today.")
-        #expect(hero.accessibilityLabel(isToday: false) == "Strain 8.6 of 21. Below suggested range. Suggested 14 to 18, from recovery 74.")
+                == "Strain 8.6 of 21. Below the range for your recovery. 14 to 18, Loopr's range for recovery 74. There is room for more today.")
+        #expect(hero.accessibilityLabel(isToday: false) == "Strain 8.6 of 21. Below the range for your recovery. 14 to 18, Loopr's range for recovery 74.")
     }
 
     @Test func verdictFollowsThePosition() {
-        #expect(BodyStrainHero.make(metric: strain("12.0"), recovery: 50).verdict == "In suggested range")
+        #expect(BodyStrainHero.make(metric: strain("12.0"), recovery: 50).verdict == "In the range for your recovery")
         #expect(BodyStrainHero.make(metric: strain("12.0"), recovery: 50).sentence(isToday: true) == nil)
-        #expect(BodyStrainHero.make(metric: strain("11.3"), recovery: 20).verdict == "Above suggested range")
+        #expect(BodyStrainHero.make(metric: strain("11.3"), recovery: 20).verdict == "Above the range for your recovery")
         #expect(BodyStrainHero.make(metric: strain("11.3"), recovery: 20).sentence(isToday: true) == "An easy evening helps tomorrow.")
-        #expect(BodyStrainHero.make(metric: strain("11.3"), recovery: 20).rangeLegend == "Suggested 4 to 10 · recovery 20")
+        #expect(BodyStrainHero.make(metric: strain("11.3"), recovery: 20).rangeLegend == "4 to 10 · Loopr's range for recovery 20")
     }
 
     @Test func noRecoveryMeansNoRangeAndSaysSo() {
@@ -95,8 +95,8 @@ private func history(strain: [Double?], endingOn end: DayIdentity = anchor, reco
         #expect(hero.target == nil)
         #expect(hero.verdict == nil)
         #expect(hero.rangeLegend == nil)
-        #expect(hero.sentence(isToday: true) == "There is no recovery score for today yet, so there is no suggested range.")
-        #expect(hero.sentence(isToday: false) == "There was no recovery score that day, so there is no suggested range.")
+        #expect(hero.sentence(isToday: true) == "There is no recovery score for today yet, so there is no range to compare with.")
+        #expect(hero.sentence(isToday: false) == "There was no recovery score that day, so there is no range to compare with.")
     }
 
     @Test func productionAgeCaptionBecomesTheProfilePrompt() {

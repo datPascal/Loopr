@@ -85,8 +85,15 @@ nonisolated enum LooprActivityLifecycle {
     }
 }
 
+/// What a strength session adds to the workout Live Activity: when the rest ends and which set is next.
+nonisolated struct TrainActivityOverlay: Equatable, Sendable {
+    var restEndsAt: Date?
+    var setSummary: String?
+}
+
 nonisolated enum LooprWorkoutActivityProjection {
-    static func state(for workout: WorkoutRecord, zones: HeartRateZoneSet?, now: Date) -> LooprWorkoutActivityAttributes.ContentState {
+    static func state(for workout: WorkoutRecord, zones: HeartRateZoneSet?, now: Date,
+                      train: TrainActivityOverlay? = nil) -> LooprWorkoutActivityAttributes.ContentState {
         let startedAt = workout.startedAt ?? workout.createdAt
         let elapsed = max(0, Int(workout.activeElapsed(at: now) ?? 0))
         let live = WorkoutLiveMetrics(workout: workout, zones: zones, now: now)
@@ -118,7 +125,9 @@ nonisolated enum LooprWorkoutActivityProjection {
             distanceMeters: distanceSample?.distanceMeters,
             paceSecondsPerKilometer: pace,
             targetName: workout.currentZoneTarget?.title,
-            targetStatus: workout.targetStatus(bpm: heartRate, at: now)
+            targetStatus: workout.targetStatus(bpm: heartRate, at: now),
+            restEndsAt: train?.restEndsAt.flatMap { $0 > now ? $0 : nil },
+            setSummary: train?.setSummary
         )
     }
 }

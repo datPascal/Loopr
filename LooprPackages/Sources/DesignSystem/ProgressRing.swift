@@ -206,7 +206,7 @@ public struct LooprProgressRing: View {
             .minimumScaleFactor(0.5)
 
             if let caption {
-                Text(caption.uppercased())
+                Text(caption.looprLabelCased)
                     .looprTypography(.lensCaption)
                     .foregroundStyle(Color.loopr(.inkSecondary))
                     .lineLimit(1)
@@ -466,8 +466,7 @@ public struct LooprRingHero<Footer: View>: View {
                     Color.loopr(.sheetFill),
                     in: RoundedRectangle(cornerRadius: LooprRadius.card, style: .continuous)
                 )
-                .shadow(color: Color.loopr(.ink).opacity(0.06), radius: 2, y: 1)
-                .shadow(color: Color.loopr(.ink).opacity(0.05), radius: 15, y: 10)
+                .shadow(color: Color.loopr(.ink).opacity(0.05), radius: 18, y: 6)
                 .padding(.horizontal, LooprSpacing.md)
         }
     }

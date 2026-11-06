@@ -24,7 +24,13 @@ enum AppHabitFeatureGate {
 
 public struct AppEnvironment: Sendable {
     public enum Root: String, Sendable { case onboarding, main }
-    public enum Composition: String, Sendable { case production, onboarding, pairing, empty, populated, stale, disconnected, activeWorkout, connectedMixedCapabilities }
+    public enum Composition: String, Sendable {
+        case production, onboarding, pairing, empty, populated, stale, disconnected, activeWorkout, connectedMixedCapabilities
+
+        /// Onboarding, pairing and empty launches stand for a fresh install, so they seed nothing the person has not
+        /// given: no workouts, no band or Apple Health readings, no meals (R3-NEW-3).
+        public var startsFresh: Bool { self == .onboarding || self == .pairing || self == .empty }
+    }
 
     public let composition: Composition
     public let root: Root

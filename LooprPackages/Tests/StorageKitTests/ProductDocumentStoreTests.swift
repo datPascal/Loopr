@@ -79,3 +79,27 @@ struct ProductDocumentStoreTests {
         try database.databasePool.close()
     }
 }
+
+extension ProductDocumentStoreTests {
+    @Test
+    func prefixDeletionIsLiteralCaseSensitiveAndNamespaced() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("LooprPrefix-\(UUID()).sqlite")
+        let database = try StorageDatabase(url: url, applicationVersion: "test")
+        defer {
+            try? database.databasePool.close()
+            for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: url.path + suffix) }
+        }
+        let store = try StorageDocumentStore(database: database, namespace: "one")
+        let other = try StorageDocumentStore(database: database, namespace: "two")
+        let keys = ["habit_1", "habitX1", "HABIT_1", "100%done", "100percent", "café.1"]
+        for key in keys {
+            try store.writeData(Data([1]), key: key)
+            try other.writeData(Data([2]), key: key)
+        }
+        try store.removeAll(whereKeyPrefix: "habit_")
+        try store.removeAll(whereKeyPrefix: "100%")
+        try store.removeAll(whereKeyPrefix: "café.")
+        #expect(Set(try store.keys()) == ["habitX1", "HABIT_1", "100percent"])
+        #expect(Set(try other.keys()) == Set(keys))
+    }
+}

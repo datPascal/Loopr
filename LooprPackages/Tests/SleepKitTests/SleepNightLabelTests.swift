@@ -24,13 +24,13 @@ struct SleepNightLabelTests {
         // The header used to say "LAST NIGHT · THU 24 → FRI 25 SEP" here.
         let meta = SleepDateFormatting.nightMeta(for: snapshot(DayIdentity(year: 2026, month: 9, day: 24), main: false),
                                                  today: thursdayMorning, calendar: calendar)
-        #expect(meta == "LAST NIGHT · WED 23 → THU 24 SEP")
+        #expect(meta == "Last night · Wed 23 → Thu 24 Sep")
     }
 
     @Test func aPastNightIsNotCalledLastNight() {
         let meta = SleepDateFormatting.nightMeta(for: snapshot(DayIdentity(year: 2026, month: 9, day: 23), main: true),
                                                  today: thursdayMorning, calendar: calendar)
-        #expect(meta == "TUE 22 → WED 23 SEP")
+        #expect(meta == "Tue 22 → Wed 23 Sep")
     }
 
     @Test func sharedDayHeaderFollowsTheSelectedDay() {
@@ -38,9 +38,9 @@ struct SleepNightLabelTests {
         let onToday = LooprDayNavigation(day: today, today: today, earliest: nil, calendar: calendar, onSelect: { _ in })
         // The shared header grammar: today is "last night", the date follows
         // from the navigator; any other day names its night.
-        #expect(LooprHeaderMeta.nightPhrase(onToday) == "LAST NIGHT")
+        #expect(LooprHeaderMeta.nightPhrase(onToday) == "Last night")
         let earlier = LooprDayNavigation(day: LooprDay(year: 2026, month: 9, day: 21), today: today, earliest: nil,
                                          calendar: calendar, onSelect: { _ in })
-        #expect(LooprHeaderMeta.nightPhrase(earlier) == "SUN 20 → MON 21 SEP")
+        #expect(LooprHeaderMeta.nightPhrase(earlier) == "Sun 20 → Mon 21 Sep")
     }
 }

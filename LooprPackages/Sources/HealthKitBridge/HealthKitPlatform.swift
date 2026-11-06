@@ -235,6 +235,13 @@ public final class LiveHealthKitClient: @unchecked Sendable,
         case "cardio": .mixedCardio
         case "yoga": .yoga
         case "hiit": .highIntensityIntervalTraining
+        case "pilates": .pilates
+        case "mobility": .flexibility
+        case "crossfit": .crossTraining
+        case "rowing": .rowing
+        case "climbing": .climbing
+        case "sport": .other
+        case "dance": .cardioDance
         default: .other
         }
     }

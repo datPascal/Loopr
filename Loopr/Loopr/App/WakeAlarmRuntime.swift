@@ -34,6 +34,13 @@ nonisolated struct WakeAlarmSnapshot: Equatable, Sendable {
     var assurance: StrapAlarmAssurance?
     var phoneLayerEnabled: Bool
     var bandConnected: Bool
+    var cancellationPending = false
+
+    var cancellationWarning: String? {
+        cancellationPending
+            ? "Loopr has not confirmed that both alarms are off. One may still ring. Try turning the alarm off again with your band connected."
+            : nil
+    }
 
     var isOn: Bool { configuration?.isEnabled == true }
 
@@ -94,7 +101,7 @@ protocol WakeAlarmControlling: Sendable {
     func retryBand() async throws
     /// RUN_ALARM: buzzes the band now.
     func testBuzz() async throws
-    func setPhoneLayerEnabled(_ enabled: Bool) async
+    func setPhoneLayerEnabled(_ enabled: Bool) async throws
 }
 
 // MARK: - Production
@@ -116,6 +123,7 @@ nonisolated struct LooprWakeAlarmController: WakeAlarmControlling {
     var armRecord = LooprStrapAlarmArmRecord()
     var calendar: Calendar = .autoupdatingCurrent
     var now: @Sendable () -> Date = { Date() }
+    var operations = LooprAlarmOperationQueue.shared
 
     private var setup: DeviceAlarmSetupService { DeviceAlarmSetupService(repository: repository) }
 
@@ -128,7 +136,8 @@ nonisolated struct LooprWakeAlarmController: WakeAlarmControlling {
                 now: now,
                 armRecord: armRecord,
                 phoneAlarm: phoneAlarm,
-                phonePreference: preference
+                phonePreference: preference,
+                operations: operations
             )
         }
     }
@@ -158,41 +167,49 @@ nonisolated struct LooprWakeAlarmController: WakeAlarmControlling {
                 ?? .unavailable("Loopr has no backup alarm on this iPhone.")
             assurance = StrapAlarmAssurance(band: .off, phoneBackup: backup)
         }
+        let phoneStillPresent = await phoneAlarm.lastOutcome() != nil
         return WakeAlarmSnapshot(
             configuration: configuration,
             assurance: assurance,
             phoneLayerEnabled: preference.isEnabled,
-            bandConnected: connected
+            bandConnected: connected,
+            cancellationPending: configuration?.isEnabled != true && (armRecord.needsDisable || phoneStillPresent)
         )
     }
 
     @discardableResult
     func save(_ plan: WakeAlarmPlan) async throws -> Date? {
-        let validated = try await setup.save(plan.configuration(updatedAt: now()))
-        guard validated.isEnabled else {
-            await clearLayers()
-            return nil
+        if let service {
+            return try await service.save(plan.configuration(updatedAt: now()), waitForBand: false)
         }
-        guard let fireDate = StrapAlarmSchedulePlanner.nextFireDate(
-            for: validated, after: now(), calendar: calendar
-        ) else {
-            throw LooprStrapAlarmError.noOccurrence
+        return try await operations.withLock {
+            let validated = try await setup.save(plan.configuration(updatedAt: now()))
+            guard validated.isEnabled else {
+                let needsBandCancellation = armRecord.read() != nil || armRecord.needsDisable
+                if needsBandCancellation {
+                    armRecord.setNeedsDisable(true)
+                    armRecord.invalidateVerification()
+                }
+                do { try await phoneAlarm.cancelChecked() }
+                catch {
+                    throw needsBandCancellation ? LooprStrapAlarmError.bothCancellationsPending : .phoneCancellationPending
+                }
+                guard !needsBandCancellation else { throw LooprStrapAlarmError.cancellationPending }
+                return nil
+            }
+            guard let fireDate = StrapAlarmSchedulePlanner.nextFireDate(
+                for: validated, after: now(), calendar: calendar
+            ) else { throw LooprStrapAlarmError.noOccurrence }
+            try await schedulePhone(at: fireDate, configuration: validated)
+            return fireDate
         }
-        await schedulePhone(at: fireDate)
-        if let service, await runtime?.runtimeState().acceptsBandCommands == true {
-            Task.detached { await service.arm(fireDate, reason: "saved from the wake alarm screen") }
-        }
-        // A disconnected band is armed by the event consumer's reconcile as
-        // soon as it reconnects; the screen says so.
-        return fireDate
     }
 
     func turnOff() async throws {
         let current = try await setup.load()
         var plan = WakeAlarmPlan(configuration: current)
         plan.isEnabled = false
-        _ = try await setup.save(plan.configuration(updatedAt: now()))
-        await clearLayers()
+        _ = try await save(plan)
     }
 
     func retryBand() async throws {
@@ -202,7 +219,8 @@ nonisolated struct LooprWakeAlarmController: WakeAlarmControlling {
         guard let fireDate = try await service.plannedFireDate() else {
             throw LooprStrapAlarmError.noOccurrence
         }
-        Task.detached { await service.arm(fireDate, reason: "sent again from the wake alarm screen") }
+        guard let configuration = try await setup.load() else { throw LooprStrapAlarmError.noOccurrence }
+        Task { await service.armIfCurrent(fireDate, configuration: configuration, reason: "sent again from the wake alarm screen") }
     }
 
     func testBuzz() async throws {
@@ -212,36 +230,34 @@ nonisolated struct LooprWakeAlarmController: WakeAlarmControlling {
         try await service.test()
     }
 
-    func setPhoneLayerEnabled(_ enabled: Bool) async {
-        preference.setEnabled(enabled)
-        guard enabled else {
-            await phoneAlarm.cancel()
-            return
+    func setPhoneLayerEnabled(_ enabled: Bool) async throws {
+        try await operations.withLock {
+            guard enabled else {
+                do { try await phoneAlarm.cancelChecked() }
+                catch { throw LooprStrapAlarmError.phoneCancellationPending }
+                preference.setEnabled(false)
+                return
+            }
+            preference.setEnabled(true)
+            guard let configuration = try? await setup.load(), configuration.isEnabled,
+                  let fireDate = StrapAlarmSchedulePlanner.nextFireDate(
+                    for: configuration, after: now(), calendar: calendar
+                  ) else { return }
+            try await schedulePhone(at: fireDate, configuration: configuration)
         }
-        guard let configuration = try? await setup.load(), configuration.isEnabled,
-              let fireDate = StrapAlarmSchedulePlanner.nextFireDate(
-                for: configuration, after: now(), calendar: calendar
-              ) else { return }
-        await schedulePhone(at: fireDate)
     }
 
-    private func schedulePhone(at fireDate: Date) async {
+    private func schedulePhone(at fireDate: Date, configuration: StrapAlarmConfiguration) async throws {
         guard preference.isEnabled else {
-            await phoneAlarm.cancel()
+            do { try await phoneAlarm.cancelChecked() }
+            catch { throw LooprStrapAlarmError.phoneCancellationPending }
             return
         }
         await phoneAlarm.prepare()
-        let outcome = await phoneAlarm.schedule(at: fireDate)
+        let outcome = await phoneAlarm.schedule(at: fireDate, repeating: configuration)
         BandActionLog.alarm("phone alarm from the wake alarm screen: \(outcome)")
     }
 
-    private func clearLayers() async {
-        if let service {
-            await service.turnOff()
-        } else {
-            await phoneAlarm.cancel()
-        }
-    }
 }
 
 // MARK: - Fixture

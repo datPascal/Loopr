@@ -130,7 +130,7 @@ assert_no_active_test_processes() {
     fi
     # Actions are exact whitespace-delimited fields, never slash boundaries. A literal path
     # component named "test" surrounded by spaces is conservatively indistinguishable from one.
-    if ! active_processes="$("$awk_bin" '
+    if ! active_processes="$("$awk_bin" -v repo_root="$repo_root" -v derived_data_path="$derived_data_path" '
 function has_action(action, field) {
     for (field = 3; field <= NF; field++) {
         if ($field == action) {
@@ -138,6 +138,22 @@ function has_action(action, field) {
         }
     }
     return 0
+}
+function is_other_project(field, foreign_scheme) {
+    # A named foreign scheme may use a different leased fleet worker. Keep
+    # nameless commands and anything referencing Loopr or its build tree
+    # conservative, including commands in another Loopr checkout.
+    if (index($0, repo_root) || index($0, derived_data_path) ||
+        $0 ~ /Loopr[.]xcodeproj/ || $0 ~ /LooprPackages/) {
+        return 0
+    }
+    for (field = 3; field < NF; field++) {
+        if ($field == "-scheme") {
+            if ($(field + 1) ~ /^Loopr/) { return 0 }
+            foreign_scheme = 1
+        }
+    }
+    return foreign_scheme
 }
 {
     if (NF < 2 || $1 !~ /^[0-9]+$/ || $2 == "") {
@@ -147,7 +163,7 @@ function has_action(action, field) {
     executable = $2
     sub("^.*/", "", executable)
     if (executable == "xctest" || executable ~ /[.]xctest$/ ||
-        (executable == "xcodebuild" && (has_action("test") || has_action("test-without-building"))) ||
+        (executable == "xcodebuild" && (has_action("test") || has_action("test-without-building")) && !is_other_project()) ||
         (executable == "swift" && has_action("test"))) {
         print $0
     }
@@ -239,7 +255,7 @@ elif any(.devicesAndConfigurations[]; ((.testPlanConfiguration.configurationId |
 elif any(.devicesAndConfigurations[]; ((.passedTests | nonnegative_integer) | not) or ((.failedTests | nonnegative_integer) | not) or ((.skippedTests | nonnegative_integer) | not) or ((.expectedFailures | nonnegative_integer) | not)) then
   error("summary device/configuration counts are not non-negative integers")
 elif any(.devicesAndConfigurations[]; ((.device.deviceId | ascii_downcase) != ($selected_udid | ascii_downcase) or .device.deviceName != $selected_device or .device.platform != "iOS Simulator" or (version_prefix_matches(.device.osVersion; $selected_runtime) | not))) then
-  error("summary device evidence does not match the selected iOS 26 simulator")
+  error("summary device evidence does not match the selected iOS 27 simulator")
 else
   [.totalTestCount, .passedTests, .failedTests, .skippedTests, .expectedFailures, .result] | @tsv
 end
@@ -304,13 +320,14 @@ elif any($nodes[]; (has("result") and ((.result | type) != "string"))) then
   error("test node result has an unexpected type")
 elif any($nodes[]; (has("result") and (.result as $node_result | (["Passed", "Failed", "Skipped", "Expected Failure", "unknown"] | index($node_result)) == null))) then
   error("test tree contains an unknown test result")
- # Xcode 26.3 emits results on every test node; an absent result is fail-closed.
-elif any($nodes[]; (has("result") | not)) then
+# Runtime Warning nodes are diagnostic metadata and may omit result.
+# Executed tests, runs, suites and plans still require an explicit pass.
+elif any($nodes[]; .nodeType != "Runtime Warning" and (has("result") | not)) then
   error("an emitted Xcode 26.3 test node lacks a result")
-elif any($nodes[]; .result != "Passed") then
+elif any($nodes[]; has("result") and .result != "Passed") then
   error("test tree contains a non-passed target or test node")
 elif ([$test_tree.devices[] | select((.deviceId | ascii_downcase) == ($selected_udid | ascii_downcase) and .deviceName == $selected_device and .platform == "iOS Simulator" and version_prefix_matches(.osVersion; $selected_runtime))] | length) != ($test_tree.devices | length) then
-  error("test tree destination evidence does not match the selected iOS 26 simulator")
+  error("test tree destination evidence does not match the selected iOS 27 simulator")
 else
   ([$test_tree | .. | objects | select(.nodeType == "Test Plan") | .name] | unique | sort) as $plans |
   ([$test_tree | .. | objects | select(.nodeType == "Unit test bundle" or .nodeType == "UI test bundle") | .name] | unique | sort) as $bundles |
@@ -365,11 +382,16 @@ package_dir="$repo_root/LooprPackages"
 results_dir="$repo_root/TestResults"
 visual_script_path="$script_dir/test-visual.sh"
 phase06_validator_path="$script_dir/verify-phase06.sh"
-package_test_targets='DomainKitTests,ProtocolKitTests,StorageKitTests,BluetoothKitTests,SyncKitTests,AnalyticsKitTests,HealthKitBridgeTests,WorkoutKitTests,NotificationKitTests,SharedSurfaceKitTests,CoachingKitTests,AIKitTests,ImportKitTests,DeviceActionsKitTests,DesignSystemTests,ProfileKitTests,OnboardingKitTests,DeviceCenterKitTests,TodayKitTests,CoachKitTests,SleepKitTests,HeartKitTests,BodyKitTests,RouteKitTests,JournalKitTests,CycleKitTests,RecordsKitTests,StressKitTests,SettingsKitTests,DataKitTests'
+package_test_targets='DomainKitTests,ProtocolKitTests,StorageKitTests,BluetoothKitTests,SyncKitTests,AnalyticsKitTests,HealthKitBridgeTests,WorkoutKitTests,NotificationKitTests,SharedSurfaceKitTests,CoachingKitTests,AIKitTests,ImportKitTests,DeviceActionsKitTests,DesignSystemTests,ProfileKitTests,OnboardingKitTests,DeviceCenterKitTests,TodayKitTests,CoachKitTests,SleepKitTests,HeartKitTests,BodyKitTests,RouteKitTests,FoodKitTests,TrainKitTests,JournalKitTests,CycleKitTests,RecordsKitTests,StressKitTests,SettingsKitTests,DataKitTests,RoutineKitTests'
 local_source_packages_dir="$repo_root/build/native-surface/SourcePackages"
-derived_data_path="$repo_root/build/derived-data/$lane_name"
+# A shared-Mac lane can reuse its own compile-only output without building a
+# second copy of every package. The default remains isolated by lane.
+derived_data_path="${LOOPR_DERIVED_DATA_PATH:-$repo_root/build/derived-data/$lane_name}"
+if [[ "$derived_data_path" != /* ]]; then
+    fail "LOOPR_DERIVED_DATA_PATH must be an absolute path"
+fi
 xcode_package_args=()
-xcodebuild_command=("$xcodebuild_bin")
+xcodebuild_command=("$xcodebuild_bin" -jobs 4)
 
 if [[ -f "$local_source_packages_dir/workspace-state.json" &&
       -d "$local_source_packages_dir/checkouts/GRDB.swift" ]]; then
@@ -639,7 +661,7 @@ if ! simulator_record="$("$jq_bin" -r --arg leased_udid "$IOS_SIMULATOR_UDID" '
   | .key as $runtime_key
   | select($runtime_key | test("^com\\.apple\\.CoreSimulator\\.SimRuntime\\.iOS-[0-9]+(-[0-9]+)*$"))
   | ($runtime_key | sub("^com\\.apple\\.CoreSimulator\\.SimRuntime\\.iOS-"; "") | split("-") | join(".")) as $runtime
-  | select($runtime | test("^26(\\.[0-9]+)*$"))
+  | select($runtime | test("^27(\\.[0-9]+)*$"))
   | .value[]
   | select(.isAvailable == true and .udid == $leased_udid)
   | {
@@ -658,15 +680,15 @@ if ! simulator_record="$("$jq_bin" -r --arg leased_udid "$IOS_SIMULATOR_UDID" '
 fi
 
 if [[ -z "$simulator_record" ]]; then
-    fail "no available Loopr-isolated or standard iPhone 17 simulator with an iOS 26 runtime was found"
+    fail "no available Loopr-isolated or standard iPhone 17 simulator with an iOS 27 runtime was found"
 fi
 
 IFS=$'\t' read -r selected_runtime selected_device selected_udid <<< "$simulator_record"
 if [[ -z "$selected_runtime" || -z "$selected_device" || -z "$selected_udid" ]]; then
     fail "simulator discovery returned an incomplete record: $simulator_record"
 fi
-if [[ ! "$selected_runtime" =~ ^26(\.[0-9]+)*$ ]]; then
-    fail "simulator discovery returned a non-iOS-26 runtime: $selected_runtime"
+if [[ ! "$selected_runtime" =~ ^27(\.[0-9]+)*$ ]]; then
+    fail "simulator discovery returned a non-iOS-27 runtime: $selected_runtime"
 fi
 if [[ ! "$selected_udid" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
     fail "simulator discovery returned an invalid UDID: $selected_udid"
@@ -723,8 +745,14 @@ if (( full_lane )); then
     lane_success_label="full simulator lane"
 fi
 
-if ! run_dir="$("$mktemp_bin" -d "$results_dir/$lane_name.XXXXXX")"; then
-    fail "could not reserve a unique result directory under $results_dir"
+if [[ -n "${LOOPR_RESULT_DIRECTORY:-}" ]]; then
+    run_dir="$LOOPR_RESULT_DIRECTORY"
+    [[ "$run_dir" == /* && ! -e "$run_dir" && ! -L "$run_dir" ]] || fail "LOOPR_RESULT_DIRECTORY must be an unused absolute path"
+    "$mkdir_bin" -m 700 "$run_dir" || fail "could not create result directory: $run_dir"
+else
+    if ! run_dir="$("$mktemp_bin" -d "$results_dir/$lane_name.XXXXXX")"; then
+        fail "could not reserve a unique result directory under $results_dir"
+    fi
 fi
 
 app_result="$run_dir/$app_result_stem.xcresult"
@@ -769,6 +797,9 @@ if (( full_lane )); then
             -derivedDataPath "$derived_data_path" \
             CODE_SIGNING_ALLOWED=NO
 fi
+
+run_command "leased simulator boot readiness" \
+    "$xcrun_bin" simctl bootstatus "$IOS_SIMULATOR_UDID" -b
 
 printf '%s: %s result bundle: %s\n' "$lane_name" "$app_result_label" "$app_result"
 # The source defines no changed-package algorithm, so use the safe full fast-unit fallback.

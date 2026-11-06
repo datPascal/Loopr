@@ -10,7 +10,12 @@ public final class HabitViewModel: ObservableObject {
     @Published public private(set) var settings = HabitSettings()
     @Published public private(set) var migrationSuggestions: [HabitMigrationSuggestion] = []
     @Published public private(set) var isLoading = true
+    @Published public private(set) var isSavingCheckIn = false
+    @Published public private(set) var isRefreshingInsights = false
     @Published public private(set) var errorMessage: String?
+    /// Habits that became protocol rules (ICP R1-UPG-1). The rule is where they are answered and edited, so the
+    /// Journal's check-in, its progress and its question editor leave them out. Their history stays.
+    @Published public private(set) var ruleHabitIDs: Set<HabitID> = []
 
     public let store: any HabitStore
     private let dateProvider: any DateProviding
@@ -20,6 +25,10 @@ public final class HabitViewModel: ObservableObject {
     private let journalStore: (any JournalStore)?
     private let reminderScheduler: any HabitReminderScheduling
     private let featureStageOverride: HabitFeatureStage?
+    private let autoFill: (any JournalAutoFillProviding)?
+    private var autoFillGeneration = 0
+    private let prepareInsights: (@Sendable () async throws -> Void)?
+    private let readRuleHabitIDs: (@Sendable () async -> Set<HabitID>)?
 
     public init(
         store: any HabitStore,
@@ -29,7 +38,10 @@ public final class HabitViewModel: ObservableObject {
         uuidProvider: any UUIDProviding = SystemUUIDProvider(),
         journalStore: (any JournalStore)? = nil,
         reminderScheduler: any HabitReminderScheduling = NoOpHabitReminderScheduler(),
-        featureStageOverride: HabitFeatureStage? = nil
+        featureStageOverride: HabitFeatureStage? = nil,
+        autoFill: (any JournalAutoFillProviding)? = nil,
+        prepareInsights: (@Sendable () async throws -> Void)? = nil,
+        ruleHabitIDs: (@Sendable () async -> Set<HabitID>)? = nil
     ) {
         self.store = store
         self.dateProvider = dateProvider
@@ -39,9 +51,23 @@ public final class HabitViewModel: ObservableObject {
         self.journalStore = journalStore
         self.reminderScheduler = reminderScheduler
         self.featureStageOverride = featureStageOverride
+        self.autoFill = autoFill
+        self.prepareInsights = prepareInsights
+        self.readRuleHabitIDs = ruleHabitIDs
     }
 
     public var activeDefinitions: [HabitDefinition] { definitions.filter { !$0.isArchived } }
+
+    /// The active questions the Journal still asks: every active habit that did not become a protocol rule.
+    public var checkInDefinitions: [HabitDefinition] { activeDefinitions.filter { !ruleHabitIDs.contains($0.id) } }
+
+    /// The active habits that are protocol rules now.
+    public var ruleDefinitions: [HabitDefinition] { activeDefinitions.filter { ruleHabitIDs.contains($0.id) } }
+
+    /// The Protocol tab passes the habits its rules came from after each load.
+    public func setRuleHabitIDs(_ ids: Set<HabitID>) {
+        if ids != ruleHabitIDs { ruleHabitIDs = ids }
+    }
 
     public var currentDay: DayIdentity {
         DayBoundaryCalculator.boundary(
@@ -57,6 +83,7 @@ public final class HabitViewModel: ObservableObject {
 
     public func load() async {
         isLoading = true
+        if let readRuleHabitIDs { setRuleHabitIDs(await readRuleHabitIDs()) }
         do {
             async let loadedDefinitions = store.definitions(includeArchived: true)
             async let loadedRecords = store.dayRecords()
@@ -110,10 +137,11 @@ public final class HabitViewModel: ObservableObject {
         await saveNewDefinition(name: name, question: question, source: .custom)
     }
 
-    public func rename(_ definition: HabitDefinition, name: String, question: String) async {
+    public func rename(_ definition: HabitDefinition, name: String, question: String, period: HabitQuestionPeriod? = nil) async {
         var output = definition
         output.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         output.question = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let period { output.questionPeriod = period }
         output.updatedAt = dateProvider.now()
         do {
             try await store.saveDefinition(output)
@@ -168,13 +196,137 @@ public final class HabitViewModel: ObservableObject {
     }
 
     public func completion(for day: DayIdentity) -> (answered: Int, total: Int) {
+        let asked = checkInDefinitions
         let answered = record(for: day)?.responses.filter { response in
-            activeDefinitions.contains { $0.id == response.habitID }
+            asked.contains { $0.id == response.habitID }
         }.count ?? 0
-        return (answered, activeDefinitions.count)
+        return (answered, asked.count)
     }
 
     public func clearError() { errorMessage = nil }
+
+    /// The days a comparison reads, ending on `day`: the days in the comparison window with an answer to a question
+    /// still asked. "Comparing 87 days" while the first comparison runs (ICP R3-HAB-04).
+    public func comparedDays(endingOn day: DayIdentity, policy: HabitImpactPolicy = .default) -> Int {
+        let asked = Set(activeDefinitions.map(\.id))
+        let end = day.habitKey
+        let start = shift(day, by: -(policy.windowDays - 1))?.habitKey ?? end
+        return records.filter { record in
+            let key = record.behaviorDay.habitKey
+            return key >= start && key <= end && record.responses.contains { asked.contains($0.habitID) }
+        }.count
+    }
+
+    public func refreshInsights() async {
+        guard (featureStageOverride ?? settings.featureStage).exposesEntryPoints else { return }
+        isRefreshingInsights = true
+        defer { isRefreshingInsights = false }
+        // The comparisons stored last time show at once; the fresh ones replace them when the engine is done, so the
+        // screen never waits on a "Loading" card for numbers it already has (ICP R2-VET-13, R2-HAB-01).
+        await load()
+        do {
+            if let prepareInsights {
+                try await prepareInsights()
+                try Task.checkCancellation()
+                // What the preparation stored shows before the fresh calculation starts (ICP R3-HAB-04).
+                await load()
+            }
+            let store = store, now = dateProvider.now(), calendar = calendarProvider
+            let calculation = Task.detached(priority: .utility) {
+                try await HabitInsightEngine(calendarProvider: calendar).recalculateAll(store: store, calculatedAt: now)
+            }
+            _ = try await withTaskCancellationHandler {
+                try await calculation.value
+            } onCancel: { calculation.cancel() }
+            try Task.checkCancellation()
+            await load()
+        } catch is CancellationError { }
+        catch { errorMessage = "Could not update your comparisons. \(error.localizedDescription)" }
+    }
+
+    public func refreshAutoFill(on selectedDay: DayIdentity) async {
+        autoFillGeneration += 1
+        let generation = autoFillGeneration
+        await load()
+        guard let autoFill, generation == autoFillGeneration, !Task.isCancelled else { return }
+        do {
+            let days = [behaviorDay(for: .evening, selectedDay: selectedDay), selectedDay]
+            for day in days {
+                let zone = checkInTimeZone(for: day)
+                let snapshot = try await autoFill.snapshot(for: day, timeZoneID: zone)
+                try Task.checkCancellation()
+                guard generation == autoFillGeneration else { return }
+                guard snapshot.day == day, snapshot.timeZoneID == zone else { throw JournalAutoFillError.invalidEvidence }
+                try await JournalAutoFillService(store: store, clock: dateProvider).reconcile(snapshot)
+            }
+            guard generation == autoFillGeneration, !Task.isCancelled else { return }
+            await load()
+        } catch is CancellationError { }
+        catch {
+            guard generation == autoFillGeneration else { return }
+            errorMessage = "Could not refresh logged answers. \(error.localizedDescription)"
+        }
+    }
+
+    /// The day an answer belongs to. The Journal's morning check-in asks about the evening before; a host that asks
+    /// about the selected day's own evening, as Protocol's evening sheet does, passes `eveningIsSameDay` (ICP R3-SEN-09).
+    public func behaviorDay(for period: HabitQuestionPeriod, selectedDay: DayIdentity, eveningIsSameDay: Bool = false) -> DayIdentity {
+        period == .evening && !eveningIsSameDay ? shift(selectedDay, by: -1) ?? selectedDay : selectedDay
+    }
+
+    public func checkInProgress(on day: DayIdentity, eveningIsSameDay: Bool = false) -> (answered: Int, total: Int) {
+        let wellbeing = record(for: day)?.wellbeing ?? JournalWellbeing()
+        let ratings = JournalFeeling.allCases.filter { wellbeing[$0] != nil }.count
+        let asked = checkInDefinitions
+        let questions = asked.filter { definition in
+            record(for: behaviorDay(for: definition.checkInPeriod, selectedDay: day, eveningIsSameDay: eveningIsSameDay))?
+                .response(for: definition.id) != nil
+        }.count
+        return (ratings + questions + (wellbeing.soreness == nil ? 0 : 1), JournalFeeling.allCases.count + asked.count + 1)
+    }
+
+    public func rate(_ feeling: JournalFeeling, value: JournalRating?, day: DayIdentity) async {
+        guard !isSavingCheckIn else { return }
+        isSavingCheckIn = true
+        defer { isSavingCheckIn = false }
+        do {
+            try await HabitCheckInService(store: store, dateProvider: dateProvider)
+                .rate(feeling, value: value, day: day, timeZoneID: checkInTimeZone(for: day))
+            await load()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    public func setSoreness(_ value: Set<JournalSoreness>?, day: DayIdentity) async {
+        guard !isSavingCheckIn else { return }
+        isSavingCheckIn = true
+        defer { isSavingCheckIn = false }
+        do {
+            try await HabitCheckInService(store: store, dateProvider: dateProvider)
+                .setSoreness(value, day: day, timeZoneID: checkInTimeZone(for: day))
+            await load()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    public func setCheckInAnswer(_ answer: HabitAnswer?, definition: HabitDefinition, selectedDay: DayIdentity,
+                                 eveningIsSameDay: Bool = false) async {
+        guard !isSavingCheckIn else { return }
+        isSavingCheckIn = true
+        defer { isSavingCheckIn = false }
+        let day = behaviorDay(for: definition.checkInPeriod, selectedDay: selectedDay, eveningIsSameDay: eveningIsSameDay)
+        let service = HabitCheckInService(store: store, dateProvider: dateProvider)
+        do {
+            if let answer {
+                try await service.answer(habitID: definition.id, day: day,
+                    timeZoneID: checkInTimeZone(for: day), answer: answer,
+                    source: day == currentDay ? .sameDay : .morningCheckIn)
+            } else { try await service.clearAnswer(habitID: definition.id, day: day) }
+            await load()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func checkInTimeZone(for day: DayIdentity) -> String {
+        record(for: day)?.behaviorTimeZoneID ?? timeZoneProvider.timeZone.identifier
+    }
 
     public func updateReminder(enabled: Bool, hour: Int, minute: Int) async {
         var output = settings

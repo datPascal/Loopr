@@ -126,7 +126,7 @@ struct SleepTimingChart: View {
             let count = consistency.nights.count
             ZStack(alignment: .topLeading) {
                 ForEach(Array(consistency.nights.enumerated()), id: \.element.id) { index, night in
-                    Text(night.date.formatted(.dateTime.weekday(.narrow)).uppercased())
+                    Text(night.date.formatted(.dateTime.weekday(.narrow)).looprLabelCased)
                         .looprTypography(.confidence)
                         .foregroundStyle(Color.loopr(index == count - 1 ? .ink : .inkSecondary))
                         .fixedSize()

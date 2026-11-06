@@ -154,6 +154,36 @@ final class HabitInsightsIntegrationTests: XCTestCase {
     }
 
     @MainActor
+    func testDeepSleepRequiresFiniteTypedMinutesWithinTheMainSleep() async throws {
+        let behaviorDay = DayIdentity(year: 2023, month: 11, day: 14)
+        let outcomeDay = DayIdentity(year: 2023, month: 11, day: 15)
+        let start = Date(timeIntervalSince1970: 1_699_977_600)
+        let session = SleepSessionSummary(id: "deep-night", start: start, end: start.addingTimeInterval(8 * 3600),
+            durationMinutes: 480, isMainSleep: true, isPartial: false, confidence: 0.9, state: .measuredZero)
+        let sleep = InMemorySleepRepository()
+        let resolver = AppHabitOutcomeResolver(today: InMemoryTodayRepository(), sleep: sleep, heart: InMemoryHeartRepository(),
+            dateProvider: FixedTestDateProvider(value: start.addingTimeInterval(10 * 3600)))
+        let record = HabitDayRecord(behaviorDay: behaviorDay, behaviorTimeZoneID: "Australia/Perth", createdAt: start)
+        let cases: [(Double, SleepMetricUnitID, MetricState, Bool)] = [
+            (90, .minutes, .measuredZero, true), (0, .minutes, .measuredZero, true),
+            (-1, .minutes, .measuredZero, false), (481, .minutes, .measuredZero, false),
+            (1, .hours, .measuredZero, false), (90, .minutes, .absent, false)
+        ]
+        for (value, unit, state, valid) in cases {
+            await sleep.replace(.init(day: outcomeDay, state: .measuredZero, mainSleep: session,
+                metrics: [.init(id: "deep", title: "Deep sleep", value: String(value), unit: unit.rawValue,
+                    state: state, source: "test", numericValue: value, numericUnit: unit)], source: "test"), for: outcomeDay)
+            let result = await resolver.resolve(record: record)
+            if valid {
+                guard case .outcome(let snapshot) = result else { XCTFail("Valid deep sleep was omitted"); continue }
+                XCTAssertEqual(snapshot.metrics[.deepSleepMinutes], value)
+            } else {
+                guard case .excluded = result else { XCTFail("Invalid deep sleep became an outcome"); continue }
+            }
+        }
+    }
+
+    @MainActor
     func testOutcomeResolverKeepsAvailableMetricsAndRecordsTypedFailures() async throws {
         let behaviorDay = DayIdentity(year: 2026, month: 8, day: 29)
         let outcomeDay = DayIdentity(year: 2026, month: 8, day: 30)

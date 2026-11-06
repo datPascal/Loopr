@@ -20,8 +20,8 @@ private struct FixedDate: DateProviding {
 /// phone and prints every computed metric. The database is never modified: it
 /// is copied into a temporary directory first.
 ///
-/// The file is not in the repository, so the whole suite skips itself unless
-/// `LOOPR_REAL_DB` points at one.
+/// Private-data methods require LOOPR_PRIVATE_DATABASE_AUDITS at compile time
+/// and a readable `LOOPR_REAL_DB` capture. The synthetic alarm test always runs.
 @MainActor
 final class RealDatabaseMetricAuditTests: XCTestCase {
     // The zone the copy was recorded in. Set `LOOPR_REAL_DB_ZONE`; defaults to this Mac's zone.
@@ -54,8 +54,9 @@ final class RealDatabaseMetricAuditTests: XCTestCase {
             createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 0))
     }
 
+    #if LOOPR_PRIVATE_DATABASE_AUDITS
     func testRealDatabaseDayProducesSaneMetrics() async throws {
-        try XCTSkipIf(Self.databasePath == nil, "No real strap database available")
+        _ = try XCTUnwrap(Self.databasePath, "Private audit requires a readable device database")
         let (history, products, root) = try copiedHistory()
         defer { try? FileManager.default.removeItem(at: root) }
 
@@ -169,6 +170,7 @@ final class RealDatabaseMetricAuditTests: XCTestCase {
         XCTAssertTrue((0...100).contains(reading.score))
         XCTAssertLessThanOrEqual(reading.confidence, 0.4)
     }
+    #endif
 
     /// The suggested alarm is the median recent bedtime plus the sleep need.
     /// It never appeared in the product because analytics never produced one.
@@ -206,8 +208,9 @@ final class RealDatabaseMetricAuditTests: XCTestCase {
 
     /// A profile with no height or weight must not crash or invent an energy
     /// figure; it must land in the documented "add your details" state.
+    #if LOOPR_PRIVATE_DATABASE_AUDITS
     func testMissingBodyMeasurementsYieldTheDesignedEmptyState() async throws {
-        try XCTSkipIf(Self.databasePath == nil, "No real strap database available")
+        _ = try XCTUnwrap(Self.databasePath, "Private audit requires a readable device database")
         let (history, products, root) = try copiedHistory()
         defer { try? FileManager.default.removeItem(at: root) }
         let upper = try history.read { db in try Int64.fetchOne(db, sql: "SELECT MAX(absolute_timestamp) FROM decoded_second") ?? 0 }
@@ -234,4 +237,5 @@ final class RealDatabaseMetricAuditTests: XCTestCase {
         XCTAssertEqual(steps.state, .absent)
         XCTAssertEqual(steps.confidence, "A few more days of wear and this is ready")
     }
+    #endif
 }

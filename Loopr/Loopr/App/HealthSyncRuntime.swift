@@ -99,6 +99,7 @@ nonisolated struct ProductDerivationDeletionGroup: PersistentDataDeletionDeleter
 nonisolated struct LooprHealthSyncStatus: Sendable {
     var enabled = true
     var disabledRead: Set<HealthHistoryQuantity> = []
+    var disabledSources: Set<AppleHealthSourceKind> = []
     var sleepReadEnabled = true
     var disabledWrite: Set<ExportMetricKind> = []
     var readPermissionNeeded = false
@@ -111,7 +112,7 @@ nonisolated struct LooprHealthSyncStatus: Sendable {
     var error: String?
 }
 
-actor LooprHealthSyncRuntime: PersistentDataDeletionDeleter, LooprBackgroundHealthSynchronizing {
+actor LooprHealthSyncRuntime: PersistentDataDeletionDeleter, LooprBackgroundHealthSynchronizing, AppleHealthSourceGating {
     nonisolated let storeName = "health-sync.runtime"
     // These have production sources. Active energy joined the list once the
     // derivation started reporting real kilocalories from the person's
@@ -155,6 +156,7 @@ actor LooprHealthSyncRuntime: PersistentDataDeletionDeleter, LooprBackgroundHeal
             let preferences = try store.preferences()
             result.enabled = preferences.enabled
             result.disabledRead = preferences.disabledRead
+            result.disabledSources = preferences.disabledSources
             result.sleepReadEnabled = preferences.sleepReadEnabled
             result.disabledWrite = preferences.disabledWrite
             for metric in Self.metrics.subtracting(preferences.disabledWrite) {
@@ -167,9 +169,10 @@ actor LooprHealthSyncRuntime: PersistentDataDeletionDeleter, LooprBackgroundHeal
             }
             #if canImport(HealthKit)
             let reading = Set(HealthHistoryQuantity.allCases).subtracting(preferences.disabledRead)
-            if !reading.isEmpty || preferences.sleepReadEnabled {
+            let sources = Self.enabledSources(for: preferences)
+            if !reading.isEmpty || preferences.sleepReadEnabled || !sources.isEmpty {
                 result.readPermissionNeeded = !(await LiveHealthHistoryClient().historyReadAccessRequested(
-                    reading: reading, readSleep: preferences.sleepReadEnabled))
+                    reading: reading, readSleep: preferences.sleepReadEnabled, sources: sources))
             }
             #endif
             for key in try store.documents.keys() where key.hasPrefix("summary.") {
@@ -227,6 +230,52 @@ actor LooprHealthSyncRuntime: PersistentDataDeletionDeleter, LooprBackgroundHeal
         }
     }
 
+    /// Switches one Apple Health source read (DEC-12.16) on or off. VO₂ max and
+    /// steps keep their existing switches and go through `setReadEnabled`.
+    func setSourceEnabled(_ enabled: Bool, for kind: AppleHealthSourceKind) async throws {
+        guard !stopped else { throw CancellationError() }
+        if let quantity = kind.historyQuantity {
+            try await setReadEnabled(enabled, for: quantity)
+            return
+        }
+        var preferences = try store.preferences()
+        if enabled { preferences.disabledSources.remove(kind) }
+        else { preferences.disabledSources.insert(kind) }
+        try store.savePreferences(preferences)
+        NotificationCenter.default.post(name: looprHealthReadPreferencesChanged, object: nil)
+        if enabled, preferences.enabled {
+            #if canImport(HealthKit)
+            if !(await LiveHealthHistoryClient().historyReadAccessRequested(
+                reading: [], readSleep: false, sources: [kind])),
+               let authorizer = client as? any HealthHistoryAuthorizing {
+                try await authorizer.requestAuthorization(sharing: [], reading: [], readSleep: false, sources: [kind])
+            }
+            #endif
+        }
+    }
+
+    /// True when Apple Health is on in Loopr and this read is left on. Both
+    /// the history switches and the source switches count.
+    func allowsSource(_ kind: AppleHealthSourceKind) -> Bool {
+        guard let preferences = try? store.preferences(), preferences.enabled else { return false }
+        return Self.allows(kind, in: preferences)
+    }
+
+    /// The service the app uses to read the eight Apple Health kinds.
+    nonisolated func appleHealthSources() -> AppleHealthSources {
+        AppleHealthSources(gate: self)
+    }
+
+    nonisolated static func allows(_ kind: AppleHealthSourceKind, in preferences: HealthSyncPreferences) -> Bool {
+        if let quantity = kind.historyQuantity { return !preferences.disabledRead.contains(quantity) }
+        return !preferences.disabledSources.contains(kind)
+    }
+
+    /// The source kinds `requestPermission()` adds to the read request.
+    nonisolated static func enabledSources(for preferences: HealthSyncPreferences) -> Set<AppleHealthSourceKind> {
+        Set(AppleHealthSourceKind.allCases.filter { allows($0, in: preferences) })
+    }
+
     func allowsRead(_ quantity: HealthHistoryQuantity) -> Bool {
         guard HealthHistoryQuantity.allCases.contains(quantity),
               let preferences = try? store.preferences() else { return false }
@@ -260,7 +309,7 @@ actor LooprHealthSyncRuntime: PersistentDataDeletionDeleter, LooprBackgroundHeal
             // access for the metric history import.
             if let history = client as? any HealthHistoryAuthorizing {
                 try await history.requestAuthorization(sharing: request.writes, reading: request.reads,
-                    readSleep: request.readsSleep)
+                    readSleep: request.readsSleep, sources: Self.enabledSources(for: preferences))
             } else {
                 try await client.requestWriteAuthorization(for: request.writes)
             }

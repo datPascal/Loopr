@@ -63,11 +63,62 @@ public enum UnitSystem: String, Codable, CaseIterable, Sendable {
 
 public struct ProfileSettings: Codable, Equatable, Sendable {
     public var displayName: String?
-    public var age: Int?
+    /// The stored input, as the canonical profile keeps it. Age is worked out from it, so the field the Data and
+    /// Fitness rulers ask for ("your birth year in Profile") is the field Profile shows (R2-UPG-2).
+    public var birthYear: Int?
     public var heightCentimeters: Double?
     public var weightKilograms: Double?
     public var biologicalSex: String?
-    public init(displayName: String? = nil, age: Int? = nil, heightCentimeters: Double? = nil, weightKilograms: Double? = nil, biologicalSex: String? = nil) { self.displayName = displayName; self.age = age; self.heightCentimeters = heightCentimeters; self.weightKilograms = weightKilograms; self.biologicalSex = biologicalSex }
+
+    public init(displayName: String? = nil, birthYear: Int? = nil, heightCentimeters: Double? = nil, weightKilograms: Double? = nil, biologicalSex: String? = nil) { self.displayName = displayName; self.birthYear = birthYear; self.heightCentimeters = heightCentimeters; self.weightKilograms = weightKilograms; self.biologicalSex = biologicalSex }
+
+    /// For callers that speak in years old: the birth year is estimated from the age this calendar year.
+    public init(displayName: String? = nil, age: Int?, heightCentimeters: Double? = nil, weightKilograms: Double? = nil, biologicalSex: String? = nil) {
+        self.init(displayName: displayName, birthYear: age.map { Self.currentYear() - $0 }, heightCentimeters: heightCentimeters,
+                  weightKilograms: weightKilograms, biologicalSex: biologicalSex)
+    }
+
+    /// Whole years this calendar year. The profile keeps the year only, so this can be one high before the birthday.
+    public var age: Int? {
+        get { birthYear.map { max(0, Self.currentYear() - $0) } }
+        set { birthYear = newValue.map { Self.currentYear() - $0 } }
+    }
+
+    /// The birth years Profile accepts: ages 13 to 120, as `ProfileValidator` checks them.
+    public static func acceptedBirthYears(currentYear: Int = ProfileSettings.currentYear()) -> ClosedRange<Int> {
+        (currentYear - 120)...(currentYear - 13)
+    }
+
+    public static func currentYear(_ date: Date = Date()) -> Int {
+        Calendar(identifier: .gregorian).component(.year, from: date)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case displayName, birthYear, age, heightCentimeters, weightKilograms, biologicalSex
+    }
+
+    /// Snapshots saved before the birth year kept `age` only. They migrate to the birth year that age gives this year.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
+        if let year = try container.decodeIfPresent(Int.self, forKey: .birthYear) {
+            birthYear = year
+        } else {
+            birthYear = try container.decodeIfPresent(Int.self, forKey: .age).map { Self.currentYear() - $0 }
+        }
+        heightCentimeters = try container.decodeIfPresent(Double.self, forKey: .heightCentimeters)
+        weightKilograms = try container.decodeIfPresent(Double.self, forKey: .weightKilograms)
+        biologicalSex = try container.decodeIfPresent(String.self, forKey: .biologicalSex)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(displayName, forKey: .displayName)
+        try container.encodeIfPresent(birthYear, forKey: .birthYear)
+        try container.encodeIfPresent(heightCentimeters, forKey: .heightCentimeters)
+        try container.encodeIfPresent(weightKilograms, forKey: .weightKilograms)
+        try container.encodeIfPresent(biologicalSex, forKey: .biologicalSex)
+    }
 }
 
 public struct AccessibilitySettings: Codable, Equatable, Sendable {
@@ -88,7 +139,34 @@ public struct SurfacePrivacySettings: Codable, Equatable, Sendable {
     public var batteryWidget: Bool
     public var watchSnapshot: Bool
     public var liveActivity: Bool
-    public init(todayWidget: Bool = true, batteryWidget: Bool = true, watchSnapshot: Bool = true, liveActivity: Bool = true) { self.todayWidget = todayWidget; self.batteryWidget = batteryWidget; self.watchSnapshot = watchSnapshot; self.liveActivity = liveActivity }
+    /// The bedtime countdown on the lock screen and in the Dynamic Island (DEC-12.17). Off until the person turns it on
+    /// here or from the first-evening card. It also needs `liveActivity`.
+    public var bedtimeLiveActivity: Bool
+    public init(todayWidget: Bool = true, batteryWidget: Bool = true, watchSnapshot: Bool = true, liveActivity: Bool = true, bedtimeLiveActivity: Bool = false) { self.todayWidget = todayWidget; self.batteryWidget = batteryWidget; self.watchSnapshot = watchSnapshot; self.liveActivity = liveActivity; self.bedtimeLiveActivity = bedtimeLiveActivity }
+
+    private enum CodingKeys: String, CodingKey { case todayWidget, batteryWidget, watchSnapshot, liveActivity, bedtimeLiveActivity }
+
+    /// Settings saved before the bedtime switch existed have no key for it. They decode with it off, and the other
+    /// four keep their stored values.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        todayWidget = try container.decode(Bool.self, forKey: .todayWidget)
+        batteryWidget = try container.decode(Bool.self, forKey: .batteryWidget)
+        watchSnapshot = try container.decode(Bool.self, forKey: .watchSnapshot)
+        liveActivity = try container.decode(Bool.self, forKey: .liveActivity)
+        bedtimeLiveActivity = try container.decodeIfPresent(Bool.self, forKey: .bedtimeLiveActivity) ?? false
+    }
+}
+
+public extension Notification.Name {
+    /// Posted after Settings saves. The bedtime Live Activity listens, so the switch takes effect without a relaunch.
+    /// `userInfo` holds `SurfacePrivacyChange.bedtimeKey` and `SurfacePrivacyChange.liveActivityKey` as `Bool`.
+    static let looprSurfacePrivacyDidChange = Notification.Name("com.loopr.settings.surfacePrivacyDidChange")
+}
+
+public enum SurfacePrivacyChange {
+    public static let bedtimeKey = "bedtimeLiveActivity"
+    public static let liveActivityKey = "liveActivity"
 }
 
 public struct SettingsSnapshot: Codable, Equatable, Sendable {
@@ -483,7 +561,7 @@ public actor InMemorySettingsRepository: SettingsRepository, SettingsSectionRese
     public func snapshot() -> SettingsSnapshot { value }
     public func update(_ snapshot: SettingsSnapshot) throws {
         if let goal = snapshot.goals.stepGoal, goal <= 0 { throw SettingsError.invalidGoal }
-        if let age = snapshot.profile.age, !(0...130).contains(age) { throw SettingsError.invalidProfile }
+        if let year = snapshot.profile.birthYear, !((ProfileSettings.currentYear() - 130)...ProfileSettings.currentYear()).contains(year) { throw SettingsError.invalidProfile }
         value = snapshot
     }
     public func resetProfile() { value.profile = ProfileSettings(); value.goals = GoalSettings() }
@@ -573,6 +651,10 @@ public actor SettingsViewModel {
     }
     public func update(_ snapshot: SettingsSnapshot) async throws {
         try await repository.update(snapshot)
+        NotificationCenter.default.post(name: .looprSurfacePrivacyDidChange, object: nil, userInfo: [
+            SurfacePrivacyChange.bedtimeKey: snapshot.surfacePrivacy.bedtimeLiveActivity,
+            SurfacePrivacyChange.liveActivityKey: snapshot.surfacePrivacy.liveActivity
+        ])
         if let tokenBridge {
             try await tokenBridge.apply(DesignSystemTokenState(
                 appearance: snapshot.appearance,

@@ -26,10 +26,10 @@ public enum MetricState: String, Codable, CaseIterable, Sendable {
         case .lowConfidence: "Low confidence"
         case .settling: "Updating"
         case .stale: "Out of date"
-        case .disconnected: "Strap disconnected"
+        case .disconnected: "Band disconnected"
         case .bluetoothOff: "Bluetooth is off"
         case .permissionDenied: "Permission needed"
-        case .unsupportedHardware: "Not supported by this strap"
+        case .unsupportedHardware: "Not supported by this band"
         case .recoverableError: "Could not load data"
         case .destructiveFailure: "Data recovery needed"
         }
@@ -38,15 +38,15 @@ public enum MetricState: String, Codable, CaseIterable, Sendable {
     public var detail: String {
         switch self {
         case .loading: "Getting the latest measurements."
-        case .noRecords: "Wear your strap to begin building this view."
+        case .noRecords: "Wear your band to start filling this view."
         case .absent: "No measurement was recorded for this period."
         case .measuredZero: "A valid measurement of zero was recorded."
         case .partial: "Some measurements are still missing."
         case .lowConfidence: "Use this estimate with caution."
         case .settling: "Recent data is being recomputed."
-        case .stale: "Connect your strap to refresh this result."
-        case .disconnected: "Reconnect your strap to continue syncing."
-        case .bluetoothOff: "Turn on Bluetooth to connect to your strap."
+        case .stale: "Connect your band to refresh this result."
+        case .disconnected: "Reconnect your band to keep syncing."
+        case .bluetoothOff: "Turn on Bluetooth to connect to your band."
         case .permissionDenied: "Allow access in Settings to show this information."
         case .unsupportedHardware: "This feature is unavailable for the connected model."
         case .recoverableError: "Try again without losing your saved data."
@@ -183,12 +183,14 @@ public struct LooprRowPresentation: Equatable, Sendable {
 public struct HairlineMetricRow: View, Identifiable {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     public let id: String
+    private let accessibilityID: String?
     public let title: String
     public let confidence: String?
     public let value: String
     public let unit: String?
     public let accent: LooprColorToken?
     public let valueStyle: LooprTextStyle?
+    public let captionStyle: LooprTextStyle?
 
     public let showsDisclosure: Bool
     private let action: (() -> Void)?
@@ -201,16 +203,19 @@ public struct HairlineMetricRow: View, Identifiable {
         unit: String? = nil,
         accent: LooprColorToken? = nil,
         valueStyle: LooprTextStyle? = nil,
+        captionStyle: LooprTextStyle? = nil,
         showsDisclosure: Bool = false,
         action: (() -> Void)? = nil
     ) {
         self.id = id ?? title
+        self.accessibilityID = id
         self.title = title
         self.confidence = confidence
         self.value = value
         self.unit = unit
         self.accent = accent
         self.valueStyle = valueStyle
+        self.captionStyle = captionStyle
         self.showsDisclosure = showsDisclosure
         self.action = action
     }
@@ -246,10 +251,12 @@ public struct HairlineMetricRow: View, Identifiable {
         let shown = presentation
         var parts = [title]
         if !shown.value.isEmpty {
+            // "−4" is read "minus 4", never "hyphen 4".
+            let spokenValue = LooprSignedNumber.spoken(text: shown.value)
             if let unit = shown.unit {
-                parts.append("\(shown.value) \(LooprUnitFormatter.spokenUnit(unit))")
+                parts.append("\(spokenValue) \(LooprUnitFormatter.spokenUnit(unit))")
             } else {
-                parts.append(shown.value)
+                parts.append(spokenValue)
             }
         }
         if let caption = shown.caption { parts.append(caption) }
@@ -263,6 +270,8 @@ public struct HairlineMetricRow: View, Identifiable {
         interactiveRow
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilitySummary)
+            .accessibilityAddTraits(action == nil ? [] : .isButton)
+            .modifier(LooprOptionalIdentifier(accessibilityID))
     }
 
     @ViewBuilder
@@ -289,8 +298,8 @@ public struct HairlineMetricRow: View, Identifiable {
                     .foregroundStyle(Color.loopr(.ink))
                     .fixedSize(horizontal: false, vertical: true)
                 if let caption = shown.caption {
-                    Text(shown.captionIsSentence ? caption : caption.uppercased())
-                        .looprTypography(shown.captionIsSentence ? .caption : .confidence)
+                    Text(captionStyle != nil || shown.captionIsSentence ? caption : caption.looprLabelCased)
+                        .looprTypography(captionStyle ?? (shown.captionIsSentence ? .caption : .confidence))
                         .foregroundStyle(Color.loopr(.inkSecondary))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -449,7 +458,7 @@ public struct StickyHeader: View {
                             .foregroundStyle(Color.loopr(.ink))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
-                        Text(meta.uppercased())
+                        Text(meta.looprLabelCased)
                             .looprTypography(.headerMeta)
                             .foregroundStyle(Color.loopr(.inkSecondary))
                             .lineLimit(1)
@@ -483,7 +492,7 @@ public struct StickyHeader: View {
                 var content = LooprTabHeaderContent(
                     title: title,
                     accent: .brand,
-                    dayPhrase: meta.isEmpty ? nil : meta.uppercased(),
+                    dayPhrase: meta.isEmpty ? nil : meta.looprLabelCased,
                     status: status,
                     control: trailingAccessory.map(LooprHeaderControl.custom) ?? .none
                 )
@@ -531,6 +540,16 @@ private struct BandConnectedKey: EnvironmentKey {
     static let defaultValue = false
 }
 
+/// Whether a band is paired at all, connected or not. Without one, an empty view says what feeds it instead of asking
+/// the person to wear a band they may not own (R1-NEW-2). Defaults to true, the wording every view had before.
+private struct BandPairedKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+private struct NoBandEmptyDetailKey: EnvironmentKey {
+    static let defaultValue = MetricState.noBandDetail
+}
+
 private struct ConnectedEmptyDetailKey: EnvironmentKey {
     static let defaultValue = "Your band is connected. Keep wearing it while Loopr collects measurements. Sleep and recovery need overnight data; live heart rate is available in Heart."
 }
@@ -544,13 +563,40 @@ public extension EnvironmentValues {
         get { self[ConnectedEmptyDetailKey.self] }
         set { self[ConnectedEmptyDetailKey.self] = newValue }
     }
+    /// A band is paired, connected or not. The shell sets it from the band link.
+    var bandPaired: Bool {
+        get { self[BandPairedKey.self] }
+        set { self[BandPairedKey.self] = newValue }
+    }
+    /// What an empty view says when no band is paired: what fills it, and that a band is optional.
+    var noBandEmptyDetail: String {
+        get { self[NoBandEmptyDetailKey.self] }
+        set { self[NoBandEmptyDetailKey.self] = newValue }
+    }
+}
+
+public extension MetricState {
+    /// The no-records title when no band is paired.
+    static let noBandTitle = "Nothing here yet"
+    /// The no-records detail when no band is paired. A view that knows its own sources sets `noBandEmptyDetail`.
+    static let noBandDetail = "This view fills in from a band's overnight data. Food, Fitness, Protocol and Apple Health work without one. To add a band, open Settings, then Band."
 }
 
 public struct StateMessage: View {
     @Environment(\.bandConnected) private var bandConnected
     @Environment(\.connectedEmptyDetail) private var connectedEmptyDetail
-    private var title: String { state == .noRecords && bandConnected ? "Waiting for your first measurements" : state.title }
-    private var detail: String { state == .noRecords && bandConnected ? connectedEmptyDetail : state.detail }
+    @Environment(\.bandPaired) private var bandPaired
+    @Environment(\.noBandEmptyDetail) private var noBandEmptyDetail
+    private var title: String {
+        guard state == .noRecords else { return state.title }
+        if bandConnected { return "Waiting for your first measurements" }
+        return bandPaired ? state.title : MetricState.noBandTitle
+    }
+    private var detail: String {
+        guard state == .noRecords else { return state.detail }
+        if bandConnected { return connectedEmptyDetail }
+        return bandPaired ? state.detail : noBandEmptyDetail
+    }
 
     @ScaledMetric(relativeTo: .body) private var symbolSize = 24
     private let state: MetricState
@@ -626,55 +672,57 @@ public enum ChipTone: CaseIterable, Sendable {
 
 public struct StatusChip: View {
     private let label: String
-    private let symbol: String
+    private let symbol: String?
     private let tone: ChipTone
     private let accentOverride: LooprColorToken?
 
     public init(
         _ label: String,
-        symbol: String = "circle.fill",
+        symbol: String? = "circle.fill",
         tone: ChipTone = .neutral,
         accent: LooprColorToken? = nil
     ) {
-        self.label = label
+        self.label = label.looprLabelCased
         self.symbol = symbol
         self.tone = tone
         accentOverride = accent
     }
 
     public var accessibilitySummary: String { label }
-    public var hasNonColorDifferentiator: Bool { !label.isEmpty && !symbol.isEmpty }
+    public var hasNonColorDifferentiator: Bool { !label.isEmpty || symbol?.isEmpty == false }
 
     public var body: some View {
-        Label {
-            Text(label)
-                .textCase(.uppercase)
-        } icon: {
-            Image(systemName: symbol)
+        Group {
+            if let symbol { Label(label, systemImage: symbol) }
+            else { Text(label) }
         }
             .looprTypography(.chip)
-            .foregroundStyle(Color.loopr(labelToken))
+            // Darkened in light mode until it reads at 4.5:1 on the chip's tint.
+            .foregroundStyle(labelToken.tintedLabelColor)
             .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color.loopr(accentToken).opacity(isDark ? 0.13 : 0.10), in: Capsule(style: .continuous))
-            .overlay {
-                Capsule(style: .continuous)
-                    .strokeBorder(Color.loopr(accentToken).opacity(isDark ? 0.30 : 0.25), lineWidth: 1)
-                    .allowsHitTesting(false)
-            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .background(Color.loopr(accentToken).opacity(isDark ? 0.14 : 0.10), in: Capsule(style: .continuous))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label)
     }
 
     @Environment(\.colorScheme) private var colorScheme
 
-    private var accentToken: LooprColorToken {
+    private var accentToken: LooprColorToken { Self.accentToken(for: accentOverride, tone: tone) }
+
+    /// The fill colour for a chip. `accent: .movement` keeps the movement token, so it follows the
+    /// movement palette if that ever stops matching the brand. Colours with no chip family fall back to brand.
+    public static func accentToken(for accentOverride: LooprColorToken?, tone: ChipTone = .neutral) -> LooprColorToken {
         if let accentOverride {
             switch accentOverride {
+            case .movement: .movement
             case .sleep, .sleepSweep, .sleepChip, .sleepAwake, .sleepLight, .sleepDeep, .sleepREM: .sleep
-            case .heart, .heartSoft, .heartSweep, .heartChip, .stress, .cycle, .cyclePlum, .critical: .heart
+            case .heart, .heartSoft, .heartSweep, .heartChip, .stress, .cycle, .cyclePlum, .protocol, .critical: .heart
             case .strain, .strainSweep, .strainChip, .energy, .warning: .strain
+            case .recoveryHigh, .recoveryHighSweep: .recoveryHigh
+            case .recoveryMid, .recoveryMidSweep: .recoveryMid
+            case .recoveryLow, .recoveryLowSweep: .recoveryLow
             default: .brand
             }
         } else {
@@ -772,7 +820,7 @@ public struct MetricCard: View {
         if let confidence, !LooprRowPresentation.silentCaptions.contains(confidence.lowercased()) {
             VStack(alignment: .leading, spacing: LooprSpacing.xxs - 1) {
                 LooprText(title, style: .cardTitle)
-                LooprText(confidence.uppercased(), style: .confidence, color: .inkSecondary)
+                LooprText(confidence.looprLabelCased, style: .confidence, color: .inkSecondary)
             }
         } else {
             LooprText(title, style: .cardTitle)
@@ -784,29 +832,41 @@ public struct LooprButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     public static let minimumTargetHeight: CGFloat = 56
     private let prominent: Bool
+    private let accent: LooprColorToken
+    private let circular: Bool
+    private let quiet: Bool
 
-    public init(prominent: Bool = true) { self.prominent = prominent }
+    public init(prominent: Bool = true, accent: LooprColorToken = .brand, circular: Bool = false, quiet: Bool = false) {
+        self.prominent = prominent; self.accent = accent; self.circular = circular; self.quiet = quiet
+    }
+    private var shape: AnyShape {
+        circular ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: LooprRadius.control, style: .continuous))
+    }
 
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .looprTypography(.label)
-            .foregroundStyle(prominent ? Color.loopr(.background) : Color.loopr(.brand))
+            .looprTypography(.button)
+            .foregroundStyle(prominent && !quiet ? accent.filledLabelColor : accent.tintedLabelColor)
             .frame(maxWidth: .infinity, minHeight: Self.minimumTargetHeight)
+            // A quiet button has a clear background, so without this only its text takes taps.
+            .contentShape(shape)
             .background(
-                prominent ? Color.loopr(.brand) : Color.loopr(.brand).opacity(0.10),
-                in: RoundedRectangle(cornerRadius: LooprRadius.control, style: .continuous)
+                quiet ? Color.clear : prominent ? Color.loopr(accent) : Color.loopr(accent).opacity(0.12),
+                in: shape
             )
             .overlay {
-                if !prominent {
-                    RoundedRectangle(cornerRadius: LooprRadius.control, style: .continuous)
-                        .strokeBorder(Color.loopr(.brand).opacity(0.25), lineWidth: 1)
+                // A soft highlight along the top edge of a filled button, as if lit from above.
+                if prominent && !quiet {
+                    shape.fill(LinearGradient(colors: [.white.opacity(0.16), .clear], startPoint: .top, endPoint: .center))
+                        .allowsHitTesting(false)
                 }
             }
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .brightness(configuration.isPressed ? -0.04 : 0)
             .animation(
                 reduceMotion || DesignSystemRuntime.state().reduceMotion == true
                     ? .linear(duration: 0)
-                    : LooprMotion.stateChange,
+                    : .spring(response: 0.28, dampingFraction: 0.72),
                 value: configuration.isPressed
             )
     }
@@ -816,18 +876,21 @@ public struct LooprRow<Trailing: View>: View {
     public static var minimumTargetHeight: CGFloat { 56 }
     private let title: String
     private let subtitle: String?
-    private let symbol: String
+    private let symbol: String?
+    private let accent: LooprColorToken
     private let trailing: Trailing
 
     public init(
         title: String,
         subtitle: String? = nil,
-        symbol: String,
+        symbol: String?,
+        accent: LooprColorToken = .brand,
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.title = title
         self.subtitle = subtitle
         self.symbol = symbol
+        self.accent = accent
         self.trailing = trailing()
     }
 
@@ -837,12 +900,14 @@ public struct LooprRow<Trailing: View>: View {
 
     public var body: some View {
         HStack(spacing: LooprSpacing.md) {
-            Image(systemName: symbol)
-                .looprTypography(.rowTitle)
-                .foregroundStyle(Color.loopr(.brand))
-                .frame(width: 32, height: 32)
-                .background(Color.loopr(.brandSoft), in: Circle())
-                .accessibilityHidden(true)
+            if let symbol {
+                Image(systemName: symbol)
+                    .looprTypography(.rowTitle)
+                    .foregroundStyle(Color.loopr(accent))
+                    .frame(width: LooprSpacing.xxl, height: LooprSpacing.xxl)
+                    .background(Color.loopr(accent).opacity(0.12), in: Circle())
+                    .accessibilityHidden(true)
+            }
             VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
                 LooprText(title, style: .rowTitle)
                 if let subtitle { LooprText(subtitle, style: .prose, color: .inkSecondary) }
@@ -852,6 +917,7 @@ public struct LooprRow<Trailing: View>: View {
                 .foregroundStyle(Color.loopr(.inkSecondary))
                 .looprTypography(.metricUnit)
         }
+        .padding(.vertical, LooprSpacing.xs)
         .frame(minHeight: Self.minimumTargetHeight)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -860,8 +926,8 @@ public struct LooprRow<Trailing: View>: View {
 }
 
 public extension LooprRow where Trailing == Image {
-    init(title: String, subtitle: String? = nil, symbol: String) {
-        self.init(title: title, subtitle: subtitle, symbol: symbol) {
+    init(title: String, subtitle: String? = nil, symbol: String?, accent: LooprColorToken = .brand) {
+        self.init(title: title, subtitle: subtitle, symbol: symbol, accent: accent) {
             Image(systemName: "chevron.right")
         }
     }

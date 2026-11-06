@@ -18,7 +18,7 @@ struct WorkoutDatePickerRow: View {
         }
         .datePickerStyle(.compact)
         .looprTypography(.settingsRow)
-        .tint(Color.loopr(.movement))
+        .tint(Color.loopr(.workoutAccent))
         .padding(.horizontal, LooprSpacing.formCardPadding)
         .padding(.vertical, LooprSpacing.formRowVerticalPadding)
         .frame(maxWidth: .infinity, minHeight: LooprSpacing.interactiveRowHeight, alignment: .leading)

@@ -313,7 +313,7 @@ enum HeartAlertPresentation {
 
     static func meta(_ record: HeartAlertRecord) -> String {
         let date = record.date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
-        return "\(date) · \(deliveryLabel(record.delivery))".uppercased()
+        return "\(date) · \(deliveryLabel(record.delivery))".looprLabelCased
     }
 
     static func value(_ record: HeartAlertRecord) -> String {
@@ -378,7 +378,7 @@ struct HeartAlertDetailScreen: View {
         let direction = episode.kind == .high ? "above" : "below"
         LooprSurface(emphasis: .hero(.heart)) {
             VStack(alignment: .leading, spacing: LooprSpacing.xs) {
-                LooprText(start.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased(), style: .sectionLabel, color: .inkSecondary)
+                LooprText(start.formatted(.dateTime.weekday(.wide).day().month(.wide)).looprLabelCased, style: .sectionLabel, color: .inkSecondary)
                 HStack(alignment: .firstTextBaseline, spacing: LooprSpacing.xxs) {
                     LooprText("\(Int(episode.medianBPM.rounded()))", style: .metric)
                     LooprText("bpm median", style: .metricUnit, color: .inkSecondary)

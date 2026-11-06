@@ -29,6 +29,8 @@ public extension LocalRouteExporter {
             "<gpx version=\"1.1\" creator=\"Loopr\" xmlns=\"http://www.topografix.com/GPX/1/1\" xmlns:gpxtpx=\"http://www.garmin.com/xmlschemas/TrackPointExtension/v1\">",
             "  <trk>",
             "    <name>\(Self.xmlText(name ?? route.activity.rawValue.capitalized))</name>",
+            // Strava and others file the upload under this sport.
+            "    <type>\(route.activity.gpxType)</type>",
             "    <trkseg>"
         ]
         let gaps = Set(route.gapStartIndices)
@@ -87,6 +89,17 @@ public extension LocalRouteExporter {
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
             .replacingOccurrences(of: "'", with: "&apos;")
+    }
+}
+
+extension RouteActivity {
+    var gpxType: String {
+        switch self {
+        case .run: "running"
+        case .cycle: "cycling"
+        case .walk: "walking"
+        case .hike: "hiking"
+        }
     }
 }
 

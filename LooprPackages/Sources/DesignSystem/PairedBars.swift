@@ -161,7 +161,7 @@ public struct LooprPairedBars: View {
             } else {
                 RoundedRectangle(cornerRadius: 2).fill(Color.loopr(style.accent)).frame(width: 10, height: 10)
             }
-            Text(style.title.uppercased())
+            Text(style.title.looprLabelCased)
                 .looprTypography(.sectionLabel)
                 .foregroundStyle(Color.loopr(.inkSecondary))
         }

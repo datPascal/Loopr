@@ -152,7 +152,7 @@ public struct DeviceCenterScreen: View {
                 }
             }
         }
-        .navigationTitle("Device Center")
+        .navigationTitle("Band")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(LooprAppearance.isDark(colorScheme) ? .dark : .light, for: .navigationBar)
@@ -282,7 +282,7 @@ public struct DeviceCenterScreen: View {
         accent: LooprColorToken
     ) -> some View {
         VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
-            LooprText(title.uppercased(), style: .sectionLabel, color: .inkSecondary)
+            LooprText(title.looprLabelCased, style: .sectionLabel, color: .inkSecondary)
             HStack(alignment: .firstTextBaseline, spacing: LooprSpacing.xxs) {
                 LooprText(value, style: .metricValue, color: accent)
                     .lineLimit(1)

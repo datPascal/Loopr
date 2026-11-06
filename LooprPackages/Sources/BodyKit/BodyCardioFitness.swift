@@ -60,7 +60,7 @@ public enum BodyCardioFitnessPresenter {
     // https://support.apple.com/en-us/108790
     public static let empty = BodyCardioFitnessPresentation(title: "Cardio fitness", eyebrow: "From Apple Health",
         value: nil, unit: nil,
-        detail: "Cardio fitness needs three Apple Health readings over at least two weeks. An Apple Watch can record one during an outdoor walk, run or hike. Allow Loopr to read cardio fitness in Health settings.",
+        detail: "Cardio fitness needs three Apple Health readings over at least two weeks. An Apple Watch can record one during an outdoor walk, run or hike. Allow Loopr to read cardio fitness in the Health app.",
         state: .absent, level: nil)
 
     public static func present(_ fitness: BodyCardioFitness, resolution: CardioFitnessResolution?) -> BodyCardioFitnessPresentation {
@@ -98,7 +98,7 @@ struct BodyCardioFitnessCard: View {
                     VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
                         LooprText(presentation.title, style: .cardTitle)
                         if let eyebrow = presentation.eyebrow {
-                            LooprText(eyebrow.uppercased(), style: .confidence, color: .inkSecondary)
+                            LooprText(eyebrow.looprLabelCased, style: .confidence, color: .inkSecondary)
                         }
                     }
                     .layoutPriority(1)

@@ -11,13 +11,14 @@ final class MetricDetailUITests: XCTestCase {
     func testHeartDetailCardsOpenMetricPages() {
         let app = launch()
         selectTab(app, "Heart", root: "heart-screen")
-        XCTAssertTrue(element(app, "heart-vitals-section").waitForExistence(timeout: 10))
+        // Recovery opens on its chart, then last night's numbers, each opening its metric page (Data ICP R3).
+        XCTAssertTrue(element(app, "data-last-night").waitForExistence(timeout: 10))
         capture(app, "heart-overnight-vitals")
-        tapWhenHittable(element(app, "heart-vital-rmssd"), in: app)
+        tapWhenHittable(element(app, "data-last-night-rmssd"), in: app)
         assertMetricPage(app)
         captureScrolled(app, "metric-rmssd")
         goBack(app, to: "heart-screen")
-        tapWhenHittable(element(app, "heart-vital-resting_heart_rate"), in: app)
+        tapWhenHittable(element(app, "data-last-night-resting_heart_rate"), in: app)
         assertMetricPage(app)
         XCTAssertTrue(element(app, "metric-detail-status").waitForExistence(timeout: 5))
         captureScrolled(app, "metric-resting-heart-rate")
@@ -40,7 +41,7 @@ final class MetricDetailUITests: XCTestCase {
         captureScrolled(app, "metric-sdnn")
         goBack(app, to: "heart-screen")
 
-        XCTAssertTrue(element(app, "heart-vitals-section").exists)
+        XCTAssertTrue(element(app, "data-last-night").exists)
         XCTAssertFalse(element(app, "heart-trends-route").exists)
         capture(app, "heart-single-history-home")
     }
@@ -153,6 +154,8 @@ final class MetricDetailUITests: XCTestCase {
 
     @MainActor
     private func selectTab(_ app: XCUIApplication, _ tab: String, root identifier: String) {
+        if ["Sleep", "Heart", "Body", "Workouts"].contains(tab) { _ = app.openLooprArea(tab); return }
+
         for _ in 0..<6 {
             let tabButton = app.tabBars.firstMatch.buttons[tab].firstMatch
             if tabButton.waitForExistence(timeout: 3), tabButton.isHittable {

@@ -99,12 +99,12 @@ public enum LooprUnitFormatter {
             if value >= 1_000 {
                 return LooprMeasurement(value: fraction(value / 1_000, digits: 1), unit: "km")
             }
-            return LooprMeasurement(value: Int(value.rounded()).formatted(), unit: "m")
+            return LooprMeasurement(value: Int(value.rounded()).formatted(.number.locale(displayLocale)), unit: "m")
         case .imperial:
             if value >= metresPerMile {
                 return LooprMeasurement(value: fraction(value / metresPerMile, digits: 1), unit: "mi")
             }
-            return LooprMeasurement(value: Int((value / metresPerFoot).rounded()).formatted(), unit: "ft")
+            return LooprMeasurement(value: Int((value / metresPerFoot).rounded()).formatted(.number.locale(displayLocale)), unit: "ft")
         }
     }
 
@@ -147,7 +147,7 @@ public enum LooprUnitFormatter {
 
     /// The minus sign every signed number uses. A hyphen reads as a dash in a
     /// monospaced font and sits too low next to a plus.
-    public static let minusSign = "\u{2212}"
+    public static let minusSign = LooprSignedNumber.minusSign
 
     /// A duration the way people say it: `7 h 42 m`, `8 h`, or `24 min` below
     /// an hour. Rounds to the nearest minute. Nil for a value that is not a
@@ -190,10 +190,7 @@ public enum LooprUnitFormatter {
     /// `digits` places, so a caption never says "+0".
     public static func signed(_ value: Double, digits: Int = 0) -> String? {
         guard value.isFinite else { return nil }
-        let text = displayNumber(abs(value), digits: digits)
-        let rounded = (abs(value) * pow(10, Double(digits))).rounded()
-        guard rounded != 0 else { return displayNumber(0, digits: digits) }
-        return (value > 0 ? "+" : minusSign) + text
+        return LooprSignedNumber.text(value, fractionDigits: digits, locale: displayLocale)
     }
 
     /// A plain number at a fixed precision: `14.6`, `8,240`.
@@ -206,7 +203,11 @@ public enum LooprUnitFormatter {
         return displayNumber(value, digits: digits)
     }
 
-    static let displayLocale = Locale(identifier: "en_US")
+    /// The one locale Loopr writes numbers in, on every tab (ICP R2-LAB-18, R2-OPT-21). Hero numbers, Food's totals
+    /// and Data's method pages read it too, so one screen never shows "1.240" beside "2,450". About 75
+    /// `String(format:)` call sites and the test fleet (en_US with a German region) assume these digits; moving Loopr
+    /// to the device's own number style is a switch of this one value plus those sites, decided for the whole app.
+    public static let displayLocale = Locale(identifier: "en_US")
 
     private static func displayNumber(_ value: Double, digits: Int) -> String {
         value.formatted(.number.precision(.fractionLength(max(0, digits))).locale(displayLocale))
@@ -336,6 +337,6 @@ public enum LooprUnitFormatter {
     }
 
     private static func fraction(_ value: Double, digits: Int) -> String {
-        value.formatted(.number.precision(.fractionLength(digits)))
+        value.formatted(.number.precision(.fractionLength(digits)).locale(displayLocale))
     }
 }

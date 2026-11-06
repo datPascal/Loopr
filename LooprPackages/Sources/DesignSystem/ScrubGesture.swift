@@ -88,6 +88,28 @@ public extension View {
         modifier(LooprScrubGesture(holdDuration: holdDuration, onChange: onChange))
     }
 
+    /// Hold-then-drag scrubbing across `slots` equal slots, such as a bar
+    /// chart's days. On top of the engage haptic, each new slot under the
+    /// finger plays `.selection`, at most 30 a second, with a little
+    /// hysteresis so a finger resting on a boundary does not buzz.
+    func looprScrub(
+        slots: Int,
+        holdDuration: Double = LooprScrub.holdDuration,
+        onChange: @escaping @MainActor (CGFloat?) -> Void
+    ) -> some View {
+        modifier(LooprScrubGesture(holdDuration: holdDuration, slots: slots, onChange: onChange))
+    }
+
+    /// The same hold-then-drag for a round object such as Today's dial: `onChange` receives the whole point under the
+    /// finger in this view's own coordinates, and nil when it lifts. The page still scrolls when a drag starts on the
+    /// view without the hold, and stays put once scrubbing starts. One selection haptic plays when it engages.
+    func looprScrubPoint(
+        holdDuration: Double = LooprScrub.holdDuration,
+        onChange: @escaping @MainActor (CGPoint?) -> Void
+    ) -> some View {
+        modifier(LooprPointScrubGesture(holdDuration: holdDuration, onChange: onChange))
+    }
+
     /// The same gesture writing into a binding: the x position while
     /// scrubbing, nil otherwise.
     func looprScrub(_ x: Binding<CGFloat?>, holdDuration: Double = LooprScrub.holdDuration) -> some View {
@@ -95,38 +117,94 @@ public extension View {
     }
 }
 
-/// The hold-then-drag scrub as a view modifier. Most callers use
-/// `.looprScrub { x in ... }`, which applies this.
-public struct LooprScrubGesture: ViewModifier {
+/// The hold-then-drag scrub reporting the whole point. Callers use `.looprScrubPoint { point in ... }`.
+struct LooprPointScrubGesture: ViewModifier {
     let holdDuration: Double
-    let onChange: @MainActor (CGFloat?) -> Void
+    let onChange: @MainActor (CGPoint?) -> Void
     @State private var engagements = 0
     @State private var isScrubbing = false
 
-    public init(holdDuration: Double = LooprScrub.holdDuration, onChange: @escaping @MainActor (CGFloat?) -> Void) {
-        self.holdDuration = holdDuration
-        self.onChange = onChange
-    }
-
-    public func body(content: Content) -> some View {
+    func body(content: Content) -> some View {
         #if canImport(UIKit)
         content
-            .gesture(LooprScrubRecognizer(holdDuration: holdDuration) { x in
-                if let x {
-                    if !isScrubbing {
-                        isScrubbing = true
-                        engagements += 1
-                    }
-                    onChange(x)
-                } else {
-                    isScrubbing = false
-                    onChange(nil)
-                }
+            .gesture(LooprScrubRecognizer(holdDuration: holdDuration) { point in
+                if point != nil, !isScrubbing { engagements += 1 }
+                isScrubbing = point != nil
+                onChange(point)
             })
             .sensoryFeedback(.selection, trigger: engagements)
         #else
         content
         #endif
+    }
+}
+
+/// The hold-then-drag scrub as a view modifier. Most callers use
+/// `.looprScrub { x in ... }`, which applies this.
+public struct LooprScrubGesture: ViewModifier {
+    let holdDuration: Double
+    let slots: Int?
+    let onChange: @MainActor (CGFloat?) -> Void
+    @State private var engagements = 0
+    @State private var isScrubbing = false
+    @State private var width: CGFloat = 0
+    @State private var slotIndex: Int?
+    @State private var tracker: LooprDetentTracker?
+
+    public init(holdDuration: Double = LooprScrub.holdDuration, onChange: @escaping @MainActor (CGFloat?) -> Void) {
+        self.init(holdDuration: holdDuration, slots: nil, onChange: onChange)
+    }
+
+    /// With `slots`, each new slot under the finger plays a capped `.selection` (`LooprDetent`).
+    public init(holdDuration: Double = LooprScrub.holdDuration, slots: Int?, onChange: @escaping @MainActor (CGFloat?) -> Void) {
+        self.holdDuration = holdDuration
+        self.slots = slots.flatMap { $0 > 0 ? $0 : nil }
+        self.onChange = onChange
+    }
+
+    /// The slot detents for `slots` slots: one stop per slot centre.
+    public static func detent(slots: Int) -> LooprDetent {
+        LooprDetent(range: 0...Double(max(slots - 1, 0)), step: 1, hysteresis: 0.15)
+    }
+
+    /// The continuous slot position under `x`, where slot `i` is centred on `i`.
+    public static func slotPosition(x: CGFloat, width: CGFloat, slots: Int) -> Double {
+        LooprScrubMath.fraction(x: x, width: width) * Double(max(slots, 1)) - 0.5
+    }
+
+    public func body(content: Content) -> some View {
+        #if canImport(UIKit)
+        content
+            .gesture(LooprScrubRecognizer(holdDuration: holdDuration) { point in
+                if let x = point?.x {
+                    if !isScrubbing {
+                        isScrubbing = true
+                        engagements += 1
+                    }
+                    trackSlot(x)
+                    onChange(x)
+                } else {
+                    isScrubbing = false
+                    tracker?.reset()
+                    slotIndex = nil
+                    onChange(nil)
+                }
+            })
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .sensoryFeedback(.selection, trigger: engagements)
+            .looprDetentFeedback(slotIndex)
+        #else
+        content
+        #endif
+    }
+
+    private func trackSlot(_ x: CGFloat) {
+        guard let slots, width > 0 else { return }
+        var tracker = tracker ?? LooprDetentTracker(Self.detent(slots: slots))
+        let step = tracker.update(Self.slotPosition(x: x, width: width, slots: slots), at: LooprHapticClock.now())
+        self.tracker = tracker
+        // The engage haptic covers the first slot; each later slot ticks through the detent feedback.
+        slotIndex = step.index
     }
 }
 
@@ -138,7 +216,8 @@ public struct LooprScrubGesture: ViewModifier {
 /// a drag does not reliably do either inside a `ScrollView`.
 private struct LooprScrubRecognizer: UIGestureRecognizerRepresentable {
     let holdDuration: Double
-    let onChange: @MainActor (CGFloat?) -> Void
+    /// The finger's position in the view's own coordinates, nil when it lifts.
+    let onChange: @MainActor (CGPoint?) -> Void
 
     func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
         let recognizer = UILongPressGestureRecognizer()
@@ -154,7 +233,7 @@ private struct LooprScrubRecognizer: UIGestureRecognizerRepresentable {
     func handleUIGestureRecognizerAction(_ recognizer: UILongPressGestureRecognizer, context: Context) {
         switch recognizer.state {
         case .began, .changed:
-            onChange(context.converter.localLocation.x)
+            onChange(context.converter.localLocation)
         case .ended, .cancelled, .failed:
             onChange(nil)
         default:
@@ -235,7 +314,7 @@ public struct LooprScrubReadout: View {
 
     private var label: some View {
         VStack(alignment: .center, spacing: 1) {
-            Text(title.uppercased())
+            Text(title.looprLabelCased)
                 .looprTypography(.confidence)
                 .foregroundStyle(Color.loopr(.inkSecondary))
             Text(value ?? "No reading")

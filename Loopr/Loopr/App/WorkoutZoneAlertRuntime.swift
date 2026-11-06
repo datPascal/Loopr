@@ -58,15 +58,19 @@ actor WorkoutZoneAlertRuntime {
         }
     }
 
-    func configure(_ preference: WorkoutZoneAlertPreference) async {
+    @discardableResult
+    func configure(_ preference: WorkoutZoneAlertPreference) async -> UUID {
         cueTask?.cancel()
         cueTask = nil
-        await delivery?.invalidate()
+        let previousDelivery = delivery
         cueSessionID = UUID()
         self.preference = preference
         revision = UUID()
+        let revision = self.revision
         machine.reset()
         lastSampleTime = nil
+        await previousDelivery?.invalidate()
+        return revision
     }
 
     func stop() {
@@ -86,7 +90,10 @@ actor WorkoutZoneAlertRuntime {
     @discardableResult
     func receive(_ workout: WorkoutRecord) async -> Task<Void, Never>? {
         guard workout.id == workoutID else { return nil }
-        if let saved = workout.zoneAlertPreference, saved != preference { await configure(saved) }
+        if let saved = workout.zoneAlertPreference, saved != preference {
+            let revision = await configure(saved)
+            guard workout.id == workoutID, self.revision == revision else { return nil }
+        }
         guard workout.state == .active || workout.state == .paused else {
             stop()
             return nil
@@ -94,11 +101,12 @@ actor WorkoutZoneAlertRuntime {
         if workout.state == .paused {
             cueTask?.cancel()
             cueTask = nil
-            await delivery?.invalidate()
+            let previousDelivery = delivery
             cueSessionID = UUID()
             revision = UUID()
             machine.reset()
             lastSampleTime = workout.samples.last?.timestamp
+            await previousDelivery?.invalidate()
             return nil
         }
         guard workout.state == .active,

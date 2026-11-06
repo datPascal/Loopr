@@ -23,6 +23,9 @@ public struct LooprDayNavigator: View {
         case bar(title: String? = nil, subtitle: String? = nil)
     }
 
+    /// The width of each step button in the compact layout.
+    static let compactStepWidth: CGFloat = 40
+
     @Environment(\.colorScheme) private var colorScheme
     private let navigation: LooprDayNavigation
     private let style: Style
@@ -68,6 +71,7 @@ public struct LooprDayNavigator: View {
                     .strokeBorder(Color.loopr(.surfaceStroke), lineWidth: 1)
                     .allowsHitTesting(false)
             }
+            .frame(height: LooprSpacing.interactiveRowHeight)
             .modifier(AdjustableDay(navigation: navigation))
         }
         .animation(.easeOut(duration: LooprMotion.fast), value: navigation.isToday)
@@ -83,7 +87,7 @@ public struct LooprDayNavigator: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 if let subtitle {
-                    Text(subtitle.uppercased())
+                    Text(subtitle.looprLabelCased)
                         .looprTypography(.headerMeta)
                         .foregroundStyle(Color.loopr(.inkSecondary))
                         .lineLimit(1)
@@ -114,11 +118,13 @@ public struct LooprDayNavigator: View {
             direction == .back ? navigation.goBack() : navigation.goForward()
         } label: {
             Image(systemName: direction == .back ? "chevron.left" : "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
+                .looprTypography(.prose)
                 .foregroundStyle(Color.loopr(enabled ? .ink : .inkMuted))
-                .frame(width: 34, height: 32)
-                // The visible control is compact; the touch target is not.
-                .contentShape(Rectangle().inset(by: -6))
+                // 40 pt wide in the header, so a past day's Today pill fits beside it on one row; the touch target
+                // reaches past the edges to 48 pt.
+                .frame(width: style == .compact ? Self.compactStepWidth : LooprSpacing.interactiveRowHeight,
+                       height: LooprSpacing.headerControlDiameter)
+                .contentShape(Rectangle().inset(by: -LooprSpacing.xxs))
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
@@ -136,7 +142,7 @@ public struct LooprDayNavigator: View {
                 .foregroundStyle(Color.loopr(accent))
                 .lineLimit(1)
                 .padding(.horizontal, 10)
-                .frame(height: 32)
+                .frame(height: LooprSpacing.headerControlDiameter)
                 .background(Color.loopr(accent).opacity(isDark ? 0.16 : 0.12), in: Capsule(style: .continuous))
                 .overlay {
                     Capsule(style: .continuous)
@@ -363,15 +369,29 @@ public extension View {
 /// It says which day, why it is empty, and what to do next, in one quiet
 /// card instead of a list of blank rows.
 public struct LooprDayEmptyState: View {
+    /// Whether the screen shows what was logged under the card. Today does: its dial, timeline and rules follow, so the
+    /// card names only what is missing (band data) instead of claiming nothing was recorded (R1-NEW-4).
+    public enum Context: Sendable { case standalone, logsBelow }
+
+    @Environment(\.bandPaired) private var bandPaired
     private let navigation: LooprDayNavigation
     private let accent: LooprColorToken
     private let now: Date
+    private let context: Context
+    private let todayCopy: (title: String, detail: String)?
 
-    public init(_ navigation: LooprDayNavigation, accent: LooprColorToken = .brand, now: Date? = nil) {
+    /// - Parameter todayCopy: the screen's own words for an empty today, such as Sleep's "No sleep recorded yet". A
+    ///   past day keeps the shared words.
+    public init(_ navigation: LooprDayNavigation, accent: LooprColorToken = .brand, now: Date? = nil,
+                context: Context = .standalone, todayCopy: (title: String, detail: String)? = nil) {
         self.navigation = navigation
         self.accent = accent
         self.now = now ?? navigation.now ?? Date()
+        self.context = context
+        self.todayCopy = todayCopy
     }
+
+    private var ownCopy: (title: String, detail: String)? { navigation.isToday ? todayCopy : nil }
 
     public var body: some View {
         LooprSurface {
@@ -381,8 +401,9 @@ public struct LooprDayEmptyState: View {
                     .foregroundStyle(Color.loopr(accent))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
-                    LooprText(Self.title(for: navigation), style: .rowTitle)
-                    LooprText(Self.detail(for: navigation, now: now), style: .prose, color: .inkSecondary)
+                    LooprText(ownCopy?.title ?? Self.title(for: navigation, context: context, bandPaired: bandPaired), style: .rowTitle)
+                    LooprText(ownCopy?.detail ?? Self.detail(for: navigation, now: now, context: context, bandPaired: bandPaired),
+                              style: .prose, color: .inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .combine)
@@ -402,15 +423,28 @@ public struct LooprDayEmptyState: View {
         .accessibilityIdentifier("day-empty-state")
     }
 
-    /// "Nothing for today yet" or "Nothing recorded on Mon 21 Sep".
-    public static func title(for navigation: LooprDayNavigation) -> String {
+    /// "Nothing for today yet" or "Nothing recorded on Mon 21 Sep". With logs below, a past day says "No band data on
+    /// Mon 21 Sep" with a band paired, and "Mon 21 Sep" without one.
+    public static func title(for navigation: LooprDayNavigation, context: Context = .standalone,
+                             bandPaired: Bool = true) -> String {
         if navigation.isToday { return "Nothing for today yet" }
-        return "Nothing recorded \(navigation.title == "Yesterday" ? "yesterday" : "on \(navigation.dateText)")"
+        let when = navigation.title == "Yesterday" ? "yesterday" : "on \(navigation.dateText)"
+        guard context == .logsBelow else { return "Nothing recorded \(when)" }
+        return bandPaired ? "No band data \(when)" : (navigation.title == "Yesterday" ? "Yesterday" : navigation.dateText)
     }
 
-    public static func detail(for navigation: LooprDayNavigation, now: Date) -> String {
+    public static func detail(for navigation: LooprDayNavigation, now: Date, context: Context = .standalone,
+                              bandPaired: Bool = true) -> String {
         guard navigation.isToday else {
-            return "Loopr has no band data for this day."
+            switch (context, bandPaired) {
+            case (.logsBelow, true): return "What you logged that day is below."
+            case (.logsBelow, false): return "What you logged that day is below. Sleep and recovery need a band."
+            case (.standalone, true): return "Loopr has no band data for this day."
+            case (.standalone, false): return "Nothing was logged on this day."
+            }
+        }
+        guard bandPaired else {
+            return "Log a meal or a workout, start a protocol or add a blood test, and it shows here. Sleep and recovery need a band."
         }
         guard navigation.lastSyncedAt != nil else {
             return "Wear your band and keep it near your iPhone. Today's numbers appear after it syncs."

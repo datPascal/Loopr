@@ -40,9 +40,7 @@ final class ScrubGestureUITests: XCTestCase {
         app.launchArguments = ["--loopr-launch-mode=populated", "--loopr-metric-history-fixture"]
         app.launch()
         XCTAssertTrue(element(app, "main-tab-shell").waitForExistence(timeout: 15))
-        let tab = app.tabBars.firstMatch.buttons["Heart"].firstMatch
-        XCTAssertTrue(tab.waitForExistence(timeout: 5))
-        tab.tap()
+        XCTAssertTrue(app.openLooprArea("Heart"))
         let row = element(app, "heart-vital-rmssd")
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         for _ in 0..<4 where !(row.isHittable && row.frame.maxY < app.tabBars.firstMatch.frame.minY - 8) {

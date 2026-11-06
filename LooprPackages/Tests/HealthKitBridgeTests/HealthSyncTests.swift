@@ -43,6 +43,52 @@ final class HealthSyncTests: XCTestCase {
             provenance: "Measured", algorithm: "test.1", timeZone: "UTC")
     }
 
+    func testCancelledSyncDoesNotReplaceItsPersistedPartition() async throws {
+        let store = SyncMemoryStore(), client = SyncClientSpy()
+        let engine = HealthSyncEngine(store: store, client: client)
+        let row = sample("cancelled")
+        let now = now
+        let attempt = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await engine.synchronize(key: "cancelled", metric: .heartRate, samples: [row], now: now)
+        }
+        do {
+            _ = try await attempt.value
+            XCTFail("A cancelled sync must throw before saving local state")
+        } catch is CancellationError {}
+        XCTAssertNil(try store.partition("cancelled"))
+    }
+
+    func testCorruptPartitionAndUnrepresentableVersionsFailWithoutOverwritingData() async throws {
+        let row = sample("one")
+        let invalid = [
+            HealthSyncPartition(samples: [row, row], version: 1, saved: [], obsolete: [], lastError: nil, completedAt: nil),
+            HealthSyncPartition(samples: [row], version: Int.max, saved: [], obsolete: [], lastError: nil, completedAt: nil),
+            HealthSyncPartition(samples: [row], version: 1, saved: ["missing"], obsolete: [], lastError: nil, completedAt: nil)
+        ]
+        for partition in invalid {
+            let store = SyncMemoryStore(), client = SyncClientSpy()
+            try store.savePartition(partition, key: "day")
+            let engine = HealthSyncEngine(store: store, client: client)
+            do {
+                _ = try await engine.synchronize(key: "day", metric: .heartRate, samples: [sample("two")], now: now)
+                XCTFail("Invalid persisted state must be rejected")
+            } catch { XCTAssertEqual(error as? HealthSyncError, .invalidSamples) }
+            XCTAssertEqual(try store.partition("day"), partition)
+            let writes = await client.writes()
+            XCTAssertTrue(writes.isEmpty)
+        }
+        for invalidTime in [Double.nan, .infinity, Double.greatestFiniteMagnitude] {
+            let store = SyncMemoryStore()
+            let engine = HealthSyncEngine(store: store, client: SyncClientSpy())
+            do {
+                _ = try await engine.synchronize(key: "day", metric: .heartRate, samples: [row], now: Date(timeIntervalSince1970: invalidTime))
+                XCTFail("An unrepresentable version must fail before saving")
+            } catch { XCTAssertEqual(error as? HealthSyncError, .invalidSamples) }
+            XCTAssertNil(try store.partition("day"))
+        }
+    }
+
     func testLegacyPreferencesDecodeWithAllCategoriesOn() throws {
         let data = Data(#"{"enabled":true,"timeZoneIdentifier":"UTC"}"#.utf8)
         let preferences = try JSONDecoder().decode(HealthSyncPreferences.self, from: data)

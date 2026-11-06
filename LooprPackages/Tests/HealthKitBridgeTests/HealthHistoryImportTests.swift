@@ -17,6 +17,11 @@ private actor FakeHealthHistoryStore: HealthHistoryQueryClient {
     private(set) var statisticRequests: [(HealthHistoryQuantity, Date, Date, [String])] = []
     private(set) var sleepRequests: [(Date, Date)] = []
     private(set) var accessRequests: [(Set<HealthHistoryQuantity>, Bool)] = []
+    private var queryGate: HealthImportGate?
+    func pauseQuery(_ gate: HealthImportGate) { queryGate = gate }
+    private func waitForQuery() async {
+        if let gate = queryGate { queryGate = nil; await gate.pause() }
+    }
 
     func set(_ quantity: HealthHistoryQuantity, _ values: [HealthDailyStatistic]) { statistics[quantity] = values }
     func setSleep(_ samples: [HealthSleepSample]) { sleep = samples }
@@ -27,12 +32,14 @@ private actor FakeHealthHistoryStore: HealthHistoryQueryClient {
     func dailyStatistics(for quantity: HealthHistoryQuantity, from start: Date, to end: Date,
                          calendar: Calendar, excludingBundlePrefixes: [String]) async throws -> [HealthDailyStatistic] {
         statisticRequests.append((quantity, start, end, excludingBundlePrefixes))
+        await waitForQuery()
         if failing.contains(quantity) { throw FakeFailure.query }
         return (statistics[quantity] ?? []).filter { $0.dayStart >= calendar.startOfDay(for: start) && $0.dayStart < end }
     }
 
     func sleepSamples(from start: Date, to end: Date, excludingBundlePrefixes: [String]) async throws -> [HealthSleepSample] {
         sleepRequests.append((start, end))
+        await waitForQuery()
         return sleep.filter { sample in
             sample.end > start && sample.start < end
                 && (leakOwnSamples || !HealthHistorySourceFilter.isExcluded(sample.sourceBundleIdentifier, prefixes: excludingBundlePrefixes))
@@ -47,6 +54,21 @@ private actor FakeHealthHistoryStore: HealthHistoryQueryClient {
 }
 
 private enum FakeFailure: Error { case query }
+
+private actor HealthImportGate {
+    private var entered = false
+    private var waiting: CheckedContinuation<Void, Never>?
+    private var opening: CheckedContinuation<Void, Never>?
+    func pause() async {
+        entered = true; waiting?.resume(); waiting = nil
+        await withCheckedContinuation { opening = $0 }
+    }
+    func wait() async {
+        if entered { return }
+        await withCheckedContinuation { waiting = $0 }
+    }
+    func open() { opening?.resume(); opening = nil }
+}
 
 private final class MemoryImportStore: HealthHistoryImportStore, @unchecked Sendable {
     private let lock = NSLock()
@@ -77,6 +99,25 @@ final class HealthHistoryImportTests: XCTestCase {
         return calendar
     }()
     private let own = "com.loopr.ios"
+
+    func testCancelledQueryCannotEraseSavedHistoryOrAdvanceCursor() async throws {
+        for sleep in [false, true] {
+            let client = FakeHealthHistoryStore()
+            let store = MemoryImportStore()
+            let metric: HealthHistoryMetric = sleep ? .sleepDuration : .steps
+            let saved = HealthHistoryDayValue(metric: metric, localDay: "2026-10-10", value: 420)
+            try store.replaceDailyValues(metric, from: saved.localDay, through: saved.localDay, values: [saved])
+            let gate = HealthImportGate()
+            await client.pauseQuery(gate)
+            let importer = HealthHistoryImporter(client: client, store: store, calendar: calendar,
+                excludedBundlePrefixes: [], mayRead: { sleep ? $0 == nil : $0 == .steps })
+            let now = day(2026, 10, 11, hour: 10)
+            let work = Task { await importer.importHistory(now: now) }
+            await gate.wait(); work.cancel(); await gate.open(); _ = await work.value
+            XCTAssertEqual(store.values(metric), [saved])
+            XCTAssertNil(store.cursor("apple_health.daily." + (sleep ? "sleep" : "steps")))
+        }
+    }
 
     private func day(_ year: Int, _ month: Int, _ day: Int, hour: Int = 0, minute: Int = 0) -> Date {
         calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!

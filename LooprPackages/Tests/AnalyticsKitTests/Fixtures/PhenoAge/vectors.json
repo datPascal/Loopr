@@ -1,0 +1,232 @@
+{
+  "schema": 1,
+  "vectors": [
+    {
+      "id": "pyaging-crp-0.5",
+      "inputSource": "pyaging tests/predict/test_crp_transform.py (_ROW: albumin 46.0, creatinine 70.0, glucose 5.0, lymphocyte 30.0, MCV 90.0, RDW 13.0, ALP 70.0, WBC 7.0, age 50.0) at commit c15cf283; CRP slot set to 0.5 mg/dL in test_moving_the_log_into_the_clock_matches_the_logged_input",
+      "ageYears": 50.0,
+      "values": [
+        {
+          "marker": "albumin",
+          "value": "46",
+          "unit": "g/L"
+        },
+        {
+          "marker": "creatinine",
+          "value": "70",
+          "unit": "µmol/L"
+        },
+        {
+          "marker": "glucose",
+          "value": "5.0",
+          "unit": "mmol/L"
+        },
+        {
+          "marker": "crp",
+          "value": "0.5",
+          "unit": "mg/dL"
+        },
+        {
+          "marker": "lymphocyte-percent",
+          "value": "30",
+          "unit": "%"
+        },
+        {
+          "marker": "mean-cell-volume",
+          "value": "90",
+          "unit": "fL"
+        },
+        {
+          "marker": "red-cell-distribution-width",
+          "value": "13",
+          "unit": "%"
+        },
+        {
+          "marker": "alkaline-phosphatase",
+          "value": "70",
+          "unit": "U/L"
+        },
+        {
+          "marker": "white-blood-cell-count",
+          "value": "7",
+          "unit": "10^3/µL"
+        }
+      ],
+      "expected": {
+        "pyaging": {
+          "linearPredictor": -8.98632624102542,
+          "phenotypicAge": 42.79895971927003,
+          "mortalityScore": 0.02437185681969839
+        },
+        "bioAge": {
+          "linearPredictor": -8.99279734691971,
+          "phenotypicAge": 42.72818641330355,
+          "mortalityScore": 0.024216558314697934
+        },
+        "liuCorrection": {
+          "linearPredictor": -8.988026241025418,
+          "phenotypicAge": 44.3774329601774,
+          "mortalityScore": 0.02433094115222545
+        }
+      }
+    },
+    {
+      "id": "pyaging-crp-0.21",
+      "inputSource": "pyaging tests/predict/test_crp_transform.py (same _ROW) with CRP 0.21 mg/dL, the value used in test_a_plausible_crp_does_not_warn, at commit c15cf283",
+      "ageYears": 50.0,
+      "values": [
+        {
+          "marker": "albumin",
+          "value": "46",
+          "unit": "g/L"
+        },
+        {
+          "marker": "creatinine",
+          "value": "70",
+          "unit": "µmol/L"
+        },
+        {
+          "marker": "glucose",
+          "value": "5.0",
+          "unit": "mmol/L"
+        },
+        {
+          "marker": "crp",
+          "value": "0.21",
+          "unit": "mg/dL"
+        },
+        {
+          "marker": "lymphocyte-percent",
+          "value": "30",
+          "unit": "%"
+        },
+        {
+          "marker": "mean-cell-volume",
+          "value": "90",
+          "unit": "fL"
+        },
+        {
+          "marker": "red-cell-distribution-width",
+          "value": "13",
+          "unit": "%"
+        },
+        {
+          "marker": "alkaline-phosphatase",
+          "value": "70",
+          "unit": "U/L"
+        },
+        {
+          "marker": "white-blood-cell-count",
+          "value": "7",
+          "unit": "10^3/µL"
+        }
+      ],
+      "expected": {
+        "pyaging": {
+          "linearPredictor": -9.06908579518445,
+          "phenotypicAge": 41.88109187521712,
+          "mortalityScore": 0.022457969095904706
+        },
+        "bioAge": {
+          "linearPredictor": -9.075528811410358,
+          "phenotypicAge": 41.810630105527295,
+          "mortalityScore": 0.022315345797597197
+        },
+        "liuCorrection": {
+          "linearPredictor": -9.070785795184449,
+          "phenotypicAge": 43.474437279227814,
+          "mortalityScore": 0.02242022943276134
+        }
+      }
+    },
+    {
+      "id": "mcp-phenoage-clock-readme-us-units",
+      "inputSource": "mcp-phenoage-clock 1.0.1 README sample (github.com/199-biotechnologies/mcp-phenoage-clock): age 45, albumin 4.2 g/dL, creatinine 0.9 mg/dL, glucose 85 mg/dL, CRP 0.5 mg/L, lymphocytes 30 %, MCV 89 fL, RDW 12.5 %, ALP 65 U/L, WBC 6.2; the README states no output",
+      "ageYears": 45.0,
+      "values": [
+        {
+          "marker": "albumin",
+          "value": "4.2",
+          "unit": "g/dL"
+        },
+        {
+          "marker": "creatinine",
+          "value": "0.9",
+          "unit": "mg/dL"
+        },
+        {
+          "marker": "glucose",
+          "value": "85",
+          "unit": "mg/dL"
+        },
+        {
+          "marker": "crp",
+          "value": "0.5",
+          "unit": "mg/L"
+        },
+        {
+          "marker": "lymphocyte-percent",
+          "value": "30",
+          "unit": "%"
+        },
+        {
+          "marker": "mean-cell-volume",
+          "value": "89",
+          "unit": "fL"
+        },
+        {
+          "marker": "red-cell-distribution-width",
+          "value": "12.5",
+          "unit": "%"
+        },
+        {
+          "marker": "alkaline-phosphatase",
+          "value": "65",
+          "unit": "U/L"
+        },
+        {
+          "marker": "white-blood-cell-count",
+          "value": "6.2",
+          "unit": "10^3/µL"
+        }
+      ],
+      "expected": {
+        "pyaging": {
+          "linearPredictor": -9.683761908630622,
+          "phenotypicAge": 35.06385554797072,
+          "mortalityScore": 0.012208948289608518
+        },
+        "bioAge": {
+          "linearPredictor": -9.689730364713952,
+          "phenotypicAge": 34.99865701947839,
+          "mortalityScore": 0.012136732409443352
+        },
+        "liuCorrection": {
+          "linearPredictor": -9.68536190863062,
+          "phenotypicAge": 36.768751371468156,
+          "mortalityScore": 0.012189535701240706
+        }
+      }
+    }
+  ],
+  "transformVectors": [
+    {
+      "id": "pyaging-postprocess--12",
+      "linearPredictor": -12.0,
+      "phenotypicAge": 9.37497303957636,
+      "source": "pyaging docs/development/phenoage-gompertz-correction.md and clocks/notebooks/phenoage.ipynb at commit c15cf283 (v0.5.7): log hazards -12, -9, -6 map to 9.37497303957636, 42.64730709381026, 75.91964114804416 (torch.testing.assert_close, rtol 0, atol 1e-12; independent R 4.5.3 evaluation gives about 9.37, 42.65, 75.92)"
+    },
+    {
+      "id": "pyaging-postprocess--9",
+      "linearPredictor": -9.0,
+      "phenotypicAge": 42.64730709381026,
+      "source": "pyaging docs/development/phenoage-gompertz-correction.md and clocks/notebooks/phenoage.ipynb at commit c15cf283 (v0.5.7): log hazards -12, -9, -6 map to 9.37497303957636, 42.64730709381026, 75.91964114804416 (torch.testing.assert_close, rtol 0, atol 1e-12; independent R 4.5.3 evaluation gives about 9.37, 42.65, 75.92)"
+    },
+    {
+      "id": "pyaging-postprocess--6",
+      "linearPredictor": -6.0,
+      "phenotypicAge": 75.91964114804416,
+      "source": "pyaging docs/development/phenoage-gompertz-correction.md and clocks/notebooks/phenoage.ipynb at commit c15cf283 (v0.5.7): log hazards -12, -9, -6 map to 9.37497303957636, 42.64730709381026, 75.91964114804416 (torch.testing.assert_close, rtol 0, atol 1e-12; independent R 4.5.3 evaluation gives about 9.37, 42.65, 75.92)"
+    }
+  ]
+}

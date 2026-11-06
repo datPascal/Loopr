@@ -19,6 +19,16 @@ public enum BiologicalSex: String, Codable, CaseIterable, Hashable, Sendable {
     case male
     case intersex
     case undisclosed
+
+    /// The answer as onboarding's About you and Profile both show it.
+    public var title: String {
+        switch self {
+        case .female: "Female"
+        case .male: "Male"
+        case .intersex: "Intersex"
+        case .undisclosed: "Prefer not to say"
+        }
+    }
 }
 
 public enum ProfileField: String, CaseIterable, Hashable, Sendable {

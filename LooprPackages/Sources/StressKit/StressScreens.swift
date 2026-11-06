@@ -146,6 +146,7 @@ public enum StressFixtures {
 
 public struct StressScreen: View {
     @Environment(\.looprMetricLink) private var metricLink
+    @Environment(\.looprAreaTrend) private var areaTrend
     @ObservedObject private var viewModel: StressViewModel
     @State private var trendPoints: [LooprChartPoint] = []
     @State private var trendRange: LooprChartRange = .month
@@ -167,6 +168,9 @@ public struct StressScreen: View {
                 measuredDays: measuredDays
             )
 
+            // On Data the range picker and its chart follow the hero, as on every area page.
+            if let areaTrend { areaTrend }
+
             LooprSectionGroup(title: "Daytime stress") {
                 if viewModel.hourlyStressReadFailed {
                     LooprFormCard { LooprText("Could not load daytime stress. Try refreshing.", style: .prose, color: .inkSecondary) }
@@ -175,6 +179,7 @@ public struct StressScreen: View {
                 }
             }
 
+            if areaTrend == nil {
             LooprSectionGroup(title: "Recent days") {
                 LooprMetricTrendCard(
                     title: "Stress",
@@ -189,6 +194,7 @@ public struct StressScreen: View {
                     identifier: "stress-trend",
                     showsRangePicker: false
                 )
+            }
             }
 
             LooprSectionGroup(title: "Explore") {
@@ -851,7 +857,7 @@ private struct StressBreathingGuide: View {
                 } else {
                     SpectralLens(
                         value: phase.lensValue,
-                        caption: "BREATHE",
+                        caption: "Breathe",
                         accent: .stress,
                         diameter: LooprSpacing.hero * 3
                     )

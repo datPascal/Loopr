@@ -4,7 +4,7 @@ import ProfileKit
 import SwiftUI
 import UIKit
 
-// The nine onboarding steps. Each is a hero, a headline and the sections
+// The onboarding steps: nine with a band, six without. Each is a hero, a headline and the sections
 // under it; `OnboardingScreen` supplies the header, the scroll view, the
 // background and the buttons.
 
@@ -35,15 +35,36 @@ struct OnboardingWelcomeStep: View {
             OnboardingBrandMark()
                 .padding(.vertical, LooprSpacing.sm)
         } content: {
+            // What works without a band, said before the person picks a path.
+            LooprText(OnboardingCopy.Welcome.noBandLine, style: .prose, color: .inkSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, LooprSpacing.xs)
+                .accessibilityIdentifier("onboarding-welcome-no-band-line")
             OnboardingSection(OnboardingCopy.Welcome.sectionTitle) {
                 OnboardingListCard {
+                    OnboardingInfoRow(
+                        symbol: "person.crop.circle.badge.xmark",
+                        title: OnboardingCopy.Welcome.accountTitle,
+                        detail: OnboardingCopy.Welcome.accountDetail,
+                        accent: accent
+                    )
+                    LooprHairline()
                     OnboardingInfoRow(
                         symbol: "lock.shield",
                         title: OnboardingCopy.Welcome.privateTitle,
                         detail: OnboardingCopy.Welcome.privateDetail,
                         accent: accent
                     )
-                    LooprHairline()
+                    // Ask and its API key are explained in Settings, where they are turned on; on Welcome the key read as
+                    // a chore before anything else (UX R1-NEW-02).
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("onboarding-privacy")
+            }
+            OnboardingSection(OnboardingCopy.Welcome.goodToKnowTitle) {
+                OnboardingListCard {
                     OnboardingInfoRow(
                         symbol: "heart.text.clipboard",
                         title: OnboardingCopy.Welcome.wellnessTitle,
@@ -126,27 +147,37 @@ struct OnboardingHandoverStep: View {
 
 // MARK: - Pairing mode
 
+/// "Get your band ready": the WHOOP app's Bluetooth off, then pairing mode, on one screen. These were two steps
+/// before the UX simplification (UX R1-DES-02, R1-NEW-01).
 struct OnboardingPrepareStep: View {
     let accent: LooprColorToken
 
     var body: some View {
+        // The header already says "Your band"; the photo is a third of the screen so the steps show at once
+        // (UX R2-DES-19).
         OnboardingStepLayout(
-            title: OnboardingCopy.Prepare.title,
+            title: nil,
             detail: OnboardingCopy.Prepare.detail
         ) {
             OnboardingBandArt(preferred: [.pairing, .product])
-                .frame(maxWidth: OnboardingMetrics.bandWidth)
-                .padding(.vertical, LooprSpacing.md)
+                .frame(maxWidth: OnboardingMetrics.bandWidth * 0.55)
         } content: {
             OnboardingSection(OnboardingCopy.Prepare.sectionTitle) {
                 VStack(spacing: LooprSpacing.sm) {
                     OnboardingStepCard(
                         number: 1,
-                        title: OnboardingCopy.Prepare.offTitle,
-                        detail: OnboardingCopy.Prepare.offDetail,
+                        title: OnboardingCopy.Prepare.whoopTitle,
+                        detail: OnboardingCopy.Prepare.whoopDetail,
                         accent: accent
                     ) {
-                        OnboardingBandTile(preferred: [.product], fallbackSymbol: "hand.raised", accent: accent)
+                        OnboardingSymbolTile(symbol: "switch.2", accent: accent)
+                    } extra: {
+                        VStack(alignment: .leading, spacing: LooprSpacing.xs) {
+                            OnboardingSettingsButton(title: OnboardingCopy.Handover.openSettings, accent: accent)
+                                .accessibilityIdentifier("onboarding-handover-open-settings")
+                            LooprText(OnboardingCopy.Handover.openSettingsNote, style: .caption, color: .inkSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     OnboardingStepCard(
                         number: 2,
@@ -156,17 +187,17 @@ struct OnboardingPrepareStep: View {
                     ) {
                         OnboardingBandTile(preferred: [.tap], fallbackSymbol: "hand.tap", accent: accent)
                     }
-                    OnboardingStepCard(
-                        number: 3,
-                        title: OnboardingCopy.Prepare.newBandTitle,
-                        detail: OnboardingCopy.Prepare.newBandDetail,
-                        accent: accent
-                    ) {
-                        OnboardingSymbolTile(symbol: "battery.100.bolt", accent: accent)
-                    }
                 }
             }
             .accessibilityIdentifier("onboarding-prepare-steps")
+            // Not steps: a new band and a phone without the WHOOP app are exceptions, said once each (UX R2-NEW-03).
+            VStack(alignment: .leading, spacing: LooprSpacing.xs) {
+                LooprText(OnboardingCopy.Prepare.noWhoopNote, style: .caption, color: .inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                LooprText(OnboardingCopy.Prepare.newBandNote, style: .caption, color: .inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, LooprSpacing.xxs)
         }
     }
 }
@@ -365,24 +396,31 @@ struct OnboardingPairingStep: View {
 
 struct OnboardingProfileStep: View {
     @Binding var form: OnboardingProfileForm
+    /// True while a field has the keyboard. The action bar then shows Hide keyboard, and setting it false closes the keyboard.
+    @Binding var editing: Bool
     let timeZone: TimeZone
     let now: Date
     let accent: LooprColorToken
     @FocusState private var focused: Field?
+    /// "More about you" open. It starts open when the person already filled something in it.
+    @State private var showsMore = false
 
-    enum Field: Hashable { case name, age, height, inches, weight }
+    enum Field: Hashable { case name, birthYear, height, inches, weight }
+
+    private var currentYear: Int { ProfileEstimates.currentYear(for: now) }
 
     var body: some View {
+        // No max heart rate card above the form any more: a formula was the first thing a newcomer read (UX R1-NEW-03).
+        // The zones page explains it where it is used.
         OnboardingStepLayout(title: nil, detail: OnboardingCopy.Profile.detail) {
-            maxHeartRate
+            EmptyView()
         } content: {
             OnboardingSection(OnboardingCopy.Profile.youSection) {
                 OnboardingListCard {
-                    fieldRow(OnboardingCopy.Profile.nameTitle, placeholder: OnboardingCopy.Profile.namePlaceholder,
-                             text: $form.name, field: .name, keyboard: .default, id: "profile-name")
-                    LooprHairline()
-                    fieldRow(OnboardingCopy.Profile.ageTitle, placeholder: "",
-                             text: $form.age, field: .age, keyboard: .numberPad, unit: "yrs", id: "profile-age")
+                    fieldRow(OnboardingCopy.Profile.birthYearTitle, placeholder: OnboardingCopy.Profile.birthYearPlaceholder,
+                             text: $form.birthYear, field: .birthYear, keyboard: .numberPad,
+                             unit: form.age(currentYear: currentYear).map { OnboardingCopy.Profile.ageCaption($0) },
+                             id: "profile-birth-year")
                     LooprHairline()
                     chipsRow(OnboardingCopy.Profile.sexTitle) {
                         OnboardingChoiceChips(
@@ -397,7 +435,14 @@ struct OnboardingProfileStep: View {
                 }
             }
 
-            OnboardingSection(OnboardingCopy.Profile.bodySection) {
+            // Name, units, height and weight wait under one row: day one asks for two things (UX R2-NEW-04, R2-DES-20).
+            LooprFoldSection(OnboardingCopy.Profile.moreTitle, summary: OnboardingCopy.Profile.moreSummary,
+                             identifier: "profile-more", isOpen: $showsMore) {
+              OnboardingListCard {
+                  fieldRow(OnboardingCopy.Profile.nameTitle, placeholder: OnboardingCopy.Profile.namePlaceholder,
+                           text: $form.name, field: .name, keyboard: .default, id: "profile-name")
+              }
+              OnboardingSection(OnboardingCopy.Profile.bodySection) {
                 OnboardingListCard {
                     chipsRow(OnboardingCopy.Profile.unitsTitle) {
                         OnboardingChoiceChips(
@@ -426,9 +471,10 @@ struct OnboardingProfileStep: View {
                              field: .weight, keyboard: .decimalPad,
                              unit: form.unitSystem == .metric ? "kg" : "lb", id: "profile-weight")
                 }
+              }
             }
 
-            ForEach(form.issues, id: \.message) { issue in
+            ForEach(form.issues(currentYear: currentYear), id: \.message) { issue in
                 LooprInlineMessage(issue.message, tone: .warning)
                     .accessibilityIdentifier("profile-issue")
             }
@@ -442,44 +488,12 @@ struct OnboardingProfileStep: View {
             .padding(.horizontal, LooprSpacing.xxs)
             .accessibilityIdentifier("profile-time-zone")
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { focused = nil }
-            }
+        // Hide keyboard lives in the action bar: a keyboard toolbar floats over Continue on iOS 27.
+        .onAppear {
+            if !form.name.isEmpty || !form.heightPrimary.isEmpty || !form.weight.isEmpty { showsMore = true }
         }
-    }
-
-    /// The hero: the number the profile unlocks, live as the age is typed.
-    private var maxHeartRate: some View {
-        LooprSurface(emphasis: .hero(accent)) {
-            VStack(alignment: .leading, spacing: LooprSpacing.xs) {
-                Text(OnboardingCopy.Profile.maxHeartRateTitle.uppercased())
-                    .looprTypography(.sectionLabel)
-                    .foregroundStyle(Color.loopr(.inkSecondary))
-                if let value = form.estimatedMaxHeartRate {
-                    HStack(alignment: .firstTextBaseline, spacing: LooprSpacing.xs) {
-                        Text("\(value)")
-                            .looprTypography(.metric)
-                            .foregroundStyle(Color.loopr(.ink))
-                            .contentTransition(.numericText())
-                        LooprText("bpm", style: .metricUnit, color: .inkSecondary)
-                    }
-                } else {
-                    LooprText(OnboardingCopy.Profile.maxHeartRateEmpty, style: .cardTitle, color: .inkSecondary)
-                }
-                LooprText(OnboardingCopy.Profile.maxHeartRateNote, style: .caption, color: .inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(maxHeartRateSummary)
-        .accessibilityIdentifier("profile-max-heart-rate")
-    }
-
-    private var maxHeartRateSummary: String {
-        let value = form.estimatedMaxHeartRate.map { "\($0) beats per minute" } ?? OnboardingCopy.Profile.maxHeartRateEmpty
-        return "\(OnboardingCopy.Profile.maxHeartRateTitle), \(value). \(OnboardingCopy.Profile.maxHeartRateNote)"
+        .onChange(of: focused) { _, field in editing = field != nil }
+        .onChange(of: editing) { _, value in if !value { focused = nil } }
     }
 
     private var imperialHeightRow: some View {
@@ -562,37 +576,21 @@ struct OnboardingHealthStep: View {
 
     var body: some View {
         OnboardingStepLayout(
-            title: OnboardingCopy.Health.title,
+            title: OnboardingCopy.Health.title(for: request),
             detail: OnboardingCopy.Health.detail(for: request)
         ) {
-            HStack(spacing: LooprSpacing.xl) {
-                countRing(request.orderedWrites.count, caption: OnboardingCopy.Health.savesCaption)
-                if request.importsHistory {
-                    countRing(request.orderedReads.count, caption: OnboardingCopy.Health.readsCaption)
-                }
-            }
-            .padding(.vertical, LooprSpacing.sm)
-            .accessibilityHidden(true)
+            // The two count rings ("8 Reads, 8 Saves") said nothing a person could use; the lists below say it
+            // (UX R1-DES-23, R1-NEW-04).
+            EmptyView()
         } content: {
-            typeList(OnboardingCopy.Health.savesTitle, request.orderedWrites, id: "onboarding-health-writes")
             if request.importsHistory {
                 typeList(OnboardingCopy.Health.readsTitle, request.orderedReads, id: "onboarding-health-reads")
             }
+            typeList(OnboardingCopy.Health.savesTitle, request.orderedWrites, id: "onboarding-health-writes")
             LooprText(OnboardingCopy.Health.choiceNote, style: .caption, color: .inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, LooprSpacing.xxs)
         }
-    }
-
-    private func countRing(_ count: Int, caption: String) -> some View {
-        LooprProgressRing(
-            value: Double(count),
-            scale: LooprRingScale(fullValue: Double(max(count, 1))),
-            text: "\(count)",
-            caption: caption,
-            accent: accent,
-            diameter: OnboardingMetrics.compactRing + LooprSpacing.xxl
-        )
     }
 
     private func typeList(_ title: String, _ types: [OnboardingHealthType], id: String) -> some View {
@@ -614,18 +612,17 @@ struct OnboardingHealthStep: View {
 // MARK: - Notifications
 
 struct OnboardingNotificationsStep: View {
+    let path: OnboardingPath
     let accent: LooprColorToken
 
-    private var onGroups: [OnboardingNotificationGroup] {
-        [.workouts, .breathing, .band].filter { !$0.families.isEmpty }
-    }
+    private var onGroups: [OnboardingNotificationGroup] { OnboardingCopy.Notifications.onGroups(on: path) }
 
     var body: some View {
         OnboardingStepLayout(
             title: OnboardingCopy.Notifications.title,
-            detail: OnboardingCopy.Notifications.detail
+            detail: OnboardingCopy.Notifications.detail(on: path)
         ) {
-            OnboardingNotificationMock()
+            OnboardingNotificationMock(samples: OnboardingCopy.Notifications.sample(on: path))
                 .padding(.top, LooprSpacing.sm)
         } content: {
             OnboardingSection(OnboardingCopy.Notifications.onSection) {
@@ -650,7 +647,7 @@ struct OnboardingNotificationsStep: View {
         OnboardingInfoRow(
             symbol: OnboardingCopy.Notifications.symbol(for: group),
             title: OnboardingCopy.Notifications.title(for: group),
-            detail: OnboardingCopy.Notifications.detail(for: group),
+            detail: OnboardingCopy.Notifications.detail(for: group, on: path),
             accent: accent
         )
     }
@@ -704,6 +701,9 @@ struct OnboardingSleepNeedStep: View {
 // MARK: - Finish
 
 struct OnboardingFinishStep: View {
+    /// The person said they have no band: no nights to learn, nothing to
+    /// wear or sync. The step says where to start instead.
+    let withoutBand: Bool
     let pairingDeferred: Bool
     let bandStillConnecting: Bool
     let backgroundRefreshOff: Bool
@@ -712,22 +712,56 @@ struct OnboardingFinishStep: View {
     private var nights: Int { OnboardingFacts.recoveryLearningNights }
 
     var body: some View {
+        if withoutBand {
+            noBandBody
+        } else {
+            bandBody
+        }
+    }
+
+    private var noBandBody: some View {
+        OnboardingStepLayout(title: OnboardingCopy.Finish.title, detail: nil) {
+            OnboardingBrandMark()
+                .padding(.vertical, LooprSpacing.sm)
+        } content: {
+            OnboardingSection(OnboardingCopy.Finish.noBandSectionTitle) {
+                OnboardingListCard {
+                    OnboardingInfoRow(
+                        symbol: "fork.knife",
+                        title: OnboardingCopy.Finish.mealTitle,
+                        detail: OnboardingCopy.Finish.mealDetail,
+                        accent: accent
+                    )
+                    LooprHairline()
+                    OnboardingInfoRow(
+                        symbol: "checklist",
+                        title: OnboardingCopy.Finish.protocolTitle,
+                        detail: OnboardingCopy.Finish.protocolDetail,
+                        accent: accent
+                    )
+                    LooprHairline()
+                    OnboardingInfoRow(
+                        symbol: "antenna.radiowaves.left.and.right",
+                        title: OnboardingCopy.Finish.addBandTitle,
+                        detail: OnboardingCopy.Finish.addBandDetail,
+                        accent: accent
+                    )
+                    .accessibilityIdentifier("onboarding-finish-add-band")
+                }
+            }
+            .accessibilityIdentifier("onboarding-finish-no-band")
+        }
+    }
+
+    private var bandBody: some View {
         OnboardingStepLayout(
             title: pairingDeferred ? OnboardingCopy.Finish.deferredTitle : OnboardingCopy.Finish.title,
             detail: nil
         ) {
-            // The same count Today shows while it learns: none of the nights
-            // recovery compares against are in yet.
-            LooprProgressRing(
-                value: 0,
-                scale: LooprRingScale(fullValue: Double(nights)),
-                text: OnboardingCopy.Finish.ringText(nights: nights),
-                caption: OnboardingCopy.Finish.ringCaption,
-                accent: accent,
-                diameter: OnboardingMetrics.heroRing
-            )
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(OnboardingCopy.Finish.ringCaption), 0 of \(nights)")
+            // A ring at "0/3" was the first thing a new person saw of their data: a score of nothing (UX R1-DES-02,
+            // R1-NEW-05). The mark welcomes them instead; the rows say when recovery comes.
+            OnboardingBrandMark()
+                .padding(.vertical, LooprSpacing.sm)
         } content: {
             if backgroundRefreshOff {
                 LooprSurface(emphasis: .hero(accent)) {
@@ -745,18 +779,19 @@ struct OnboardingFinishStep: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("onboarding-finish-background-refresh")
             }
+            // What works today leads; the band rows follow, and a skipped band comes last instead of first
+            // (UX R2-NEW-06, R2-DES-21).
             OnboardingSection(OnboardingCopy.Finish.sectionTitle) {
                 OnboardingListCard {
-                    if pairingDeferred {
-                        OnboardingInfoRow(
-                            symbol: "antenna.radiowaves.left.and.right",
-                            title: OnboardingCopy.Finish.laterTitle,
-                            detail: OnboardingCopy.Finish.laterDetail,
-                            accent: accent
-                        )
-                        .accessibilityIdentifier("onboarding-finish-later")
-                        LooprHairline()
-                    } else if bandStillConnecting {
+                    OnboardingInfoRow(
+                        symbol: "checklist",
+                        title: OnboardingCopy.Finish.longevityTitle,
+                        detail: OnboardingCopy.Finish.longevityDetail,
+                        accent: accent
+                    )
+                    .accessibilityIdentifier("onboarding-finish-longevity")
+                    LooprHairline()
+                    if bandStillConnecting {
                         OnboardingInfoRow(
                             symbol: "antenna.radiowaves.left.and.right",
                             title: OnboardingCopy.Finish.connectingTitle,
@@ -766,26 +801,22 @@ struct OnboardingFinishStep: View {
                         .accessibilityIdentifier("onboarding-finish-connecting")
                         LooprHairline()
                     }
-                    OnboardingInfoRow(
-                        symbol: "moon.zzz",
-                        title: OnboardingCopy.Finish.wearTitle,
-                        detail: OnboardingCopy.Finish.wearDetail,
-                        accent: accent
-                    )
-                    LooprHairline()
-                    OnboardingInfoRow(
-                        symbol: "chart.line.uptrend.xyaxis",
-                        title: OnboardingCopy.Finish.baselineTitle(nights: nights),
-                        detail: OnboardingCopy.Finish.baselineDetail(nights: nights),
-                        accent: accent
-                    )
-                    LooprHairline()
-                    OnboardingInfoRow(
-                        symbol: "arrow.down.circle",
-                        title: OnboardingCopy.Finish.syncTitle,
-                        detail: OnboardingCopy.Finish.syncDetail,
-                        accent: accent
-                    )
+                    if !pairingDeferred {
+                        OnboardingInfoRow(
+                            symbol: "moon.zzz",
+                            title: OnboardingCopy.Finish.wearTitle,
+                            detail: OnboardingCopy.Finish.wearDetail + " " + OnboardingCopy.Finish.baselineDetail(nights: nights),
+                            accent: accent
+                        )
+                    } else {
+                        OnboardingInfoRow(
+                            symbol: "antenna.radiowaves.left.and.right",
+                            title: OnboardingCopy.Finish.laterTitle,
+                            detail: OnboardingCopy.Finish.laterDetail,
+                            accent: accent
+                        )
+                        .accessibilityIdentifier("onboarding-finish-later")
+                    }
                 }
             }
         }

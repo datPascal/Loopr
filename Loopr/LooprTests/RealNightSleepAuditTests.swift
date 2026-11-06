@@ -1,3 +1,4 @@
+#if LOOPR_PRIVATE_DATABASE_AUDITS
 import XCTest
 import Foundation
 import AnalyticsKit
@@ -24,8 +25,8 @@ private struct AuditClock: DateProviding {
 /// loose: they catch a staging or accounting defect (such as the night that
 /// read 0 minutes of deep sleep) without pinning one person's numbers.
 ///
-/// The database is not in the repository. The suite skips unless
-/// `LOOPR_REAL_NIGHT_DB` names one or the night-build snapshot is present.
+/// Compile with LOOPR_PRIVATE_DATABASE_AUDITS and supply LOOPR_REAL_NIGHT_DB
+/// to run this audit against a private database copy.
 /// Set `LOOPR_AUDIT_OUT` to also write the report to a file. The source file
 /// is never opened for writing: it is copied first.
 @MainActor
@@ -185,6 +186,8 @@ final class RealNightSleepAuditTests: XCTestCase {
     }
 
     override func setUp() async throws {
-        try XCTSkipIf(Self.databasePath == nil, "No real strap database available")
+        _ = try XCTUnwrap(Self.databasePath, "Private audit requires a readable device database")
     }
 }
+
+#endif

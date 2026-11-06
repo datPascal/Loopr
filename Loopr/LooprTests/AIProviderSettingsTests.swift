@@ -23,9 +23,9 @@ struct AIProviderSettingsTests {
         let secret = "sk-fixture-keychain-only"
 
         #expect(await runtime.state() == .permissionRequired)
-        try await runtime.configure(endpoint: "https://provider.example/v1", model: "fixture", apiKey: secret)
+        try await runtime.configure(provider: .openAI, model: "fixture", apiKey: secret)
         #expect(await runtime.state() == .available)
-        #expect(await runtime.publicConfiguration()?.model == "fixture")
+        #expect(try await runtime.selectedConfiguration()?.model == "fixture")
         #expect(await credentials.read() == Data(secret.utf8))
         let defaultsText = defaults.dictionaryRepresentation().description
         #expect(!defaultsText.contains(secret))

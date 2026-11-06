@@ -31,12 +31,12 @@ struct MetricDetailKitTests {
         let nightly = LooprMetricTrendCard(title: "Temperature change", points: points, endingOn: ending,
             range: .constant(.month), kind: .line, accent: .heart, unit: "°C", valueFormat: { String(format: "%.1f", $0) },
             options: .init(smallDataNoun: .nights))
-        #expect(nightly.headerContent(series).eyebrow == "30-NIGHT AVERAGE")
-        #expect(nightly.headerContent(series).trailing == "14 OF 30 NIGHTS")
+        #expect(nightly.headerContent(series).eyebrow == "30-night average")
+        #expect(nightly.headerContent(series).trailing == "14 of 30 nights")
         let daily = LooprMetricTrendCard(title: "Steps", points: points, endingOn: ending,
             range: .constant(.month), kind: .line, accent: .brand, unit: "steps", valueFormat: { String(format: "%.0f", $0) })
-        #expect(daily.headerContent(series).eyebrow == "30-DAY AVERAGE")
-        #expect(daily.headerContent(series).trailing == "14 OF 30 DAYS")
+        #expect(daily.headerContent(series).eyebrow == "30-day average")
+        #expect(daily.headerContent(series).trailing == "14 of 30 days")
     }
 
     // MARK: Minimum y span
@@ -94,7 +94,9 @@ struct MetricDetailKitTests {
         #expect(LooprChartRange.unlocked(historyDays: 30) == [.week, .month])
         #expect(LooprChartRange.unlocked(historyDays: 31) == [.week, .month, .quarter])
         #expect(LooprChartRange.unlocked(historyDays: 90) == [.week, .month, .quarter])
-        #expect(LooprChartRange.unlocked(historyDays: 91) == Set(LooprChartRange.allCases))
+        #expect(LooprChartRange.unlocked(historyDays: 91) == [.week, .month, .quarter, .halfYear])
+        #expect(LooprChartRange.unlocked(historyDays: 183) == [.week, .month, .quarter, .halfYear, .year])
+        #expect(LooprChartRange.unlocked(historyDays: 366) == Set(LooprChartRange.allCases))
     }
 
     @Test func historyDaysCountFromTheFirstReadingToTheDayShown() {
@@ -132,10 +134,10 @@ struct MetricDetailKitTests {
         let week = LooprChartWindow(dayCount: 7)
         let month = LooprChartWindow(dayCount: 30)
         let quarter = LooprChartWindow(dayCount: 90)
-        #expect(LooprTrendAxis.label(for: end, window: week, calendar: calendar) == "WED\n23")
-        #expect(LooprTrendAxis.label(for: end, window: month, calendar: calendar) == "WED\n23 SEP")
-        #expect(LooprTrendAxis.label(for: end, window: quarter, calendar: calendar) == "SEP")
-        #expect(LooprChartDateText.day(end, calendar: calendar) == "WED 23 SEP")
+        #expect(LooprTrendAxis.label(for: end, window: week, calendar: calendar) == "Wed\n23")
+        #expect(LooprTrendAxis.label(for: end, window: month, calendar: calendar) == "Wed\n23 Sep")
+        #expect(LooprTrendAxis.label(for: end, window: quarter, calendar: calendar) == "Sep")
+        #expect(LooprChartDateText.day(end, calendar: calendar) == "Wed 23 Sep")
     }
 
     // MARK: Recovery calendar
@@ -144,7 +146,7 @@ struct MetricDetailKitTests {
         let points = (0..<40).map { LooprChartPoint(date: day($0), value: Double(($0 * 7) % 100)) }
         let model = LooprRecoveryCalendarModel(points: points, endingOn: end, calendar: calendar)
         // 40 days back from 23 Sep reaches into August.
-        #expect(model.months.map(\.title) == ["AUG", "SEP"])
+        #expect(model.months.map(\.title) == ["Aug", "Sep"])
         #expect(model.months.first?.days.count == 31)
         // September stops at the day shown.
         #expect(model.months.last?.days.count == 23)
@@ -167,8 +169,8 @@ struct MetricDetailKitTests {
         #expect(model.day(on: day(2))?.band == nil)
         #expect(!model.isWorthShowing)
         #expect(model.latestScored?.date == day(0))
-        #expect(model.readout(for: model.latestScored!) == "WED 23 SEP · 80% · READY")
-        #expect(model.readout(for: model.day(on: day(2))!) == "MON 21 SEP · NO SCORE")
+        #expect(model.readout(for: model.latestScored!) == "Wed 23 Sep · 80% · Ready")
+        #expect(model.readout(for: model.day(on: day(2))!) == "Mon 21 Sep · No score")
         #expect(model.spokenSummary == "4 days scored: 2 ready, 1 steady, 1 recover")
     }
 
@@ -176,7 +178,7 @@ struct MetricDetailKitTests {
         let points = (0..<500).map { LooprChartPoint(date: day($0), value: 60) }
         let model = LooprRecoveryCalendarModel(points: points, endingOn: end, calendar: calendar)
         #expect(model.months.count == 12)
-        #expect(model.months.first?.title == "OCT")
+        #expect(model.months.first?.title == "Oct")
         #expect(Set(model.months.map(\.title)).count == 12)
     }
 

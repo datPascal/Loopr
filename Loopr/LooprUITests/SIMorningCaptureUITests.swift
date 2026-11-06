@@ -4,11 +4,7 @@ final class SIMorningCaptureUITests: XCTestCase {
     private var appearance: String { ProcessInfo.processInfo.environment["LOOPR_CAPTURE_APPEARANCE"] ?? "light" }
     override func setUpWithError() throws { continueAfterFailure = false }
 
-    @MainActor func testGoodDay() {
-        let app = captureToday("good", expecting: "supported")
-        XCTAssertTrue(element(app, "today-contributor-skin_temperature_deviation").label.contains("+0.2 °C"))
-        XCTAssertTrue(element(app, "today-contributor-sleep_duration").label.contains("Same as usual"))
-    }
+    @MainActor func testGoodDay() { captureToday("good", expecting: "supported") }
     @MainActor func testLoadLowersThePlan() { captureToday("load-heavy", expecting: "The range is lower after a heavy week") }
     @MainActor func testLowRecoveryWithShortSleep() { captureToday("low", expecting: "Sleep was short") }
     @MainActor func testEarlyEstimate() { captureToday("early", expecting: "Early estimate") }
@@ -19,25 +15,55 @@ final class SIMorningCaptureUITests: XCTestCase {
         capture("flagged-check-line")
         check.tap()
         XCTAssertTrue(element(app, "heart-vitals-section").waitForExistence(timeout: 5))
-        XCTAssertTrue(app.tabBars.buttons["Heart"].isSelected)
+        XCTAssertTrue(app.tabBars.buttons["Data"].isSelected)
         capture("overnight-check-detail")
     }
-    @MainActor func testMissingStress() {
-        let app = captureToday("missing-stress", expecting: "supported")
-        XCTAssertTrue(element(app, "today-metric-stress").label.contains("No clean heart data today"))
-    }
+    @MainActor func testMissingStress() { captureToday("missing-stress", expecting: "supported") }
     @MainActor func testStaleData() { captureToday("stale", expecting: "No new nights") }
     @MainActor func testFirstNight() { captureToday("first-night", expecting: "1 of 4 nights") }
     @MainActor func testEmpty() { captureToday("empty", expecting: "Waiting for last night") }
     @MainActor func testLargestText() { captureToday("flagged", expecting: "Sleep was short", large: true) }
+    /// At the largest text size the recovery briefing stays whole and on screen. Since LV-04 step 2 (DEC-12.3) recovery
+    /// is a readout under the day dial: its driver and strain plan are no longer visible lines, they are what the
+    /// readout says to VoiceOver, and the morning note (LV-04 step 3) names the drivers on screen. The plan's range is
+    /// still on screen in Your day's Strain row. So this checks the readout's words and that the page, the prompt chips,
+    /// the readout and the Strain row sit inside the screen's width, which is what a clipped large-text layout breaks.
     @MainActor func testLargestTextBriefingCopy() {
         let app = launch("flagged", large: true)
-        let driver = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Sleep was short")).firstMatch
-        reveal(app, driver, top: 360)
+        let window = app.windows.firstMatch.frame
+        // The page itself keeps the screen's width: a long prompt chip once widened the whole scroll view.
+        let page = element(app, "today-screen")
+        XCTAssertTrue(page.waitForExistence(timeout: 20))
+        XCTAssertLessThanOrEqual(page.frame.width, window.width + 0.5)
+        for index in 0..<3 {
+            let chip = element(app, "today-ask-chip-\(index)")
+            guard chip.exists else { continue }
+            XCTAssertGreaterThanOrEqual(chip.frame.minX, window.minX - 0.5, "chip \(index)")
+            XCTAssertLessThanOrEqual(chip.frame.maxX, window.maxX + 0.5, "chip \(index)")
+        }
+        let recovery = element(app, "today-metric-recovery")
+        reveal(app, recovery, top: 360)
+        XCTAssertTrue(recovery.label.contains("Sleep was short"), recovery.label)
+        XCTAssertTrue(recovery.label.contains("Keep strain between"), recovery.label)
+        XCTAssertGreaterThanOrEqual(recovery.frame.minX, window.minX - 0.5)
+        XCTAssertLessThanOrEqual(recovery.frame.maxX, window.maxX + 0.5)
         capture("largest-text-full-driver")
-        let plan = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Keep strain between")).firstMatch
-        reveal(app, plan, top: 360)
-        capture("largest-text-full-plan")
+        // The Strain row left Today with Your day in the UX simplification (2026-11-01).
+    }
+    /// Without the heads-up row the hero used to sit a gutter left of centre. Since LV-04 step 2 the hero is the day
+    /// dial, with recovery as one of the readouts under it, so the dial is what has to sit in the middle.
+    @MainActor func testHeroIsCentredWithAndWithoutTheHeadsUpRow() {
+        var headsUpSeen: Set<Bool> = []
+        for mode in ["good", "first-night", "stale", "empty"] {
+            let app = launch(mode)
+            XCTAssertTrue(element(app, "today-metric-recovery").waitForExistence(timeout: 20), mode)
+            let hero = element(app, "today-dial")
+            XCTAssertTrue(hero.waitForExistence(timeout: 20), mode)
+            headsUpSeen.insert(element(app, "today-heads-up").waitForExistence(timeout: 2))
+            XCTAssertEqual(hero.frame.midX, app.windows.firstMatch.frame.midX, accuracy: 1, mode)
+            app.terminate()
+        }
+        XCTAssertEqual(headsUpSeen, [true, false], "the modes must cover a day with and without the heads-up row")
     }
     @MainActor func testStressLearningLanguage() {
         let app = launch("good", deepLink: "today/stress", extra: ["--loopr-hourly-stress-fixture=learning"])
@@ -73,48 +99,10 @@ final class SIMorningCaptureUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: expected, object: hero)], timeout: 10), .completed)
         let suffix = large ? "largest-text" : mode
         capture("\(suffix)-briefing")
-        if large {
-            app.swipeUp()
-            capture("largest-text-briefing-plan")
-            reveal(app, element(app, "today-contributor-rmssd"))
-            capture("largest-text-contributors-top")
-            reveal(app, element(app, "today-contributor-respiratory_rate"))
-            capture("largest-text-contributors-middle")
-        }
-        if mode == "empty" {
-            let empty = element(app, "today-signals-empty")
-            reveal(app, empty)
-            XCTAssertEqual(empty.label, "Wear your band overnight and sync in the morning.")
-            XCTAssertFalse(element(app, "today-contributor-rmssd").exists)
-            capture("empty-signals")
-        } else if mode == "stale" {
-            XCTAssertFalse(element(app, "today-signals-header").exists)
-            XCTAssertFalse(element(app, "today-contributor-rmssd").exists)
-        } else {
-            let contributor = element(app, "today-contributor-skin_temperature_deviation")
-            reveal(app, contributor)
-            capture("\(suffix)-contributors")
-        }
-        if large {
-            reveal(app, element(app, "today-metric-sleep"))
-            capture("largest-text-sleep-ring")
-            reveal(app, element(app, "today-metric-strain"))
-            capture("largest-text-strain-ring")
-        }
-        let rings = element(app, "today-metric-stress")
-        reveal(app, rings)
-        if ["good", "low", "flagged", "load-heavy", "missing-stress"].contains(mode) {
-            for id in ["strain", "stress"] {
-                XCTAssertFalse(element(app, "today-metric-\(id)").label.contains("Learning your usual"))
-            }
-        }
-        capture("\(suffix)-rings")
-        if mode == "good", !large {
-            app.swipeUp()
-            capture("tonight-goals")
-            app.swipeUp()
-            capture("more")
-        }
+        // DEC-07 took the contributor list, rings and signals off Today. The hero's state and copy, checked above, and
+        // what follows it are what Today shows now.
+        app.swipeUp()
+        capture("\(suffix)-below-briefing")
         return app
     }
     @MainActor private func launch(_ mode: String, deepLink: String = "today", large: Bool = false, extra: [String] = []) -> XCUIApplication {

@@ -1,3 +1,4 @@
+import DomainKit
 import Foundation
 import ProfileKit
 import SleepKit
@@ -14,8 +15,11 @@ nonisolated struct AppSleepNightDetailSource: SleepNightDetailSource {
         return (try? await analytics.overnightHeartRate(from: start, to: end)) ?? []
     }
 
+    /// The sleep need the person saved, or nil before they save one. Every reader then falls back to the same 8 h, but
+    /// Sleep calls it the default rather than "your" need (Data ICP R4-SW-02).
     func sleepGoalMinutes() async -> Double? {
-        guard let goals, let all = try? await goals.readGoals() else { return SleepNeed.defaultMinutes }
+        guard let goals, let all = try? await goals.readGoals(),
+              all.contains(where: { $0.type == .sleep && $0.isEnabled }) else { return nil }
         return SleepNeed.minutes(from: all)
     }
 }
@@ -58,17 +62,42 @@ enum SleepNightDetails {
     static func viewModel(environment: AppEnvironment, repositories: ProductRepositoryContainer?) -> SleepViewModel {
         if let persistent = repositories?.persistent {
             return SleepViewModel(repository: persistent.sleep, correctionRepository: persistent.sleep,
-                                  detailSource: AppSleepNightDetailSource(analytics: persistent.analytics, goals: persistent.profile))
+                                  detailSource: detailSource(environment: environment, repositories: repositories))
         }
-        let snapshot = SleepFixtures.snapshot(for: ProductFixture.metricState(for: environment.composition))
         let isFixture = repositories?.isFixtureComposition != false
-        let values = isFixture ? ProductFixture.days(snapshot, day: SleepFixtures.day, composition: environment.composition) : [:]
         // The populated fixture carries one correction so its Corrections
         // row and screen can be seen and tested; every other composition
         // starts with an empty audit trail.
         let seed = isFixture && environment.composition == .populated ? SleepFixtures.corrections : []
-        return SleepViewModel(repository: InMemorySleepRepository(values: values),
+        return SleepViewModel(repository: repository(environment: environment, repositories: repositories),
                               correctionRepository: InMemorySleepCorrectionRepository(seed: seed),
-                              detailSource: isFixture ? SleepFixtures.DetailSource() : nil)
+                              detailSource: detailSource(environment: environment, repositories: repositories))
+    }
+
+    /// The saved sleep need and heart-rate reader the Sleep tab uses. Fixture launches use the fixture source.
+    static func detailSource(environment: AppEnvironment, repositories: ProductRepositoryContainer?) -> (any SleepNightDetailSource)? {
+        if let persistent = repositories?.persistent {
+            return AppSleepNightDetailSource(analytics: persistent.analytics, goals: persistent.profile)
+        }
+        return repositories?.isFixtureComposition != false ? SleepFixtures.DetailSource() : nil
+    }
+
+    /// The plan the Sleep tab's Tonight card shows for `day`, worked out the way the Sleep view model does it.
+    /// Nil with fewer than three recent nights or no night read.
+    static func tonightPlan(day: DayIdentity, environment: AppEnvironment, repositories: ProductRepositoryContainer?) async -> SleepTonightPlan? {
+        let source = repository(environment: environment, repositories: repositories)
+        guard let snapshot = try? await source.readSleepDay(for: day) else { return nil }
+        let goal = await detailSource(environment: environment, repositories: repositories)?.sleepGoalMinutes()
+        return SleepNightInsights(snapshot: snapshot, goalMinutes: goal).tonight
+    }
+
+    /// The night reader for this composition: the database in production, the fixture night otherwise. Today's
+    /// timeline reads the wake time from it, and the Sleep tab shows the same nights.
+    static func repository(environment: AppEnvironment, repositories: ProductRepositoryContainer?) -> any SleepRepository {
+        if let persistent = repositories?.persistent { return persistent.sleep }
+        let snapshot = SleepFixtures.snapshot(for: ProductFixture.metricState(for: environment.composition))
+        let isFixture = repositories?.isFixtureComposition != false
+        let values = isFixture ? ProductFixture.days(snapshot, day: SleepFixtures.day, composition: environment.composition) : [:]
+        return InMemorySleepRepository(values: values)
     }
 }

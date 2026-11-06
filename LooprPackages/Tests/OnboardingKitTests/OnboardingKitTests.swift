@@ -22,8 +22,6 @@ struct OnboardingKitTests {
         _ = try await controller.advance()
         #expect((await controller.snapshot()).stage == .welcomeDisclosures)
         _ = try await controller.advance()
-        #expect((await controller.snapshot()).stage == .whoopHandover)
-        _ = try await controller.advance()
         #expect((await controller.snapshot()).stage == .prepareBand)
         _ = try await controller.advance()
         #expect((await controller.snapshot()).stage == .pairing)
@@ -34,10 +32,6 @@ struct OnboardingKitTests {
         _ = try await controller.completeProfile(ProfileDraft(displayName: "Ari", unitSystem: .metric))
         #expect((await controller.snapshot()).stage == .appleHealth)
         _ = try await controller.skipPermission(.appleHealth)
-        #expect((await controller.snapshot()).stage == .notifications)
-        _ = try await controller.skipPermission(.notifications)
-        #expect((await controller.snapshot()).stage == .sleepGoal)
-        _ = try await controller.skipSleepGoal()
         #expect((await controller.snapshot()).stage == .finish)
         _ = try await controller.finish()
         #expect((await controller.snapshot()).stage == .mainShell)
@@ -59,7 +53,6 @@ struct OnboardingKitTests {
         #expect((await first.snapshot()).stage == .welcomeDisclosures)
         _ = try await first.advance()
         _ = try await first.advance()
-        _ = try await first.advance()
         #expect((await first.snapshot()).stage == .pairing)
 
         let resumed = try await OnboardingFlowController(
@@ -72,7 +65,7 @@ struct OnboardingKitTests {
 
     @Test
     func interruptedFlowResumesAtEachCompletedStage() async throws {
-        for expectedStage in OnboardingStage.allCases {
+        for expectedStage in [OnboardingStage.launching] + OnboardingPath.band.steps + [.mainShell] {
             let repository = InMemoryOnboardingRepository()
             let profile = InMemoryProfileRepository(dateProvider: FixedDateProvider(), uuidProvider: FixedUUIDProvider())
             let controller = try await OnboardingFlowController(
@@ -103,7 +96,6 @@ struct OnboardingKitTests {
         }
         #expect(await pairing.requestCount == 0)
 
-        _ = try await controller.advance()
         _ = try await controller.advance()
         _ = try await controller.advance()
         await #expect(throws: OnboardingTransitionError.pairingMustBeContextual) {
@@ -347,19 +339,23 @@ struct OnboardingKitTests {
     @Test
     func stepOrderIsTheVisibleSequenceWithGatesAtEachEnd() {
         #expect(OnboardingStage.visibleSteps == [
-            .welcomeDisclosures, .whoopHandover, .prepareBand, .pairing, .profileSetup,
-            .appleHealth, .notifications, .sleepGoal, .finish
+            .welcomeDisclosures, .prepareBand, .pairing, .profileSetup, .appleHealth, .finish
         ])
-        #expect(OnboardingStage.stepCount == 9)
+        #expect(OnboardingStage.stepCount == 6)
         #expect(OnboardingStage.launching.stepNumber == nil)
         #expect(OnboardingStage.mainShell.stepNumber == nil)
         #expect(OnboardingStage.welcomeDisclosures.stepNumber == 1)
-        #expect(OnboardingStage.finish.stepNumber == 9)
-        #expect(OnboardingStage.whoopHandover.stepNumber == 2)
+        #expect(OnboardingStage.finish.stepNumber == 6)
+        #expect(OnboardingStage.prepareBand.stepNumber == 2)
+        // The stages folded away in the UX simplification are no step of any path.
+        for folded in [OnboardingStage.whoopHandover, .notifications, .sleepGoal] {
+            #expect(folded.stepNumber == nil)
+            #expect(folded.stepNumber(on: .noBand) == nil)
+        }
         var stage = OnboardingStage.launching
         var walked: [OnboardingStage] = [stage]
         while let next = stage.next { walked.append(next); stage = next }
-        #expect(walked == OnboardingStage.allCases)
+        #expect(walked == [.launching] + OnboardingStage.visibleSteps + [.mainShell])
         for visible in OnboardingStage.visibleSteps.dropFirst() {
             #expect(visible.previous?.next == visible)
         }
@@ -389,6 +385,156 @@ struct OnboardingKitTests {
         #expect(decoded.appleHealthOutcome == nil)
         #expect(decoded.notificationsOutcome == nil)
         #expect(decoded.sleepGoalHours == nil)
+        // No band choice in an earlier build means the band path.
+        #expect(decoded.bandChoice == nil)
+        #expect(decoded.path == .band)
+        #expect(decoded.stepNumber == 4)
+    }
+
+    // MARK: No-band path
+
+    @Test
+    func noBandPathSkipsTheThreeBandSteps() {
+        #expect(OnboardingPath.noBand.steps == [
+            .welcomeDisclosures, .profileSetup, .appleHealth, .finish
+        ])
+        #expect(OnboardingPath.noBand.stepCount == 4)
+        #expect(OnboardingPath.band.stepCount == 6)
+        #expect(OnboardingPath.band.steps == OnboardingStage.visibleSteps)
+        for stage in OnboardingStage.bandSteps {
+            #expect(stage.stepNumber(on: .noBand) == nil)
+        }
+        #expect(OnboardingStage.profileSetup.stepNumber(on: .noBand) == 2)
+        #expect(OnboardingStage.finish.stepNumber(on: .noBand) == 4)
+        #expect(OnboardingStage.profileSetup.stepNumber(on: .band) == 4)
+
+        // Next and Back walk exactly the path's steps, both ways.
+        var stage = OnboardingStage.welcomeDisclosures
+        var walked: [OnboardingStage] = [stage]
+        while let next = stage.next(on: .noBand), next != .mainShell { walked.append(next); stage = next }
+        #expect(walked == OnboardingPath.noBand.steps)
+        for visible in OnboardingPath.noBand.steps.dropFirst() {
+            #expect(visible.previous(on: .noBand)?.next(on: .noBand) == visible)
+        }
+        #expect(OnboardingStage.profileSetup.previous(on: .noBand) == .welcomeDisclosures)
+        #expect(OnboardingStage.profileSetup.previous(on: .band) == .pairing)
+        #expect(OnboardingStage.welcomeDisclosures.next(on: .band) == .prepareBand)
+    }
+
+    @Test
+    func continuingWithoutABandGoesToAboutYouAndBackReturnsToWelcome() async throws {
+        let pairing = RecordingPairingCoordinator()
+        let controller = try await makeController(pairing: pairing)
+        try await walk(controller, to: .welcomeDisclosures)
+
+        let skipped = try await controller.continueWithoutBand()
+        #expect(skipped.stage == .profileSetup)
+        #expect(skipped.bandChoice == .noBand)
+        #expect(skipped.path == .noBand)
+        #expect(skipped.pairingRequested == false)
+        #expect(skipped.stepNumber == 2)
+
+        let back = try await controller.goBack()
+        #expect(back.stage == .welcomeDisclosures)
+        #expect(back.stepNumber == 1)
+
+        // Changing their mind on Welcome puts the person on the band path.
+        let withBand = try await controller.advance()
+        #expect(withBand.stage == .prepareBand)
+        #expect(withBand.bandChoice == .hasBand)
+        #expect(withBand.stepNumber == 2)
+        #expect(await pairing.requestCount == 0)
+    }
+
+    @Test
+    func theNoBandPathWalksFourStepsToTheShell() async throws {
+        let controller = try await makeController()
+        try await walk(controller, to: .welcomeDisclosures)
+        _ = try await controller.continueWithoutBand()
+        var seen: [OnboardingStage] = [.welcomeDisclosures]
+        while (await controller.snapshot()).stage != .mainShell {
+            let snapshot = await controller.snapshot()
+            seen.append(snapshot.stage)
+            try await walk(controller, to: try #require(snapshot.stage.next(on: snapshot.path)))
+        }
+        #expect(seen == OnboardingPath.noBand.steps)
+        #expect((await controller.snapshot()).pairingRequested == false)
+    }
+
+    @Test
+    func continuingWithoutABandIsOnlyOfferedOnWelcome() async throws {
+        let controller = try await makeController()
+        await #expect(throws: OnboardingTransitionError.self) {
+            try await controller.continueWithoutBand()
+        }
+        try await walk(controller, to: .prepareBand)
+        await #expect(throws: OnboardingTransitionError.self) {
+            try await controller.continueWithoutBand()
+        }
+        #expect((await controller.snapshot()).stage == .prepareBand)
+    }
+
+    @Test
+    func theBandChoiceSurvivesARelaunch() async throws {
+        let repository = InMemoryOnboardingRepository()
+        let profile = InMemoryProfileRepository(dateProvider: FixedDateProvider(), uuidProvider: FixedUUIDProvider())
+        let first = try await OnboardingFlowController(repository: repository, profileRepository: profile,
+                                                       dateProvider: FixedDateProvider())
+        _ = try await first.advance()
+        _ = try await first.continueWithoutBand()
+        let loaded = try await repository.load()
+        let saved = try #require(loaded)
+        let reopened = try JSONDecoder().decode(OnboardingSnapshot.self, from: JSONEncoder().encode(saved))
+        #expect(reopened.bandChoice == .noBand)
+        let second = try await OnboardingFlowController(repository: repository, profileRepository: profile,
+                                                        dateProvider: FixedDateProvider())
+        let resumed = try await second.goBack()
+        #expect(resumed.stage == .welcomeDisclosures)
+    }
+
+    @Test
+    func notificationsWithoutABandNeverMentionTheBand() {
+        let groups = OnboardingCopy.Notifications.onGroups(on: .noBand)
+        #expect(!groups.contains(.band))
+        #expect(groups.contains(.workouts))
+        #expect(OnboardingCopy.Notifications.onGroups(on: .band).contains(.band))
+        var strings = [OnboardingCopy.Notifications.detail(on: .noBand)]
+        strings += OnboardingCopy.Notifications.sample(on: .noBand).flatMap { [$0.title, $0.detail] }
+        strings += groups.flatMap { [OnboardingCopy.Notifications.title(for: $0), OnboardingCopy.Notifications.detail(for: $0, on: .noBand)] }
+        for string in strings {
+            #expect(!string.localizedCaseInsensitiveContains("band"), "\(string) mentions the band")
+            #expect(!string.localizedCaseInsensitiveContains("strap"), "\(string) mentions a strap")
+            #expect(!string.localizedCaseInsensitiveContains("detect"), "\(string) promises detection")
+        }
+        // The saved-workout sample is the text the app posts.
+        #expect(OnboardingCopy.Notifications.noBandSample.contains { $0.title == "Workout saved" })
+        #expect(OnboardingCopy.Notifications.noBandSample.contains { $0.detail.hasPrefix("You wrote this morning: ") })
+        #expect(OnboardingCopy.Notifications.sample(on: .band).map(\.title) == ["Workout detected", "Band update"])
+    }
+
+    @Test
+    func onboardingCopySaysBandNeverStrap() {
+        var strings = OnboardingCopy.Notifications.sample.flatMap { [$0.title, $0.detail] }
+        strings += OnboardingStateFixtures.all.flatMap { [$0.title, $0.detail] }
+        strings += [OnboardingCopy.Welcome.promise, OnboardingCopy.Welcome.noBandLine, OnboardingCopy.Finish.addBandDetail]
+        for string in strings {
+            #expect(!string.localizedCaseInsensitiveContains("strap"), "\(string) says strap")
+            #expect(!string.contains("Device Center"), "\(string) names Device Center")
+        }
+    }
+
+    @Test
+    func welcomeSaysWhatWorksWithoutABandAndSplitsPrivacy() {
+        for word in ["Food", "fitness tests", "protocol", "blood tests", "Apple Health", "steps", "daylight"] {
+            #expect(OnboardingCopy.Welcome.noBandLine.contains(word), "No-band line omits \(word)")
+        }
+        #expect(OnboardingCopy.Welcome.promise.contains("Apple Health"))
+        #expect(!OnboardingCopy.Welcome.promise.hasPrefix("Loopr reads your WHOOP"))
+        for detail in [OnboardingCopy.Welcome.accountDetail, OnboardingCopy.Welcome.privateDetail, OnboardingCopy.Welcome.coachDetail] {
+            #expect(detail.split(separator: " ").count <= 20, "\(detail) is too long for one row")
+        }
+        #expect(OnboardingCopy.Welcome.coachDetail.contains("OpenAI or Claude"))
+        #expect(OnboardingCopy.Welcome.privateDetail.contains("stores your health data here"))
     }
 
     @Test
@@ -465,8 +611,10 @@ struct OnboardingKitTests {
         #expect(OnboardingStage.bandSteps == [.whoopHandover, .prepareBand, .pairing])
         for stage in [OnboardingStage.whoopHandover, .prepareBand, .pairing] {
             let pairing = RecordingPairingCoordinator()
-            let controller = try await makeController(pairing: pairing)
-            try await walk(controller, to: stage)
+            let controller = stage == .whoopHandover
+                ? try await resumed(at: stage, pairingRequested: false, pairing: pairing)
+                : try await makeController(pairing: pairing)
+            if stage != .whoopHandover { try await walk(controller, to: stage) }
             let deferred = try await controller.deferPairing()
             #expect(deferred.stage == .profileSetup)
             #expect(!deferred.pairingRequested)
@@ -512,21 +660,27 @@ struct OnboardingKitTests {
         #expect(await permissions.requests.isEmpty)
 
         let afterHealth = try await controller.requestPermission(.appleHealth)
-        #expect(afterHealth.stage == .notifications)
+        #expect(afterHealth.stage == .finish)
         #expect(afterHealth.appleHealthOutcome == .granted)
+        #expect(await permissions.requests == [.appleHealth])
+    }
+
+    @Test
+    func aSnapshotSavedOnNotificationsAsksFromThereAndMovesToReady() async throws {
+        let permissions = RecordingPermissionCoordinator(answer: .granted)
+        let controller = try await resumed(at: .notifications, permissions: permissions)
         let afterNotifications = try await controller.requestPermission(.notifications)
-        #expect(afterNotifications.stage == .sleepGoal)
+        #expect(afterNotifications.stage == .finish)
         #expect(afterNotifications.notificationsOutcome == .granted)
-        #expect(await permissions.requests == [.appleHealth, .notifications])
+        #expect(await permissions.requests == [.notifications])
     }
 
     @Test
     func deniedPermissionStillMovesOn() async throws {
         let permissions = RecordingPermissionCoordinator(answer: .denied)
-        let controller = try await makeController(permissions: permissions)
-        try await walk(controller, to: .notifications)
+        let controller = try await resumed(at: .notifications, permissions: permissions)
         let next = try await controller.requestPermission(.notifications)
-        #expect(next.stage == .sleepGoal)
+        #expect(next.stage == .finish)
         #expect(next.notificationsOutcome == .denied)
     }
 
@@ -536,11 +690,8 @@ struct OnboardingKitTests {
         let controller = try await makeController(permissions: permissions)
         try await walk(controller, to: .appleHealth)
         let health = try await controller.skipPermission(.appleHealth)
-        #expect(health.stage == .notifications)
+        #expect(health.stage == .finish)
         #expect(health.appleHealthOutcome == .skipped)
-        let notifications = try await controller.skipPermission(.notifications)
-        #expect(notifications.stage == .sleepGoal)
-        #expect(notifications.notificationsOutcome == .skipped)
         #expect(await permissions.requests.isEmpty)
         await #expect(throws: OnboardingTransitionError.self) {
             try await controller.skipPermission(.appleHealth)
@@ -550,13 +701,7 @@ struct OnboardingKitTests {
     @Test
     func sleepGoalIsSavedAsTheCanonicalSleepGoal() async throws {
         let profile = InMemoryProfileRepository(dateProvider: FixedDateProvider(), uuidProvider: FixedUUIDProvider())
-        let controller = try await OnboardingFlowController(
-            repository: InMemoryOnboardingRepository(),
-            profileRepository: profile,
-            goalsRepository: profile,
-            dateProvider: FixedDateProvider()
-        )
-        try await walk(controller, to: .sleepGoal)
+        let controller = try await resumed(at: .sleepGoal, profile: profile, goals: true)
         await #expect(throws: OnboardingTransitionError.invalidSleepGoal) {
             try await controller.saveSleepGoal(hours: 2)
         }
@@ -576,13 +721,7 @@ struct OnboardingKitTests {
     @Test
     func skippingTheSleepGoalWritesNothing() async throws {
         let profile = InMemoryProfileRepository(dateProvider: FixedDateProvider(), uuidProvider: FixedUUIDProvider())
-        let controller = try await OnboardingFlowController(
-            repository: InMemoryOnboardingRepository(),
-            profileRepository: profile,
-            goalsRepository: profile,
-            dateProvider: FixedDateProvider()
-        )
-        try await walk(controller, to: .sleepGoal)
+        let controller = try await resumed(at: .sleepGoal, profile: profile, goals: true)
         let skipped = try await controller.skipSleepGoal()
         #expect(skipped.stage == .finish)
         #expect(skipped.sleepGoalHours == nil)
@@ -591,8 +730,7 @@ struct OnboardingKitTests {
 
     @Test
     func sleepGoalWithoutAGoalsRepositoryFailsClosed() async throws {
-        let controller = try await makeController()
-        try await walk(controller, to: .sleepGoal)
+        let controller = try await resumed(at: .sleepGoal)
         await #expect(throws: OnboardingTransitionError.goalsUnavailable) {
             try await controller.saveSleepGoal(hours: 8)
         }
@@ -602,11 +740,11 @@ struct OnboardingKitTests {
     @Test
     func finishOnlyFromTheFinishStep() async throws {
         let controller = try await makeController()
-        try await walk(controller, to: .sleepGoal)
+        try await walk(controller, to: .appleHealth)
         await #expect(throws: OnboardingTransitionError.self) {
             try await controller.finish()
         }
-        _ = try await controller.skipSleepGoal()
+        _ = try await controller.skipPermission(.appleHealth)
         #expect(try await controller.finish().stage == .mainShell)
     }
 
@@ -623,8 +761,6 @@ struct OnboardingKitTests {
         )
         try await walk(controller, to: .appleHealth)
         _ = try await controller.requestPermission(.appleHealth)
-        _ = try await controller.skipPermission(.notifications)
-        _ = try await controller.saveSleepGoal(hours: 8)
 
         let relaunched = try await OnboardingFlowController(
             repository: repository,
@@ -634,8 +770,8 @@ struct OnboardingKitTests {
         let resumed = try await relaunched.resume()
         #expect(resumed.stage == .finish)
         #expect(resumed.appleHealthOutcome == .granted)
-        #expect(resumed.notificationsOutcome == .skipped)
-        #expect(resumed.sleepGoalHours == 8)
+        #expect(resumed.notificationsOutcome == nil)
+        #expect(resumed.sleepGoalHours == nil)
         #expect(resumed.betaConsent.status == .neverGranted)
         #expect(resumed.pairingRequested)
     }
@@ -645,7 +781,7 @@ struct OnboardingKitTests {
     @Test
     func blankProfileFormIsValidAndSavesOnlyUnitsAndTimeZone() throws {
         let form = OnboardingProfileForm()
-        #expect(form.canSubmit)
+        #expect(form.canSubmit(currentYear: 2026))
         let draft = form.draft(currentYear: 2026, timeZone: TimeZone(identifier: "Asia/Singapore")!)
         #expect(draft.displayName == nil)
         #expect(draft.birthYear == nil)
@@ -661,7 +797,7 @@ struct OnboardingKitTests {
     func profileFormConvertsMetricEntries() throws {
         var form = OnboardingProfileForm()
         form.name = "  Alex "
-        form.age = "34"
+        form.birthYear = "1992"
         form.sex = .male
         form.heightPrimary = "181"
         form.weight = "76,5"
@@ -671,7 +807,7 @@ struct OnboardingKitTests {
         #expect(draft.biologicalSex == .male)
         #expect(draft.heightCentimeters == 181)
         #expect(draft.weightKilograms == 76.5)
-        #expect(form.estimatedMaxHeartRate == 184)
+        #expect(form.estimatedMaxHeartRate(currentYear: 2026) == 184)
         try ProfileValidator.validate(draft, currentYear: 2026)
     }
 
@@ -686,7 +822,7 @@ struct OnboardingKitTests {
         #expect(abs((draft.heightCentimeters ?? 0) - 180.34) < 0.001)
         #expect(abs((draft.weightKilograms ?? 0) - 74.843) < 0.01)
         #expect(draft.unitSystem == .imperial)
-        #expect(form.canSubmit)
+        #expect(form.canSubmit(currentYear: 2026))
     }
 
     @Test
@@ -707,36 +843,52 @@ struct OnboardingKitTests {
     @Test
     func profileFormFlagsImplausibleEntriesWithoutGuessing() {
         var form = OnboardingProfileForm()
-        form.age = "9"
+        form.birthYear = "2017"
         form.heightPrimary = "18"
         form.weight = "abc"
-        #expect(form.issues == [.age, .height, .weight])
-        #expect(!form.canSubmit)
-        #expect(form.estimatedMaxHeartRate == nil)
+        #expect(form.issues(currentYear: 2026) == [.birthYear, .height, .weight])
+        #expect(!form.canSubmit(currentYear: 2026))
+        #expect(form.estimatedMaxHeartRate(currentYear: 2026) == nil)
         let draft = form.draft(currentYear: 2026)
         #expect(draft.birthYear == nil)
 
         form.unitSystem = .imperial
         form.heightPrimary = "5"
         form.heightInches = "14"
-        form.age = "40"
+        form.birthYear = "1986"
         form.weight = ""
-        #expect(form.issues == [.height])
-        for issue in [OnboardingProfileForm.Issue.age, .height, .weight] {
+        #expect(form.issues(currentYear: 2026) == [.height])
+        for issue in [OnboardingProfileForm.Issue.birthYear, .height, .weight] {
             #expect(!issue.message.isEmpty)
         }
     }
 
     @Test
-    func derivedMaxHeartRateFollowsTheTypedAge() {
+    func derivedMaxHeartRateFollowsTheTypedBirthYear() {
         var form = OnboardingProfileForm()
-        #expect(form.estimatedMaxHeartRate == nil)
-        form.age = "30"
-        #expect(form.estimatedMaxHeartRate == 187)
-        form.age = "50"
-        #expect(form.estimatedMaxHeartRate == 173)
-        form.age = "130"
-        #expect(form.estimatedMaxHeartRate == nil)
+        #expect(form.estimatedMaxHeartRate(currentYear: 2026) == nil)
+        form.birthYear = "1996"
+        #expect(form.age(currentYear: 2026) == 30)
+        #expect(form.estimatedMaxHeartRate(currentYear: 2026) == 187)
+        form.birthYear = "1976"
+        #expect(form.estimatedMaxHeartRate(currentYear: 2026) == 173)
+        form.birthYear = "1896"
+        #expect(form.estimatedMaxHeartRate(currentYear: 2026) == nil)
+    }
+
+    /// R2-UPG-2: a year still being typed is not flagged, and Continue waits for a whole year.
+    @Test
+    func aBirthYearBeingTypedIsNotFlaggedButCannotBeSaved() {
+        var form = OnboardingProfileForm()
+        form.birthYear = "19"
+        #expect(form.issues(currentYear: 2026).isEmpty)
+        #expect(!form.canSubmit(currentYear: 2026))
+        #expect(form.draft(currentYear: 2026).birthYear == nil)
+        form.birthYear = "1990"
+        #expect(form.canSubmit(currentYear: 2026))
+        #expect(form.draft(currentYear: 2026).birthYear == 1990)
+        form.birthYear = "19a0"
+        #expect(form.issues(currentYear: 2026) == [.birthYear])
     }
 
     @Test
@@ -752,7 +904,8 @@ struct OnboardingKitTests {
         )
         let form = OnboardingProfileForm(draft: draft, currentYear: 2026)
         #expect(form.name == "Ari")
-        #expect(form.age == "36")
+        #expect(form.birthYear == "1990")
+        #expect(form.age(currentYear: 2026) == 36)
         #expect(form.sex == .undisclosed)
         #expect(form.heightPrimary == "5")
         #expect(form.heightInches == "11")
@@ -769,7 +922,10 @@ struct OnboardingKitTests {
         ]
         var strings: [String] = [
             OnboardingCopy.Welcome.title, OnboardingCopy.Welcome.promise, OnboardingCopy.Welcome.privateDetail,
-            OnboardingCopy.Welcome.independentTitle,
+            OnboardingCopy.Welcome.independentTitle, OnboardingCopy.Welcome.noBandLine,
+            OnboardingCopy.Welcome.accountTitle, OnboardingCopy.Welcome.accountDetail,
+            OnboardingCopy.Welcome.coachTitle, OnboardingCopy.Welcome.coachDetail,
+            OnboardingCopy.Welcome.goodToKnowTitle, OnboardingCopy.Welcome.action, OnboardingCopy.Welcome.noBandAction,
             OnboardingCopy.Handover.title, OnboardingCopy.Handover.detail, OnboardingCopy.Handover.bluetoothTitle,
             OnboardingCopy.Handover.bluetoothDetail, OnboardingCopy.Handover.openSettingsNote,
             OnboardingCopy.Handover.swipeTitle, OnboardingCopy.Handover.swipeDetail,
@@ -777,6 +933,8 @@ struct OnboardingKitTests {
             OnboardingCopy.Handover.reverseNote,
             OnboardingCopy.Prepare.title, OnboardingCopy.Prepare.detail, OnboardingCopy.Prepare.offDetail,
             OnboardingCopy.Prepare.tapDetail, OnboardingCopy.Prepare.newBandDetail,
+            OnboardingCopy.Prepare.whoopTitle, OnboardingCopy.Prepare.whoopDetail, OnboardingCopy.Prepare.noWhoopNote,
+            OnboardingCopy.Prepare.newBandNote, OnboardingCopy.Profile.moreSummary,
             OnboardingCopy.Pairing.timingDetail, OnboardingCopy.Pairing.nearbyDetail,
             OnboardingCopy.Pairing.helpTitle, OnboardingCopy.Pairing.helpIntro,
             OnboardingCopy.Pairing.bondRepairWarning, OnboardingCopy.Pairing.sharedLinkTitle,
@@ -785,6 +943,7 @@ struct OnboardingKitTests {
             OnboardingCopy.Health.title, OnboardingCopy.Health.detail, OnboardingCopy.Health.writeOnlyDetail,
             OnboardingCopy.Health.choiceNote,
             OnboardingCopy.Notifications.title, OnboardingCopy.Notifications.detail,
+            OnboardingCopy.Notifications.noBandDetail,
             OnboardingCopy.SleepNeedStep.title, OnboardingCopy.SleepNeedStep.detail,
             OnboardingCopy.SleepNeedStep.skipNote(defaultHours: OnboardingFacts.defaultSleepNeedHours),
             OnboardingCopy.Finish.title, OnboardingCopy.Finish.deferredTitle, OnboardingCopy.Finish.wearDetail,
@@ -792,6 +951,11 @@ struct OnboardingKitTests {
             OnboardingCopy.Finish.baselineDetail(nights: OnboardingFacts.recoveryLearningNights),
             OnboardingCopy.Finish.syncDetail, OnboardingCopy.Finish.laterDetail, OnboardingCopy.Finish.refreshDetail,
             OnboardingCopy.Finish.connectingTitle, OnboardingCopy.Finish.connectingDetail,
+            OnboardingCopy.Finish.noBandSectionTitle, OnboardingCopy.Finish.mealTitle, OnboardingCopy.Finish.mealDetail,
+            OnboardingCopy.Finish.protocolTitle, OnboardingCopy.Finish.protocolDetail,
+            OnboardingCopy.Finish.healthTitle, OnboardingCopy.Finish.healthDetail,
+            OnboardingCopy.Finish.addBandTitle, OnboardingCopy.Finish.addBandDetail,
+            OnboardingCopy.Finish.longevityTitle, OnboardingCopy.Finish.longevityDetail,
             OnboardingCopy.Pairing.helpTitle(for: .failed("x")), OnboardingCopy.Pairing.helpTitle(for: .choosing),
             OnboardingCopy.DataControls.detail
         ]
@@ -801,6 +965,7 @@ struct OnboardingKitTests {
             [OnboardingCopy.Notifications.title(for: $0), OnboardingCopy.Notifications.detail(for: $0)]
         }
         strings += OnboardingStage.allCases.map(OnboardingCopy.Chrome.headerTitle(for:))
+        strings += (OnboardingCopy.Notifications.sample + OnboardingCopy.Notifications.noBandSample).flatMap { [$0.title, $0.detail] }
         let banned = ["\u{2014}", "\u{2013}", "!", "diagnos", "medical-grade", "clinically", "arrhythm", "AFib",
                       "apnea", "abnormal", "dangerous", "blood pressure", "\u{201C}", "\u{201D}", "\u{2019}"]
         for string in strings {
@@ -818,7 +983,7 @@ struct OnboardingKitTests {
         #expect(OnboardingDisclosureCopy.nonAffiliation == "Loopr is independent from WHOOP.")
         #expect(OnboardingCopy.Welcome.independentTitle == "Not made by WHOOP")
         let all = [
-            OnboardingCopy.Welcome.promise, OnboardingCopy.Handover.detail, OnboardingCopy.Pairing.stableDetail,
+            OnboardingCopy.Welcome.promise, OnboardingCopy.Welcome.noBandLine, OnboardingCopy.Handover.detail, OnboardingCopy.Pairing.stableDetail,
             OnboardingCopy.Pairing.sharedLinkDetail
         ]
         for string in all {
@@ -830,30 +995,28 @@ struct OnboardingKitTests {
 
     @Test
     func handoverAndPairingCopyFollowTheResearch() {
-        // Handover research: these three claims in earlier copy were wrong
-        // or unverified.
+        // Handover research: these three claims in earlier copy were wrong or unverified. Since the UX simplification
+        // (2026-11-01) the WHOOP app step is the first card of "Get your band ready".
         let everything = [
-            OnboardingCopy.Handover.detail, OnboardingCopy.Handover.bluetoothDetail, OnboardingCopy.Handover.swipeDetail,
-            OnboardingCopy.Pairing.helpIntro, OnboardingCopy.Prepare.tapDetail, OnboardingCopy.Prepare.newBandDetail
+            OnboardingCopy.Prepare.whoopDetail, OnboardingCopy.Prepare.noWhoopNote,
+            OnboardingCopy.Pairing.helpIntro, OnboardingCopy.Prepare.tapDetail, OnboardingCopy.Prepare.newBandNote
         ] + OnboardingCopy.Pairing.helpItems
         for string in everything {
             #expect(!string.localizedCaseInsensitiveContains("never show up"))
             #expect(!string.localizedCaseInsensitiveContains("one app at a time"))
             #expect(!string.localizedCaseInsensitiveContains("to itself"))
         }
-        // Step 1: Bluetooth access off, by its Settings path.
-        #expect(OnboardingCopy.Handover.bluetoothDetail.contains("Privacy & Security"))
-        #expect(OnboardingCopy.Handover.bluetoothDetail.contains("Bluetooth"))
-        #expect(OnboardingCopy.Handover.bluetoothDetail.contains("delete the app"))
-        // Step 3: other phones and iPads.
-        #expect(OnboardingCopy.Handover.otherDeviceTitle.contains("iPad"))
-        // Pairing mode: the tap method first, with its timing, then the
-        // battery pack only for a band that was never paired.
+        // Card 1: Bluetooth access off, by its Settings path, then the app swiped away, and the same on an iPad.
+        #expect(OnboardingCopy.Prepare.whoopDetail.contains("Privacy & Security"))
+        #expect(OnboardingCopy.Prepare.whoopDetail.contains("Bluetooth"))
+        #expect(OnboardingCopy.Prepare.whoopDetail.contains("swipe"))
+        #expect(OnboardingCopy.Prepare.whoopDetail.contains("iPad"))
+        // Pairing mode: the tap method with its timing, then the battery pack only for a band that was never paired.
         #expect(OnboardingCopy.Prepare.tapDetail.contains("two fingers"))
         #expect(OnboardingCopy.Prepare.tapDetail.contains("sides"))
-        #expect(OnboardingCopy.Prepare.detail.contains("15 to 20 seconds"))
-        #expect(OnboardingCopy.Prepare.newBandDetail.contains("15 minutes"))
-        #expect(OnboardingCopy.Prepare.newBandTitle.contains("never paired"))
+        #expect(OnboardingCopy.Prepare.tapDetail.contains("15 to 20 seconds"))
+        #expect(OnboardingCopy.Prepare.newBandNote.contains("15 minutes"))
+        #expect(OnboardingCopy.Prepare.newBandNote.contains("never paired"))
         // Connect within about three minutes, band next to the iPhone.
         #expect(OnboardingCopy.Pairing.timingDetail.contains("3 minutes"))
         // Forget This Device only as the fix for a bond error, with its cost.
@@ -906,6 +1069,9 @@ struct OnboardingKitTests {
         }
         #expect(OnboardingCopy.Health.detail(for: request) == OnboardingCopy.Health.detail)
         #expect(OnboardingCopy.Health.detail.contains("reads"))
+        // Reading is why Loopr asks, so it comes first; saving is second.
+        #expect(OnboardingCopy.Health.detail.hasPrefix("Loopr reads"))
+        #expect(OnboardingCopy.Health.title == "Read from Apple Health")
     }
 
     @Test
@@ -916,6 +1082,8 @@ struct OnboardingKitTests {
         #expect(request.orderedReads.isEmpty)
         #expect(OnboardingCopy.Health.detail(for: request) == OnboardingCopy.Health.writeOnlyDetail)
         #expect(!OnboardingCopy.Health.writeOnlyDetail.contains("reads"))
+        #expect(OnboardingCopy.Health.title(for: request) == OnboardingCopy.Health.writeOnlyTitle)
+        #expect(OnboardingCopy.Health.title(for: .freshInstall) == OnboardingCopy.Health.title)
 
         let sleepOnly = OnboardingHealthRequest(writes: [], reads: [], readsSleep: true)
         #expect(sleepOnly.importsHistory)
@@ -941,6 +1109,9 @@ struct OnboardingKitTests {
         #expect(OnboardingNotificationGroup.offUntilChosen.families.contains(.highHeartRate))
         #expect(OnboardingNotificationGroup.band.families.contains(.battery))
         #expect(OnboardingCopy.Notifications.detail(for: .offUntilChosen).contains("heart rate"))
+        // The Journal is Protocol now, and its reminders are check-in reminders, as Settings names them (ICP R2-UPG-9).
+        #expect(!OnboardingCopy.Notifications.detail(for: .offUntilChosen).localizedCaseInsensitiveContains("journal"))
+        #expect(OnboardingCopy.Notifications.detail(for: .offUntilChosen).contains("check-in"))
     }
 
     @Test
@@ -1016,6 +1187,28 @@ struct OnboardingKitTests {
                 return
             }
         }
+    }
+
+    /// A controller resumed from a snapshot an earlier build saved on `stage`. The WHOOP app, notifications and sleep
+    /// need left the visible path in the UX simplification (2026-11-01); a snapshot stopped on one still moves on.
+    private func resumed(
+        at stage: OnboardingStage,
+        pairingRequested: Bool = true,
+        profile: InMemoryProfileRepository? = nil,
+        goals: Bool = false,
+        pairing: any ContextualPairingCoordinator = NoopPairingCoordinator(),
+        permissions: any OnboardingPermissionCoordinator = NoopPermissionCoordinator()
+    ) async throws -> OnboardingFlowController {
+        let profile = profile ?? InMemoryProfileRepository(dateProvider: FixedDateProvider(), uuidProvider: FixedUUIDProvider())
+        let snapshot = OnboardingSnapshot(stage: stage, pairingRequested: pairingRequested, lastUpdatedAt: FixedDateProvider().now())
+        return try await OnboardingFlowController(
+            repository: InMemoryOnboardingRepository(snapshot: snapshot),
+            profileRepository: profile,
+            goalsRepository: goals ? profile : nil,
+            pairingCoordinator: pairing,
+            permissionCoordinator: permissions,
+            dateProvider: FixedDateProvider()
+        )
     }
 
     private func makeController(

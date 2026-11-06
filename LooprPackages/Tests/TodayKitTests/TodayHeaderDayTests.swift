@@ -22,22 +22,33 @@ struct TodayHeaderDayTests {
         // 642 minutes after the last sync used to read "SYNCED 642 MIN A…".
         let now = lastSync.addingTimeInterval(642 * 60)
         #expect(TodayHeaderFormatting.meta(navigation: navigation(today), lastSync: lastSync, now: now)
-                == "THU 24 SEP · SYNCED 10 H AGO")
+                == "Thu 24 Sep · Synced 10 h ago")
     }
 
     @Test func pastDayMetaNamesTheDayBecauseTheTitleStaysToday() {
         let now = lastSync.addingTimeInterval(25 * 60)
         #expect(TodayHeaderFormatting.meta(navigation: navigation(LooprDay(year: 2026, month: 9, day: 23)), lastSync: lastSync, now: now)
-                == "YESTERDAY · WED 23 SEP · SYNCED 25 MIN AGO")
+                == "Yesterday · Wed 23 Sep · Synced 25 min ago")
         #expect(TodayHeaderFormatting.meta(navigation: navigation(LooprDay(year: 2026, month: 9, day: 22)), lastSync: lastSync, now: now)
-                == "TUE 22 SEP · SYNCED 25 MIN AGO")
+                == "Tue 22 Sep · Synced 25 min ago")
     }
 
     @Test func metaWithoutAnySyncIsJustTheDate() {
-        #expect(TodayHeaderFormatting.meta(navigation: navigation(today), lastSync: nil, now: lastSync) == "THU 24 SEP")
+        #expect(TodayHeaderFormatting.meta(navigation: navigation(today), lastSync: nil, now: lastSync) == "Thu 24 Sep")
     }
 
     @Test func summaryDayLabelIsShortAndEnglish() {
         #expect(TodayHeaderFormatting.dayLabel(for: DayIdentity(year: 2026, month: 9, day: 24)) == "Thu 24 Sep")
+    }
+
+    @MainActor
+    @Test func askShortcutShowsOnEveryDayWithOneIdentifier() {
+        var opened = 0
+        let action = TodayHeaderShortcut.coach { opened += 1 }
+        #expect(action.identifier == "today-header-coach")
+        #expect(action.label == "Ask your coach")
+        #expect(action.symbol == "sparkles")
+        action.run()
+        #expect(opened == 1)
     }
 }

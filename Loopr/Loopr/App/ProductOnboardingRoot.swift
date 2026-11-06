@@ -298,6 +298,10 @@ struct ProductOnboardingRoot: View {
                             now: environment.dateProvider.now(),
                             actions: actions
                         )
+                        // A person who sees onboarding in this version needs no "What's new".
+                        .onAppear {
+                            if environment.composition == .production { WhatsNewGate().markNotNeeded() }
+                        }
                     }
                 } else if let errorMessage {
                     OnboardingPreparationErrorView(message: errorMessage) {
@@ -330,6 +334,7 @@ struct ProductOnboardingRoot: View {
             }
         }
         actions.deferPairing = { run { try await $0.deferPairing() } }
+        actions.continueWithoutBand = { run { try await $0.continueWithoutBand() } }
         actions.setExperimentalSupport = { enabled in
             run { controller in
                 let next = try await controller.setExperimentalSupport(enabled)
@@ -453,10 +458,16 @@ struct ProductOnboardingRoot: View {
                 }
             } else {
                 let initial = OnboardingSnapshot(stage: initialStage, lastUpdatedAt: environment.dateProvider.now())
+                // The launch's one fixture profile, which the shell after onboarding reads, so About you's birth year
+                // and sex reach Profile, Data and Fitness (R3-NEW-1).
+                #if DEBUG
+                let profile = ProductFixtureProfile.onboardingRepository(for: environment.composition)
+                #else
                 let profile = InMemoryProfileRepository(
                     dateProvider: environment.dateProvider,
                     uuidProvider: environment.uuidProvider
                 )
+                #endif
                 let flow = try await OnboardingFlowController(
                     repository: InMemoryOnboardingRepository(snapshot: initial),
                     profileRepository: profile,

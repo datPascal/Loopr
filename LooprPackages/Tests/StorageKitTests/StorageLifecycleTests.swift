@@ -35,6 +35,40 @@ private enum StorageLifecycleTestSupport {
 
     static func seedEveryTable(_ database: StorageDatabase) throws {
         try database.write { db in
+            try db.execute(sql: "INSERT INTO food_meal VALUES ('storage-test-meal', '2024-01-01', 1704067200, 1, 1, X'0102')")
+            try db.execute(sql: "INSERT INTO food_drink VALUES ('storage-test-drink', '2024-01-01', 1704067200, X'0102')")
+            try db.execute(sql: "INSERT INTO food_day VALUES ('2024-01-01', X'0102')")
+            try db.execute(sql: "INSERT INTO food_product_cache_epoch VALUES (1, '00000000-0000-0000-0000-000000000001')")
+            try db.execute(sql: "INSERT INTO food_product_cache VALUES ('3017620422003', 1704067200, X'0102')")
+            try db.execute(sql: "INSERT INTO food_favorite VALUES ('storage-test-favorite', 1704067200, X'0102')")
+            try db.execute(sql: "INSERT INTO food_target VALUES ('storage-test-target', 1704067200, X'0102')")
+            try db.execute(sql: "INSERT INTO food_weight VALUES ('storage-test-weight', '2024-01-01', 1704067200, X'0102')")
+            try db.execute(sql: "INSERT INTO body_composition VALUES ('storage-test-weight', 21.5, 61.2, 1704067200)")
+            try db.execute(sql: "INSERT INTO food_photo VALUES ('storage-test-photo', 'storage-test-meal', 'image/png', 1704067200, 'storage-test-digest', X'0304')")
+            try db.execute(sql: "INSERT INTO routine_protocol VALUES ('storage-test-protocol', 'Sleep first', 1704067200, 1, X'0102')")
+            try db.execute(sql: "INSERT INTO routine_version VALUES ('storage-test-protocol', 1, 1704067200, X'0102')")
+            try db.execute(sql: "INSERT INTO routine_check VALUES ('storage-test-protocol', 'storage-test-rule', '2024-01-01', 1, 'kept', 'manual', NULL, 0, 1704067200, NULL)")
+            try db.execute(sql: "INSERT INTO lab_report VALUES ('storage-test-lab-report', 1704067200, '2024-01-01', 'Europe/Berlin', 'Labor Berlin', 1, 'typed', 1704070800, 'storage test')")
+            try db.execute(sql: "INSERT INTO lab_value VALUES ('storage-test-lab-value', 'storage-test-lab-report', 0, 'apob', NULL, NULL, '78.5', '78.50', 'mg/dL', '40', '90', NULL, NULL, 'typed', NULL, 0, NULL)")
+            try db.execute(sql: "INSERT INTO lab_clock_result VALUES ('storage-test-lab-clock', 'dunedinpace', NULL, '0.92', NULL, 'Lab', 1704067200, 'UTC', 1704070800, NULL)")
+            try db.execute(sql: "INSERT INTO supplement_item VALUES ('storage-test-supplement', 'supplement', 'vitamin-d3', 0, 1, '2024-01-01', 1704067200, X'0102')")
+            try db.execute(sql: "INSERT INTO supplement_tick VALUES ('storage-test-supplement', '2024-01-01', 'morning', 'taken', 1704067200, 'storage test')")
+            try db.execute(sql: "INSERT INTO capacity_result VALUES ('storage-test-capacity', 'grip', 52.0, 'kg', 'left', 1704067200, 'Europe/Berlin', 'typed', NULL, NULL, 1704067200)")
+            try db.execute(sql: "INSERT INTO capacity_goal VALUES ('grip', 45.0, 'kg', 1704067200)")
+            try db.execute(sql: """
+                INSERT INTO experiment(id, protocol_id, title, intervention_name, rule_key, design, design_length, washout,
+                    minimum_nights, planned_nights, outcome_key, outcome_title, outcome_unit, outcome_direction, start_day,
+                    time_zone_identifier, created_at, status, end_day)
+                VALUES ('storage-test-experiment', 'storage-test-protocol', 'Magnesium', 'magnesium', 'storage-test-rule', 'blocks', 7, 1,
+                    5, 28, 'deepSleepMinutes', 'Deep sleep', 'min', 'higher', '2024-01-01', 'Europe/Berlin', 1704067200,
+                    'finished', '2024-01-28')
+                """)
+            try db.execute(sql: "INSERT INTO experiment_night VALUES ('storage-test-experiment', '2024-01-01', 'on', 0, 'kept', 71.5, '{}', 1704067200)")
+            try db.execute(sql: "INSERT INTO workout_template VALUES ('storage-test-template', 'Upper A', 1704067200, 1, 1, X'0102')")
+            try db.execute(sql: "INSERT INTO workout_program VALUES ('storage-test-program', 'Strength block', 'active', 1704067200, 1, 1, X'0102')")
+            try db.execute(sql: "INSERT INTO workout_exercise_custom VALUES ('custom-storage-test', 'Sled push', 1, 1, X'0102')")
+            try db.execute(sql: "INSERT INTO workout_session VALUES ('storage-test-session', '2024-01-01', 1704067200, NULL, 'completed', 1, 1, X'0102')")
+            try db.execute(sql: "INSERT INTO workout_set VALUES ('storage-test-set', 'storage-test-session', 'storage-test-line', 'bench-press', 0, 1704067260, X'0102')")
             try db.execute(sql: """
                 INSERT INTO decoded_second(
                     physiological_timestamp, band_counter, absolute_timestamp,
@@ -437,6 +471,110 @@ final class DeletionTests: XCTestCase {
         XCTAssertEqual(try database.readInteger(sql: "SELECT COUNT(*) FROM metric_series WHERE local_day = '2024-01-02'"), 0)
         XCTAssertEqual(try database.readInteger(sql: "SELECT COUNT(*) FROM rr_beat"), 2)
         XCTAssertEqual(try database.readInteger(sql: "SELECT COUNT(*) FROM route_point"), 2)
+    }
+
+    func test_perDayDeletionRemovesTrainSessionsAndTheirSetsButKeepsPlans() throws {
+        let (database, url) = try StorageLifecycleTestSupport.open("delete-day-train")
+        defer {
+            try? database.databasePool.close()
+            StorageLifecycleTestSupport.remove(url)
+        }
+        try database.write { db in
+            try db.execute(sql: "INSERT INTO workout_template VALUES ('plan-template', 'Upper A', 1704067200, 1, 1, X'0102')")
+            for (index, day) in ["2024-01-01", "2024-01-02"].enumerated() {
+                try db.execute(sql: "INSERT INTO workout_session VALUES (?, ?, ?, NULL, 'completed', 1, 1, X'0102')",
+                               arguments: ["session-\(index)", day, 1704067200 + index * 86_400])
+                try db.execute(sql: "INSERT INTO workout_set VALUES (?, ?, 'line', 'bench-press', 0, ?, X'0102')",
+                               arguments: ["set-\(index)", "session-\(index)", 1704067260 + index * 86_400])
+            }
+        }
+        try database.delete(localDay: "2024-01-02")
+        XCTAssertEqual(try database.readInteger(sql: "SELECT COUNT(*) FROM workout_session"), 1)
+        XCTAssertEqual(try database.readInteger(sql: "SELECT COUNT(*) FROM workout_set"), 1)
+        XCTAssertEqual(try database.readString(sql: "SELECT session_id FROM workout_set"), "session-0")
+        XCTAssertEqual(try database.readInteger(sql: "SELECT COUNT(*) FROM workout_template"), 1)
+    }
+
+    func test_fullDeletionEmptiesTrainTables() throws {
+        let (database, url) = try StorageLifecycleTestSupport.open("delete-all-train")
+        defer {
+            try? database.databasePool.close()
+            StorageLifecycleTestSupport.remove(url)
+        }
+        try StorageLifecycleTestSupport.seedEveryTable(database)
+        XCTAssertEqual(try database.tableRowCounts()["workout_set"], 1)
+        try database.deleteAllData()
+        let counts = try database.tableRowCounts()
+        for table in TrainStorageSchema.tableNames { XCTAssertEqual(counts[table], 0, table) }
+    }
+
+    func test_fullDeletionEmptiesRoutineTables() throws {
+        let (database, url) = try StorageLifecycleTestSupport.open("delete-all-routine")
+        defer {
+            try? database.databasePool.close()
+            StorageLifecycleTestSupport.remove(url)
+        }
+        try StorageLifecycleTestSupport.seedEveryTable(database)
+        XCTAssertEqual(try database.tableRowCounts()["routine_check"], 1)
+        try database.deleteAllData()
+        let counts = try database.tableRowCounts()
+        for table in RoutineStorageSchema.tableNames { XCTAssertEqual(counts[table], 0, table) }
+    }
+
+    func test_fullDeletionEmptiesSupplementTables() throws {
+        let (database, url) = try StorageLifecycleTestSupport.open("delete-all-supplements")
+        defer {
+            try? database.databasePool.close()
+            StorageLifecycleTestSupport.remove(url)
+        }
+        try StorageLifecycleTestSupport.seedEveryTable(database)
+        let seeded = try database.tableRowCounts()
+        for table in SupplementStorageSchema.tableNames { XCTAssertEqual(seeded[table], 1, "\(table) was not seeded") }
+        try database.deleteAllData()
+        let counts = try database.tableRowCounts()
+        for table in SupplementStorageSchema.tableNames { XCTAssertEqual(counts[table], 0, table) }
+    }
+
+    func test_fullDeletionEmptiesCapacityTables() throws {
+        let (database, url) = try StorageLifecycleTestSupport.open("delete-all-capacity")
+        defer {
+            try? database.databasePool.close()
+            StorageLifecycleTestSupport.remove(url)
+        }
+        try StorageLifecycleTestSupport.seedEveryTable(database)
+        let seeded = try database.tableRowCounts()
+        for table in CapacityStorageSchema.tableNames { XCTAssertEqual(seeded[table], 1, "\(table) was not seeded") }
+        try database.deleteAllData()
+        let counts = try database.tableRowCounts()
+        for table in CapacityStorageSchema.tableNames { XCTAssertEqual(counts[table], 0, table) }
+    }
+
+    func test_fullDeletionEmptiesBodyCompositionTables() throws {
+        let (database, url) = try StorageLifecycleTestSupport.open("delete-all-body-composition")
+        defer {
+            try? database.databasePool.close()
+            StorageLifecycleTestSupport.remove(url)
+        }
+        try StorageLifecycleTestSupport.seedEveryTable(database)
+        let seeded = try database.tableRowCounts()
+        for table in BodyCompositionStorageSchema.tableNames { XCTAssertEqual(seeded[table], 1, "\(table) was not seeded") }
+        try database.deleteAllData()
+        let counts = try database.tableRowCounts()
+        for table in BodyCompositionStorageSchema.tableNames { XCTAssertEqual(counts[table], 0, table) }
+    }
+
+    func test_fullDeletionEmptiesExperimentTables() throws {
+        let (database, url) = try StorageLifecycleTestSupport.open("delete-all-experiments")
+        defer {
+            try? database.databasePool.close()
+            StorageLifecycleTestSupport.remove(url)
+        }
+        try StorageLifecycleTestSupport.seedEveryTable(database)
+        let seeded = try database.tableRowCounts()
+        for table in ExperimentStorageSchema.tableNames { XCTAssertEqual(seeded[table], 1, "\(table) was not seeded") }
+        try database.deleteAllData()
+        let counts = try database.tableRowCounts()
+        for table in ExperimentStorageSchema.tableNames { XCTAssertEqual(counts[table], 0, table) }
     }
 
     func test_fullDeletionEmptiesLedgerTablesAndPreservesMetadata() throws {

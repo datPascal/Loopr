@@ -2,6 +2,46 @@ import CycleKit
 import XCTest
 
 final class CycleKitTests: XCTestCase {
+    func testCurrentDayUsesThePhonesTimeZone() throws {
+        let instant = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-10-10T18:00:00Z"))
+        XCTAssertEqual(CycleDate.localDay(instant, timeZone: TimeZone(secondsFromGMT: 8 * 3600)!), "2026-10-11")
+        XCTAssertEqual(CycleDate.localDay(instant, timeZone: TimeZone(secondsFromGMT: -7 * 3600)!), "2026-10-10")
+        XCTAssertEqual(CycleDate.string(instant), "2026-10-10")
+    }
+
+    @MainActor
+    func testDefaultReloadKeepsPhaseRelativeToToday() async throws {
+        let today = try XCTUnwrap(CycleDate.parse(CycleDate.localDay(Date())))
+        let start = CycleDate.adding(days: -10, to: today)
+        let repository = CycleRepository(enabled: true, entries: [CycleEntry(day: start, kind: .periodStart)])
+        let viewModel = CycleViewModel(repository: repository)
+        _ = await viewModel.load()
+        XCTAssertEqual(viewModel.snapshot.estimate.phase, .follicular)
+        _ = await viewModel.optIn()
+        XCTAssertEqual(viewModel.snapshot.estimate.phase, .follicular)
+    }
+
+    func testEstimateCountsDistinctStartsAndExcludesFutureEvents() async throws {
+        let repository = CycleRepository(enabled: true)
+        for day in ["2026-10-01", "2026-10-01", "2026-10-01", "2026-11-01"] {
+            _ = try await repository.log(CycleEntry(day: day, kind: .periodStart))
+        }
+        let estimate = await repository.estimate(today: "2026-10-11")
+        XCTAssertEqual(estimate.sampleSize, 1)
+        XCTAssertEqual(estimate.nextPeriodDay, "2026-10-29")
+        XCTAssertTrue(estimate.uncertainty.contains("Only one"))
+        let beforeHistory = await repository.estimate(today: "2026-09-01")
+        XCTAssertFalse(beforeHistory.isAvailable)
+        XCTAssertEqual(beforeHistory.sampleSize, 0)
+    }
+
+    func testImpossibleCalendarDayIsRejected() async throws {
+        let repository = CycleRepository(enabled: true)
+        do {
+            _ = try await repository.log(CycleEntry(day: "2026-02-30", kind: .periodStart))
+            XCTFail("An impossible day was saved")
+        } catch CycleError.invalidDay {}
+    }
     func testOptInIsExplicitAndDisablePreservesHistory() async throws {
         let repository = CycleRepository()
         let initial = await repository.estimate()

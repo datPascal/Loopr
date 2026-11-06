@@ -70,7 +70,7 @@ public struct RecordsScreen: View {
         VStack(spacing: LooprSpacing.none) {
             StickyHeader(
                 title: "Records",
-                meta: "PERSONAL BESTS",
+                meta: "Personal bests",
                 status: headerStatus
             )
             // Both screens sit in a navigation stack, so the header joins
@@ -153,26 +153,23 @@ public struct RecordsScreen: View {
                 LooprSectionGroup(title: "Personal records") {
                     RecordsRecordMetricList(records: viewModel.records)
                 }
-
-                LooprMenuGroup(
-                    title: "Explore",
-                    rows: [
-                        LooprMenuItem(
-                            title: "Timeline",
-                            value: "Committed events",
-                            accessibilityIdentifier: "records-timeline",
-                            action: { route(.timeline) }
-                        ),
-                        LooprMenuItem(
-                            title: "Share preview",
-                            value: "Off by default",
-                            accessibilityIdentifier: "records-share-preview",
-                            action: { route(.sharePreview) }
-                        )
-                    ]
-                )
             }
+            // Streaks and Journey used to open from Today's More grid. They live here now, beside the records.
+            LooprMenuGroup(title: "Explore", rows: exploreRows)
         }
+    }
+
+    private var exploreRows: [LooprMenuItem] {
+        var rows = [
+            LooprMenuItem(title: "Streaks", value: "Days in a row", accessibilityIdentifier: "records-streaks", action: { route(.streaks) }),
+            LooprMenuItem(title: "Journey", value: "Milestones so far", accessibilityIdentifier: "records-journey", action: { route(.journey) }),
+            LooprMenuItem(title: "Timeline", value: "Committed events", accessibilityIdentifier: "records-timeline", action: { route(.timeline) })
+        ]
+        if !viewModel.records.isEmpty {
+            rows.append(LooprMenuItem(title: "Share preview", value: "Off by default",
+                                      accessibilityIdentifier: "records-share-preview", action: { route(.sharePreview) }))
+        }
+        return rows
     }
 }
 
@@ -308,7 +305,7 @@ public struct RecordsDestinationScreen: View {
                     HairlineMetricList(rows: [
                         HairlineMetricRow(
                             title: "Current streak",
-                            confidence: streak.current ? "ACTIVE" : "INACTIVE",
+                            confidence: streak.current ? "Active" : "Inactive",
                             value: streak.length.formatted(),
                             unit: "days"
                         ),
@@ -556,7 +553,7 @@ private struct RecordsRecordMetricList: View {
                     HairlineMetricRow(
                         id: "record-\(record.metric)",
                         title: recordsMetricName(record.metric),
-                        confidence: "PERSONAL RECORD",
+                        confidence: "Personal record",
                         value: record.value.formatted(),
                         unit: recordsDayLabel(record.day)
                     )
@@ -630,7 +627,7 @@ private struct RecordsTimelineList: View {
                         }
 
                         LooprText(
-                            event.kind.displayName.uppercased(),
+                            event.kind.displayName.looprLabelCased,
                             style: .confidence,
                             color: .inkSecondary
                         )
@@ -784,14 +781,14 @@ private func recordsPeriodRange(for recap: Recap) -> String {
 }
 
 private func recordsDayLabel(_ day: String?) -> String {
-    guard let day, !day.isEmpty else { return "NOT RECORDED" }
+    guard let day, !day.isEmpty else { return "Not recorded" }
 
     let components = day.split(separator: "-")
     guard components.count == 3,
           let year = Int(components[0]),
           let month = Int(components[1]),
           let dayOfMonth = Int(components[2]) else {
-        return day.uppercased()
+        return day.looprLabelCased
     }
 
     var calendar = Calendar(identifier: .gregorian)
@@ -799,10 +796,10 @@ private func recordsDayLabel(_ day: String?) -> String {
     calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
 
     guard let date = calendar.date(from: DateComponents(year: year, month: month, day: dayOfMonth)) else {
-        return day.uppercased()
+        return day.looprLabelCased
     }
 
-    return LooprDateFormatterCache.string(from: date, format: "d MMM yyyy", calendar: calendar).uppercased()
+    return LooprDateFormatterCache.string(from: date, format: "d MMM yyyy", calendar: calendar).looprLabelCased
 }
 
 private func recordsListDescription(_ values: [String]) -> String {

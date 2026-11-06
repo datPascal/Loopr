@@ -12,7 +12,7 @@ public struct HeartBeatToBeatSection: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: LooprSpacing.sm) {
-            LooprText("BEAT TO BEAT", style: .sectionLabel, color: .inkSecondary)
+            LooprText("Beat to beat", style: .sectionLabel, color: .inkSecondary)
                 .accessibilityLabel("Beat to beat")
             if let summary {
                 LooprText("A longer beat interval means a slower heart rate. Spread describes how much the timing varied.",

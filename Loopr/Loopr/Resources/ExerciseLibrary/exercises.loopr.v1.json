@@ -1,0 +1,1063 @@
+[
+ {
+  "category": "stretching",
+  "equipment": "body only",
+  "id": "loopr-90-90-hip-switch",
+  "level": "beginner",
+  "name": "90/90 hip switch",
+  "primaryMuscles": [
+   "glutes"
+  ],
+  "secondaryMuscles": [
+   "adductors",
+   "abductors"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "kettlebells",
+  "force": "pull",
+  "id": "loopr-american-kettlebell-swing",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "American kettlebell swing",
+  "primaryMuscles": [
+   "glutes",
+   "hamstrings"
+  ],
+  "secondaryMuscles": [
+   "shoulders",
+   "lower back",
+   "abdominals",
+   "forearms"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "push",
+  "id": "loopr-archer-push-up",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Archer push-up",
+  "primaryMuscles": [
+   "chest"
+  ],
+  "secondaryMuscles": [
+   "triceps",
+   "shoulders"
+  ]
+ },
+ {
+  "category": "cardio",
+  "equipment": "machine",
+  "force": "push",
+  "id": "loopr-assault-bike",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Assault bike",
+  "primaryMuscles": [
+   "quadriceps"
+  ],
+  "secondaryMuscles": [
+   "hamstrings",
+   "glutes",
+   "shoulders",
+   "chest",
+   "calves"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "machine",
+  "force": "push",
+  "id": "loopr-assisted-dip",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Assisted dip",
+  "primaryMuscles": [
+   "triceps"
+  ],
+  "secondaryMuscles": [
+   "chest",
+   "shoulders"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "machine",
+  "force": "pull",
+  "id": "loopr-assisted-pull-up",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Assisted pull-up",
+  "primaryMuscles": [
+   "lats"
+  ],
+  "secondaryMuscles": [
+   "biceps",
+   "middle back"
+  ]
+ },
+ {
+  "category": "plyometrics",
+  "equipment": "body only",
+  "force": "push",
+  "id": "loopr-bar-facing-burpee",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Bar-facing burpee",
+  "primaryMuscles": [
+   "quadriceps",
+   "chest"
+  ],
+  "secondaryMuscles": [
+   "shoulders",
+   "triceps",
+   "glutes",
+   "hamstrings"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "other",
+  "force": "pull",
+  "id": "loopr-bar-muscle-up",
+  "level": "expert",
+  "mechanic": "compound",
+  "name": "Bar muscle-up",
+  "primaryMuscles": [
+   "lats"
+  ],
+  "secondaryMuscles": [
+   "chest",
+   "triceps",
+   "shoulders",
+   "biceps",
+   "abdominals"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "push",
+  "id": "loopr-bear-crawl",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Bear crawl",
+  "primaryMuscles": [
+   "shoulders"
+  ],
+  "secondaryMuscles": [
+   "quadriceps",
+   "abdominals"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-bird-dog",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Bird dog",
+  "primaryMuscles": [
+   "lower back"
+  ],
+  "secondaryMuscles": [
+   "glutes",
+   "abdominals",
+   "shoulders"
+  ]
+ },
+ {
+  "category": "plyometrics",
+  "equipment": "other",
+  "force": "push",
+  "id": "loopr-box-jump-over",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Box jump over",
+  "primaryMuscles": [
+   "quadriceps"
+  ],
+  "secondaryMuscles": [
+   "glutes",
+   "hamstrings",
+   "calves"
+  ]
+ },
+ {
+  "category": "plyometrics",
+  "equipment": "body only",
+  "force": "push",
+  "id": "loopr-burpee",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Burpee",
+  "primaryMuscles": [
+   "quadriceps",
+   "chest"
+  ],
+  "secondaryMuscles": [
+   "shoulders",
+   "triceps",
+   "glutes",
+   "hamstrings",
+   "abdominals"
+  ]
+ },
+ {
+  "category": "stretching",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-butterfly-stretch",
+  "level": "beginner",
+  "name": "Butterfly stretch",
+  "primaryMuscles": [
+   "adductors"
+  ],
+  "secondaryMuscles": []
+ },
+ {
+  "category": "stretching",
+  "equipment": "body only",
+  "id": "loopr-cat-cow",
+  "level": "beginner",
+  "name": "Cat-cow",
+  "primaryMuscles": [
+   "lower back"
+  ],
+  "secondaryMuscles": [
+   "middle back",
+   "abdominals"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "pull",
+  "id": "loopr-chest-to-bar-pull-up",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Chest-to-bar pull-up",
+  "primaryMuscles": [
+   "lats"
+  ],
+  "secondaryMuscles": [
+   "biceps",
+   "middle back",
+   "forearms"
+  ]
+ },
+ {
+  "category": "stretching",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-cobra-stretch",
+  "level": "beginner",
+  "name": "Cobra stretch",
+  "primaryMuscles": [
+   "abdominals"
+  ],
+  "secondaryMuscles": [
+   "lower back"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-copenhagen-plank",
+  "level": "intermediate",
+  "mechanic": "isolation",
+  "name": "Copenhagen plank",
+  "primaryMuscles": [
+   "adductors"
+  ],
+  "secondaryMuscles": [
+   "abdominals"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "push",
+  "id": "loopr-cossack-squat",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Cossack squat",
+  "primaryMuscles": [
+   "adductors"
+  ],
+  "secondaryMuscles": [
+   "quadriceps",
+   "glutes",
+   "hamstrings"
+  ]
+ },
+ {
+  "category": "stretching",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-couch-stretch",
+  "level": "beginner",
+  "name": "Couch stretch",
+  "primaryMuscles": [
+   "quadriceps"
+  ],
+  "secondaryMuscles": []
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-dead-hang",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Dead hang",
+  "primaryMuscles": [
+   "forearms"
+  ],
+  "secondaryMuscles": [
+   "lats",
+   "shoulders"
+  ]
+ },
+ {
+  "category": "stretching",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-deep-squat-hold",
+  "level": "beginner",
+  "name": "Deep squat hold",
+  "primaryMuscles": [
+   "quadriceps"
+  ],
+  "secondaryMuscles": [
+   "glutes",
+   "adductors",
+   "calves",
+   "lower back"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "dumbbell",
+  "force": "push",
+  "id": "loopr-devil-press",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Devil press",
+  "primaryMuscles": [
+   "shoulders"
+  ],
+  "secondaryMuscles": [
+   "chest",
+   "triceps",
+   "glutes",
+   "hamstrings",
+   "quadriceps"
+  ]
+ },
+ {
+  "category": "plyometrics",
+  "equipment": "other",
+  "id": "loopr-double-under",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Double-under",
+  "primaryMuscles": [
+   "calves"
+  ],
+  "secondaryMuscles": [
+   "quadriceps",
+   "shoulders",
+   "forearms"
+  ]
+ },
+ {
+  "category": "stretching",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-downward-dog",
+  "level": "beginner",
+  "name": "Downward dog",
+  "primaryMuscles": [
+   "hamstrings"
+  ],
+  "secondaryMuscles": [
+   "calves",
+   "shoulders",
+   "lats"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "dumbbell",
+  "force": "pull",
+  "id": "loopr-dumbbell-snatch",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Dumbbell snatch",
+  "primaryMuscles": [
+   "shoulders"
+  ],
+  "secondaryMuscles": [
+   "glutes",
+   "hamstrings",
+   "quadriceps",
+   "traps"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "dumbbell",
+  "force": "push",
+  "id": "loopr-dumbbell-thruster",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Dumbbell thruster",
+  "primaryMuscles": [
+   "quadriceps"
+  ],
+  "secondaryMuscles": [
+   "glutes",
+   "shoulders",
+   "triceps"
+  ]
+ },
+ {
+  "category": "stretching",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-frog-stretch",
+  "level": "beginner",
+  "name": "Frog stretch",
+  "primaryMuscles": [
+   "adductors"
+  ],
+  "secondaryMuscles": [
+   "glutes"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-front-lever",
+  "level": "expert",
+  "mechanic": "compound",
+  "name": "Front lever",
+  "primaryMuscles": [
+   "lats"
+  ],
+  "secondaryMuscles": [
+   "abdominals",
+   "shoulders",
+   "middle back"
+  ]
+ },
+ {
+  "category": "strongman",
+  "equipment": "kettlebells",
+  "force": "static",
+  "id": "loopr-front-rack-carry",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Front rack carry",
+  "primaryMuscles": [
+   "abdominals"
+  ],
+  "secondaryMuscles": [
+   "shoulders",
+   "quadriceps",
+   "forearms"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "machine",
+  "force": "pull",
+  "id": "loopr-ghd-sit-up",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "GHD sit-up",
+  "primaryMuscles": [
+   "abdominals"
+  ],
+  "secondaryMuscles": [
+   "quadriceps"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-handstand-hold",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Handstand hold",
+  "primaryMuscles": [
+   "shoulders"
+  ],
+  "secondaryMuscles": [
+   "triceps",
+   "traps",
+   "abdominals"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "push",
+  "id": "loopr-handstand-walk",
+  "level": "expert",
+  "mechanic": "compound",
+  "name": "Handstand walk",
+  "primaryMuscles": [
+   "shoulders"
+  ],
+  "secondaryMuscles": [
+   "triceps",
+   "traps",
+   "abdominals",
+   "forearms"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "pull",
+  "id": "loopr-hanging-knee-raise",
+  "level": "beginner",
+  "mechanic": "isolation",
+  "name": "Hanging knee raise",
+  "primaryMuscles": [
+   "abdominals"
+  ],
+  "secondaryMuscles": [
+   "forearms"
+  ]
+ },
+ {
+  "category": "cardio",
+  "equipment": "body only",
+  "id": "loopr-high-knees",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "High knees",
+  "primaryMuscles": [
+   "quadriceps"
+  ],
+  "secondaryMuscles": [
+   "calves",
+   "hamstrings",
+   "abdominals"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-hollow-hold",
+  "level": "beginner",
+  "mechanic": "isolation",
+  "name": "Hollow hold",
+  "primaryMuscles": [
+   "abdominals"
+  ],
+  "secondaryMuscles": []
+ },
+ {
+  "category": "plyometrics",
+  "equipment": "body only",
+  "id": "loopr-jumping-jack",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Jumping jack",
+  "primaryMuscles": [
+   "calves"
+  ],
+  "secondaryMuscles": [
+   "shoulders",
+   "quadriceps"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "kettlebells",
+  "force": "pull",
+  "id": "loopr-kettlebell-swing",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Kettlebell swing",
+  "primaryMuscles": [
+   "glutes",
+   "hamstrings"
+  ],
+  "secondaryMuscles": [
+   "lower back",
+   "shoulders",
+   "abdominals",
+   "forearms"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "pull",
+  "id": "loopr-kipping-pull-up",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Kipping pull-up",
+  "primaryMuscles": [
+   "lats"
+  ],
+  "secondaryMuscles": [
+   "biceps",
+   "middle back",
+   "shoulders",
+   "abdominals"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "push",
+  "id": "loopr-knee-push-up",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Knee push-up",
+  "primaryMuscles": [
+   "chest"
+  ],
+  "secondaryMuscles": [
+   "shoulders",
+   "triceps"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "pull",
+  "id": "loopr-knees-to-elbows",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Knees-to-elbows",
+  "primaryMuscles": [
+   "abdominals"
+  ],
+  "secondaryMuscles": [
+   "lats",
+   "forearms"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-l-sit",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "L-sit",
+  "primaryMuscles": [
+   "abdominals"
+  ],
+  "secondaryMuscles": [
+   "quadriceps",
+   "triceps",
+   "shoulders"
+  ]
+ },
+ {
+  "category": "stretching",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-lying-spinal-twist",
+  "level": "beginner",
+  "name": "Lying spinal twist",
+  "primaryMuscles": [
+   "lower back"
+  ],
+  "secondaryMuscles": [
+   "glutes"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "pull",
+  "id": "loopr-negative-pull-up",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Negative pull-up",
+  "primaryMuscles": [
+   "lats"
+  ],
+  "secondaryMuscles": [
+   "biceps",
+   "middle back",
+   "forearms"
+  ]
+ },
+ {
+  "category": "strongman",
+  "equipment": "dumbbell",
+  "force": "static",
+  "id": "loopr-overhead-carry",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Overhead carry",
+  "primaryMuscles": [
+   "shoulders"
+  ],
+  "secondaryMuscles": [
+   "abdominals",
+   "traps",
+   "triceps"
+  ]
+ },
+ {
+  "category": "stretching",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-pigeon-pose",
+  "level": "beginner",
+  "name": "Pigeon pose",
+  "primaryMuscles": [
+   "glutes"
+  ],
+  "secondaryMuscles": [
+   "abductors",
+   "lower back"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "push",
+  "id": "loopr-pike-push-up",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Pike push-up",
+  "primaryMuscles": [
+   "shoulders"
+  ],
+  "secondaryMuscles": [
+   "triceps",
+   "chest"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "push",
+  "id": "loopr-pistol-squat",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Pistol squat",
+  "primaryMuscles": [
+   "quadriceps"
+  ],
+  "secondaryMuscles": [
+   "glutes",
+   "hamstrings",
+   "calves",
+   "abdominals"
+  ]
+ },
+ {
+  "category": "plyometrics",
+  "equipment": "body only",
+  "force": "push",
+  "id": "loopr-pogo-hops",
+  "level": "beginner",
+  "mechanic": "isolation",
+  "name": "Pogo hops",
+  "primaryMuscles": [
+   "calves"
+  ],
+  "secondaryMuscles": [
+   "quadriceps"
+  ]
+ },
+ {
+  "category": "olympic weightlifting",
+  "equipment": "barbell",
+  "force": "push",
+  "id": "loopr-push-jerk",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Push jerk",
+  "primaryMuscles": [
+   "shoulders"
+  ],
+  "secondaryMuscles": [
+   "triceps",
+   "quadriceps",
+   "glutes"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "other",
+  "force": "pull",
+  "id": "loopr-ring-row",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Ring row",
+  "primaryMuscles": [
+   "middle back"
+  ],
+  "secondaryMuscles": [
+   "lats",
+   "biceps",
+   "shoulders"
+  ]
+ },
+ {
+  "category": "strongman",
+  "equipment": "other",
+  "force": "static",
+  "id": "loopr-sandbag-carry",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Sandbag carry",
+  "primaryMuscles": [
+   "abdominals"
+  ],
+  "secondaryMuscles": [
+   "forearms",
+   "biceps",
+   "quadriceps",
+   "glutes",
+   "lower back"
+  ]
+ },
+ {
+  "category": "stretching",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-seated-forward-fold",
+  "level": "beginner",
+  "name": "Seated forward fold",
+  "primaryMuscles": [
+   "hamstrings"
+  ],
+  "secondaryMuscles": [
+   "lower back",
+   "calves"
+  ]
+ },
+ {
+  "category": "stretching",
+  "equipment": "bands",
+  "id": "loopr-shoulder-pass-through",
+  "level": "beginner",
+  "name": "Shoulder pass-through",
+  "primaryMuscles": [
+   "shoulders"
+  ],
+  "secondaryMuscles": [
+   "chest"
+  ]
+ },
+ {
+  "category": "cardio",
+  "equipment": "machine",
+  "force": "pull",
+  "id": "loopr-ski-erg",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Ski erg",
+  "primaryMuscles": [
+   "lats"
+  ],
+  "secondaryMuscles": [
+   "triceps",
+   "abdominals",
+   "shoulders",
+   "glutes"
+  ]
+ },
+ {
+  "category": "strongman",
+  "equipment": "dumbbell",
+  "force": "static",
+  "id": "loopr-suitcase-carry",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Suitcase carry",
+  "primaryMuscles": [
+   "abdominals"
+  ],
+  "secondaryMuscles": [
+   "forearms",
+   "traps",
+   "shoulders"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "barbell",
+  "force": "pull",
+  "id": "loopr-sumo-deadlift-high-pull",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Sumo deadlift high pull",
+  "primaryMuscles": [
+   "hamstrings"
+  ],
+  "secondaryMuscles": [
+   "traps",
+   "shoulders",
+   "glutes",
+   "quadriceps"
+  ]
+ },
+ {
+  "category": "stretching",
+  "equipment": "body only",
+  "id": "loopr-thoracic-rotation",
+  "level": "beginner",
+  "name": "Thoracic rotation",
+  "primaryMuscles": [
+   "middle back"
+  ],
+  "secondaryMuscles": [
+   "lower back",
+   "shoulders",
+   "chest"
+  ]
+ },
+ {
+  "category": "stretching",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-thread-the-needle",
+  "level": "beginner",
+  "name": "Thread the needle",
+  "primaryMuscles": [
+   "middle back"
+  ],
+  "secondaryMuscles": [
+   "shoulders"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "barbell",
+  "force": "push",
+  "id": "loopr-thruster",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Thruster",
+  "primaryMuscles": [
+   "quadriceps"
+  ],
+  "secondaryMuscles": [
+   "glutes",
+   "hamstrings",
+   "shoulders",
+   "triceps"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "pull",
+  "id": "loopr-toes-to-bar",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Toes-to-bar",
+  "primaryMuscles": [
+   "abdominals"
+  ],
+  "secondaryMuscles": [
+   "lats",
+   "forearms",
+   "shoulders"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "pull",
+  "id": "loopr-v-up",
+  "level": "intermediate",
+  "mechanic": "isolation",
+  "name": "V-up",
+  "primaryMuscles": [
+   "abdominals"
+  ],
+  "secondaryMuscles": []
+ },
+ {
+  "category": "strength",
+  "equipment": "medicine ball",
+  "force": "push",
+  "id": "loopr-wall-ball",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Wall ball",
+  "primaryMuscles": [
+   "quadriceps"
+  ],
+  "secondaryMuscles": [
+   "glutes",
+   "hamstrings",
+   "shoulders",
+   "triceps"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "push",
+  "id": "loopr-wall-push-up",
+  "level": "beginner",
+  "mechanic": "compound",
+  "name": "Wall push-up",
+  "primaryMuscles": [
+   "chest"
+  ],
+  "secondaryMuscles": [
+   "shoulders",
+   "triceps"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "static",
+  "id": "loopr-wall-sit",
+  "level": "beginner",
+  "mechanic": "isolation",
+  "name": "Wall sit",
+  "primaryMuscles": [
+   "quadriceps"
+  ],
+  "secondaryMuscles": [
+   "glutes",
+   "calves"
+  ]
+ },
+ {
+  "category": "strength",
+  "equipment": "body only",
+  "force": "push",
+  "id": "loopr-wall-walk",
+  "level": "intermediate",
+  "mechanic": "compound",
+  "name": "Wall walk",
+  "primaryMuscles": [
+   "shoulders"
+  ],
+  "secondaryMuscles": [
+   "triceps",
+   "chest",
+   "abdominals"
+  ]
+ }
+]

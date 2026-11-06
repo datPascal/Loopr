@@ -32,6 +32,8 @@ nonisolated enum MetricDetailRules {
         case .sleepConsistency: LooprChartScaleHint(minimumSpan: 30, bounds: 0...100)
         case .sleepEfficiency: LooprChartScaleHint(minimumSpan: 20, bounds: 0...100)
         case .sleepDuration: LooprChartScaleHint(minimumSpan: 480)
+        case .sleepPerformance: LooprChartScaleHint(minimumSpan: 30)
+        case .sleepDebt: LooprChartScaleHint(minimumSpan: 120)
         case .deepSleep, .remSleep: LooprChartScaleHint(minimumSpan: 120)
         case .vo2Max: LooprChartScaleHint(minimumSpan: 8, bounds: 0...100)
         case .activeEnergy: LooprChartScaleHint(minimumSpan: 500)
@@ -48,7 +50,7 @@ nonisolated enum MetricDetailRules {
         switch key {
         case .restingHeartRate, .rmssd, .sdnn, .pNN50, .respiratoryRate, .sleepingHeartRate, .heartRateDip,
              .oxygenSaturation, .skinTemperatureDeviation, .stress, .sleepDuration, .sleepEfficiency,
-             .deepSleep, .remSleep, .sleepConsistency:
+             .deepSleep, .remSleep, .sleepConsistency, .sleepPerformance, .sleepDebt:
             true
         case .recovery, .strain, .vo2Max, .maxHeartRate, .activeEnergy, .steps:
             false
@@ -62,9 +64,9 @@ nonisolated enum MetricDetailRules {
         case .rmssd, .sdnn, .pNN50, .recovery, .sleepDuration, .sleepEfficiency, .deepSleep, .remSleep,
              .sleepConsistency, .vo2Max, .steps:
             true
-        case .restingHeartRate, .sleepingHeartRate, .stress:
+        case .restingHeartRate, .sleepingHeartRate, .stress, .sleepDebt:
             false
-        case .respiratoryRate, .oxygenSaturation, .skinTemperatureDeviation, .strain, .maxHeartRate, .activeEnergy, .heartRateDip:
+        case .respiratoryRate, .oxygenSaturation, .skinTemperatureDeviation, .strain, .maxHeartRate, .activeEnergy, .heartRateDip, .sleepPerformance:
             nil
         }
     }
@@ -150,16 +152,16 @@ nonisolated struct MetricDetailAnchor: Hashable, Sendable {
     func heroEyebrow(for valueDate: Date, key: MetricKey) -> String {
         let valueDay = calendar.startOfDay(for: valueDate)
         guard valueDay == day else {
-            return "LATEST · " + dateText(valueDay).uppercased()
+            return "Latest · " + dateText(valueDay).looprLabelCased
         }
         if isToday { return key.presentation.period }
         let today = looprDay(today)
         let shown = looprDay(day)
         if MetricDetailRules.isNightly(key) {
-            return LooprDayLabel.nightRange(for: shown, today: today, calendar: calendar).uppercased()
+            return LooprDayLabel.nightRange(for: shown, today: today, calendar: calendar).looprLabelCased
         }
-        let date = dateText(day).uppercased()
-        return today.adding(days: -1, calendar: calendar) == shown ? "YESTERDAY · " + date : date
+        let date = dateText(day).looprLabelCased
+        return today.adding(days: -1, calendar: calendar) == shown ? "Yesterday · " + date : date
     }
 
     /// A quiet line when the value on screen is older than the anchor day.

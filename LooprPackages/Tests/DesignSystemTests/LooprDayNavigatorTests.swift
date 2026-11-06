@@ -246,6 +246,14 @@ struct LooprDayNavigatorTests {
         let neverSynced = LooprDayNavigation(day: today, today: today, earliest: nil, calendar: calendar,
                                              status: .noData, onSelect: { _ in })
         #expect(LooprDayEmptyState.detail(for: neverSynced, now: now).hasPrefix("Wear your band"))
+
+        // Today shows its logs under the card, so a past day names only the missing band data (R1-NEW-4), and without
+        // a band no empty state asks the person to wear one (R1-NEW-2).
+        #expect(LooprDayEmptyState.title(for: gap, context: .logsBelow) == "No band data on Tue 22 Sep")
+        #expect(LooprDayEmptyState.detail(for: gap, now: now, context: .logsBelow) == "What you logged that day is below.")
+        #expect(LooprDayEmptyState.title(for: gap, context: .logsBelow, bandPaired: false) == "Tue 22 Sep")
+        #expect(!LooprDayEmptyState.detail(for: neverSynced, now: now, bandPaired: false).contains("Wear"))
+        #expect(!LooprDayEmptyState.detail(for: gap, now: now, bandPaired: false).contains("band data"))
     }
 
     @Test func navigationEqualityIgnoresTheCallback() {

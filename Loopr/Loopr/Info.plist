@@ -13,6 +13,27 @@
             <key>public.filename-extension</key><array><string>gpx</string></array>
             <key>public.mime-type</key><string>application/gpx+xml</string>
         </dict>
+    </dict><dict>
+        <key>UTTypeIdentifier</key><string>com.loopr.protocol</string>
+        <key>UTTypeDescription</key><string>Loopr protocol</string>
+        <key>UTTypeConformsTo</key><array><string>public.json</string></array>
+        <key>UTTypeTagSpecification</key><dict>
+            <key>public.filename-extension</key><array><string>looprprotocol</string></array>
+            <key>public.mime-type</key><string>application/vnd.loopr.protocol+json</string>
+        </dict>
+    </dict></array>
+    <key>LSSupportsOpeningDocumentsInPlace</key><false/>
+    <key>CFBundleDocumentTypes</key>
+    <array><dict>
+        <key>CFBundleTypeName</key><string>Loopr protocol</string>
+        <key>CFBundleTypeRole</key><string>Viewer</string>
+        <key>LSHandlerRank</key><string>Owner</string>
+        <key>LSItemContentTypes</key><array><string>com.loopr.protocol</string></array>
+    </dict><dict>
+        <key>CFBundleTypeName</key><string>JSON file</string>
+        <key>CFBundleTypeRole</key><string>Viewer</string>
+        <key>LSHandlerRank</key><string>Alternate</string>
+        <key>LSItemContentTypes</key><array><string>public.json</string></array>
     </dict></array>
     <key>CFBundleDisplayName</key>
 	<string>Loopr</string>
@@ -20,13 +41,18 @@
 	<array>
 		<string>com.loopr.bluetooth.sync</string>
 		<string>com.loopr.bluetooth.refresh</string>
+		<string>com.loopr.coach.morning</string>
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LooprHabitInsightsStage</key>
-	<string>internalOnly</string>
+	<string>beta</string>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>Loopr sets a backup alarm on this iPhone so you are still woken if your band does not buzz.</string>
+	<key>NSAccessorySetupBluetoothNames</key>
+	<array>
+		<string>WHOOP</string>
+	</array>
 	<key>NSAccessorySetupBluetoothServices</key>
 	<array>
 		<string>61080001-8D6D-82B8-614A-1C8CB0F8DCC6</string>
@@ -41,7 +67,7 @@
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Loopr connects to your fitness band over Bluetooth so your health data syncs to this iPhone.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Loopr reads sleep, heart rate, resting heart rate, heart rate variability (SDNN), respiratory rate, VO₂ max, steps, and active energy from Apple Health for your history and Cardio Age.</string>
+	<string>Loopr reads workouts, sleep, heart rate, resting heart rate, heart rate variability (SDNN), respiratory rate, VO₂ max, steps, active energy, distance, time in daylight, blood pressure, weight, body fat, lean body mass and blood glucose from Apple Health. Each value shows which app or device recorded it. Workouts from Apple Watch, Garmin Connect, Strava and other apps show in Fitness, and their heart rate counts toward zone minutes on days without the band. Loopr keeps them on this iPhone. VO₂ max also feeds Cardio Age.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Loopr saves heart rate, resting heart rate, heart rate variability (SDNN), respiratory rate, sleep stages, estimated steps and active energy, and completed workouts to Apple Health when you allow them.</string>
 	<key>LSApplicationQueriesSchemes</key>
@@ -49,7 +75,17 @@
 		<string>x-apple-health</string>
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Loopr uses your location only while you explicitly record an eligible run, cycle, or walk route.</string>
+	<string>Loopr uses your location only while you record a run, ride, walk or hike, with the screen locked too. The blue indicator shows when it is on, and it stops when the workout ends.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Loopr adds your planned workouts to Calendar when you turn on Add to Calendar. It only adds events and never reads yours.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Loopr uses the camera for meal photos, barcodes, nutrition labels and blood test reports. You review what it finds before anything is saved. Reports are read on this iPhone and the photo is not kept.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Loopr uses the microphone when you dictate a message, journal note or food entry. You can review the draft before saving or sending.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Loopr reads the date a photo was taken. A meal is logged at that time, and a lab report with no printed date gets the photo's date.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Loopr uses on-device speech recognition to turn your voice into a message, journal note or food entry draft.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIAppFonts</key>
@@ -61,6 +97,7 @@
 		<string>Manrope-800.ttf</string>
 		<string>BarlowCondensed-Bold.ttf</string>
 		<string>BarlowCondensed-ExtraBold.ttf</string>
+		<string>SpaceGrotesk-Light.ttf</string>
 		<string>SpaceGrotesk-Regular.ttf</string>
 		<string>SpaceGrotesk-Medium.ttf</string>
 		<string>SpaceGrotesk-SemiBold.ttf</string>
@@ -73,10 +110,13 @@
 	<dict>
 		<key>UIColorName</key>
 		<string>LaunchBackground</string>
+		<key>UIImageName</key>
+		<string>LaunchMark</string>
 	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>
+		<string>location</string>
 		<string>processing</string>
 		<string>fetch</string>
 	</array>

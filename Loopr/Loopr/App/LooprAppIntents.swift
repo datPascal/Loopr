@@ -96,7 +96,7 @@ struct LooprBuzzBandIntent: AppIntent {
 
 struct LooprMarkMomentIntent: AppIntent {
     static let title: LocalizedStringResource = "Mark Moment"
-    static let description = IntentDescription("Save the current time as a moment in your journal.")
+    static let description = IntentDescription("Save the current time as a note in Protocol.")
     static let openAppWhenRun = true
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {

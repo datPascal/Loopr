@@ -97,3 +97,87 @@ public enum LooprPerformance {
         DispatchQueue.main.async { end(pending) }
     }
 }
+
+/// Animation intervals for the performance UI suites (LV-10.4).
+///
+/// `LooprPerformance` above times launch and navigation in the Points of Interest track. This
+/// signposter is separate: its category is `performance`, and its intervals begin with the
+/// animation style (`isAnimation=YES`), so an `XCTOSSignpostMetric` reads hitch time and hitch
+/// ratio for exactly the frames the animation covers. One interval per tab entrance, named
+/// `entrance.<tab>`. A test measures it with
+///
+///     XCTOSSignpostMetric(subsystem: "com.loopr.ios", category: "performance", name: "entrance.today")
+///
+/// Call it where an animation starts and where it settles, never per frame. With no recorder
+/// attached, a signpost is one check of a flag. The pairing counters take a lock twice per
+/// interval, which is twice per tab per day.
+public enum LooprPerformanceSignposts {
+    public static let subsystem = "com.loopr.ios"
+    public static let category = "performance"
+
+    /// The interval name of a tab's entrance. A `StaticString` because signpost names must be literals.
+    public static func entranceName(for tab: LooprColorFieldTab) -> StaticString {
+        switch tab {
+        case .today: "entrance.today"
+        case .food: "entrance.food"
+        case .fitness: "entrance.fitness"
+        case .protocol: "entrance.protocol"
+        case .data: "entrance.data"
+        }
+    }
+
+    /// The same name as text, for a test or a metric's `name:`.
+    public static func entranceMetricName(for tab: LooprColorFieldTab) -> String {
+        String(describing: entranceName(for: tab))
+    }
+
+    /// One open interval. End it exactly once with `endInterval(_:)`.
+    public struct AnimationInterval: @unchecked Sendable {
+        fileprivate let name: StaticString
+        fileprivate let state: OSSignpostIntervalState
+    }
+
+    private static let signposter = OSSignposter(subsystem: subsystem, category: category)
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var begun: [String: Int] = [:]
+    nonisolated(unsafe) private static var ended: [String: Int] = [:]
+
+    /// Opens an animation interval. `XCTOSSignpostMetric` reports hitches inside it.
+    public static func beginAnimationInterval(_ name: StaticString) -> AnimationInterval {
+        let state = signposter.beginAnimationInterval(name, id: signposter.makeSignpostID())
+        countBegin(name)
+        return AnimationInterval(name: name, state: state)
+    }
+
+    public static func endInterval(_ interval: AnimationInterval) {
+        signposter.endInterval(interval.name, interval.state)
+        countEnd(interval.name)
+    }
+
+    /// Opens the entrance interval of `tab`, or nil for an entrance that is not one of the five tabs
+    /// (the note rail, the protocol strip, the gallery), which have no interval of their own.
+    public static func beginEntrance(tab: String) -> AnimationInterval? {
+        guard let known = LooprColorFieldTab(rawValue: tab) else { return nil }
+        return beginAnimationInterval(entranceName(for: known))
+    }
+
+    /// Intervals begun and ended under `name` since launch. A test reads them to prove the pairs match.
+    public static func counts(of name: StaticString) -> (begun: Int, ended: Int) {
+        let key = String(describing: name)
+        lock.lock()
+        defer { lock.unlock() }
+        return (begun[key] ?? 0, ended[key] ?? 0)
+    }
+
+    private static func countBegin(_ name: StaticString) {
+        lock.lock()
+        begun[String(describing: name), default: 0] += 1
+        lock.unlock()
+    }
+
+    private static func countEnd(_ name: StaticString) {
+        lock.lock()
+        ended[String(describing: name), default: 0] += 1
+        lock.unlock()
+    }
+}

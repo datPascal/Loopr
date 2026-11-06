@@ -364,7 +364,7 @@ public struct CycleScreen: View {
         return LooprSurface(emphasis: .hero(.cycle)) {
             VStack(alignment: .leading, spacing: LooprSpacing.md) {
                 HStack(alignment: .center, spacing: LooprSpacing.sm) {
-                    LooprText("CURRENT PHASE", style: .sectionLabel, color: .inkSecondary)
+                    LooprText("Current phase", style: .sectionLabel, color: .inkSecondary)
                     Spacer(minLength: LooprSpacing.sm)
                     StatusChip(phaseName, symbol: "circle.fill", accent: .cycle)
                 }
@@ -425,7 +425,7 @@ public struct CycleScreen: View {
         let estimate = viewModel.snapshot.estimate
         guard estimate.sampleSize > 0 else { return nil }
         let confidence = Int((min(max(estimate.confidence, 0), 1) * 100).rounded())
-        let startsLabel = estimate.sampleSize == 1 ? "LOGGED START" : "LOGGED STARTS"
+        let startsLabel = estimate.sampleSize == 1 ? "Logged start" : "Logged starts"
         return "\(confidence)% CONFIDENCE · \(estimate.sampleSize) \(startsLabel)"
     }
 
@@ -480,7 +480,7 @@ public struct CycleScreen: View {
 public struct CycleLogScreen: View {
     public let onSave: (CycleEntry) -> Void
     private let errorMessage: String?
-    @State private var day = CycleDate.string(Date())
+    @State private var day = CycleDate.localDay(Date())
     @State private var kind: CycleEventKind = .periodStart
     @State private var flow: FlowLevel = .medium
     @State private var note = ""

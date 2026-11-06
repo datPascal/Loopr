@@ -1,4 +1,5 @@
 import Foundation
+import LooprStatisticsCore
 
 public struct BinaryExposureRow: Equatable, Sendable {
     public let dayOrdinal: Int
@@ -260,50 +261,54 @@ public enum BinaryExposureAnalyzer {
         let strainSD = sqrt(mean(filledStrains.map { ($0 - strainMean) * ($0 - strainMean) }))
         let nuisanceCount = rows.first?.nuisanceExposures.count ?? 0
         let columnCount = 1 + 1 + 6 + 2 + nuisanceCount
-        var x: [[Double]] = []
-        x.reserveCapacity(rows.count)
+        var x: [Double] = []
+        x.reserveCapacity(rows.count * columnCount)
         for (index, row) in rows.enumerated() {
-            var vector = [1.0, row.exposure ? 1.0 : 0.0]
-            vector.append(contentsOf: (1...6).map { row.weekday == $0 ? 1.0 : 0.0 })
-            vector.append(strainSD > 0 ? (filledStrains[index] - strainMean) / strainSD : 0)
-            vector.append(row.priorDayStrain == nil ? 1 : 0)
-            vector.append(contentsOf: row.nuisanceExposures)
-            x.append(vector)
+            x.append(1)
+            x.append(row.exposure ? 1 : 0)
+            for weekday in 1...6 { x.append(row.weekday == weekday ? 1 : 0) }
+            x.append(strainSD > 0 ? (filledStrains[index] - strainMean) / strainSD : 0)
+            x.append(row.priorDayStrain == nil ? 1 : 0)
+            x.append(contentsOf: row.nuisanceExposures)
         }
-        var normal = Array(repeating: Array(repeating: 0.0, count: columnCount), count: columnCount)
+        // The scalar kernel avoids Swift debug Array/iteration overhead on the
+        // bootstrap's hot loop. Accumulation order and rounding stay unchanged.
+        var normal = Array(repeating: 0.0, count: columnCount * columnCount)
         var rhs = Array(repeating: 0.0, count: columnCount)
-        for (vector, row) in zip(x, rows) {
-            for i in 0..<columnCount {
-                rhs[i] += vector[i] * row.residual
-                for j in 0..<columnCount { normal[i][j] += vector[i] * vector[j] }
+        let residuals = rows.map(\.residual)
+        normal.withUnsafeMutableBufferPointer { normalBuffer in
+            rhs.withUnsafeMutableBufferPointer { rhsBuffer in
+                x.withUnsafeBufferPointer { vectors in
+                    residuals.withUnsafeBufferPointer { values in
+                        loopr_accumulate_normal(vectors.baseAddress!, values.baseAddress!,
+                            numericCast(rows.count), numericCast(columnCount), normalBuffer.baseAddress!, rhsBuffer.baseAddress!)
+                    }
+                }
             }
         }
         if columnCount > 2 {
-            for column in 2..<columnCount { normal[column][column] += lambda }
+            for column in 2..<columnCount { normal[column * columnCount + column] += lambda }
         }
         guard let coefficients = solve(normal, rhs: rhs) else { return nil }
         return coefficients[1]
     }
 
-    private static func solve(_ matrix: [[Double]], rhs: [Double]) -> [Double]? {
+    private static func solve(_ matrix: [Double], rhs: [Double]) -> [Double]? {
         let count = rhs.count
-        guard matrix.count == count, matrix.allSatisfy({ $0.count == count }) else { return nil }
-        var augmented = zip(matrix, rhs).map { $0 + [$1] }
-        for pivot in 0..<count {
-            guard let row = (pivot..<count).max(by: { abs(augmented[$0][pivot]) < abs(augmented[$1][pivot]) }),
-                  abs(augmented[row][pivot]) > 1e-12 else { return nil }
-            if row != pivot { augmented.swapAt(row, pivot) }
-            let divisor = augmented[pivot][pivot]
-            for column in pivot...count { augmented[pivot][column] /= divisor }
-            for rowIndex in 0..<count where rowIndex != pivot {
-                let factor = augmented[rowIndex][pivot]
-                guard factor != 0 else { continue }
-                for column in pivot...count {
-                    augmented[rowIndex][column] -= factor * augmented[pivot][column]
-                }
+        guard matrix.count == count * count else { return nil }
+        let stride = count + 1
+        var augmented = Array(repeating: 0.0, count: count * stride)
+        for row in 0..<count {
+            for column in 0..<count { augmented[row * stride + column] = matrix[row * count + column] }
+            augmented[row * stride + count] = rhs[row]
+        }
+        var coefficients = Array(repeating: 0.0, count: count)
+        let solved = augmented.withUnsafeMutableBufferPointer { values in
+            coefficients.withUnsafeMutableBufferPointer { output in
+                loopr_solve_normal(values.baseAddress!, numericCast(count), output.baseAddress!) != 0
             }
         }
-        return augmented.map { $0[count] }
+        return solved ? coefficients : nil
     }
 
     private static func movingBlockSample(

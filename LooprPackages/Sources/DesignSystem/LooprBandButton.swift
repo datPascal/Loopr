@@ -6,7 +6,7 @@ import UIKit
 
 /// The glass avatar at the trailing end of every tab header. Its ring shows
 /// the band battery, a small badge shows the band link when there is
-/// something worth noticing, and a tap opens Settings.
+/// something worth noticing, and a tap opens Your data when the shell supplies it.
 ///
 /// It reads `\.looprBandIndicator` and `\.looprOpenSettings`, which the app
 /// shell provides on every tab. A screen can pass its own fallbacks for hosts
@@ -15,12 +15,13 @@ import UIKit
 public struct LooprBandButton: View {
     @Environment(\.looprBandIndicator) private var environmentIndicator
     @Environment(\.looprOpenSettings) private var environmentOpenSettings
+    @Environment(\.looprOpenYourData) private var openYourData
 
     private let accent: LooprColorToken
     private let fallbackIndicator: LooprBandIndicator?
     private let fallbackAction: (@MainActor () -> Void)?
 
-    public static let diameter: CGFloat = 48
+    public static let diameter = LooprSpacing.headerControlDiameter
 
     public init(
         accent: LooprColorToken = .brand,
@@ -33,9 +34,9 @@ public struct LooprBandButton: View {
     }
 
     public var body: some View {
-        if let action = environmentOpenSettings?.run ?? fallbackAction {
+        if let action = openYourData?.run ?? environmentOpenSettings?.run ?? fallbackAction {
             let indicator = environmentIndicator ?? fallbackIndicator
-            LooprSettingsGlassButton(spokenLabel: LooprBandButtonStyle.spokenLabel(for: indicator), action: action)
+            LooprSettingsGlassButton(spokenLabel: LooprBandButtonStyle.spokenLabel(for: indicator).replacingOccurrences(of: "Open settings", with: openYourData == nil ? "Open settings" : "Your data"), action: action)
                 .overlay {
                     LooprBatteryRing(
                         percent: indicator?.batteryPercent,
@@ -52,7 +53,14 @@ public struct LooprBandButton: View {
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
-                .frame(width: Self.diameter, height: Self.diameter)
+                .frame(width: LooprSpacing.interactiveRowHeight, height: LooprSpacing.interactiveRowHeight)
+                .contextMenu {
+                    if let settings = environmentOpenSettings?.run ?? fallbackAction {
+                        Button("Settings", systemImage: "gearshape", action: settings)
+                            .accessibilityIdentifier("your-data-settings")
+                    }
+                }
+                .accessibilityHint("Touch and hold for Settings")
         }
     }
 }

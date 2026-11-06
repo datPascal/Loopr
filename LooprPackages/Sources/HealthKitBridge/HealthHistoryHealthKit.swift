@@ -5,6 +5,17 @@ import Foundation
 public protocol HealthHistoryAuthorizing: Sendable {
     func requestAuthorization(sharing share: Set<ExportMetricKind>, reading: Set<HealthHistoryQuantity>,
                               readSleep: Bool) async throws
+    /// The same sheet, with the Apple Health source reads (DEC-12.16) added to
+    /// the read set. The write set is never touched by `sources`.
+    func requestAuthorization(sharing share: Set<ExportMetricKind>, reading: Set<HealthHistoryQuantity>,
+                              readSleep: Bool, sources: Set<AppleHealthSourceKind>) async throws
+}
+
+public extension HealthHistoryAuthorizing {
+    func requestAuthorization(sharing share: Set<ExportMetricKind>, reading: Set<HealthHistoryQuantity>,
+                              readSleep: Bool, sources: Set<AppleHealthSourceKind>) async throws {
+        try await requestAuthorization(sharing: share, reading: reading, readSleep: readSleep)
+    }
 }
 
 #if canImport(HealthKit)
@@ -22,17 +33,27 @@ public final class LiveHealthHistoryClient: HealthHistoryQueryClient, HealthHist
         readTypes(for: Set(HealthHistoryQuantity.allCases), readSleep: true)
     }
 
+    /// Heart rate brings the workouts other apps saved, with their energy and
+    /// distance (R1-VET-01): Loopr reads those workouts for their heart rate,
+    /// so the heart rate switch governs both.
     public static func readTypes(for quantities: Set<HealthHistoryQuantity>, readSleep: Bool) -> Set<HKObjectType> {
         var types = Set<HKObjectType>(quantities.intersection(Set(HealthHistoryQuantity.allCases)).compactMap { quantityType($0) })
         if readSleep, let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) { types.insert(sleep) }
+        if quantities.contains(.heartRate) { types.formUnion(LiveAppleHealthWorkoutStore.readTypes) }
         return types
     }
 
     public func requestAuthorization(sharing share: Set<ExportMetricKind>, reading: Set<HealthHistoryQuantity>,
                                      readSleep: Bool) async throws {
+        try await requestAuthorization(sharing: share, reading: reading, readSleep: readSleep, sources: [])
+    }
+
+    public func requestAuthorization(sharing share: Set<ExportMetricKind>, reading: Set<HealthHistoryQuantity>,
+                                     readSleep: Bool, sources: Set<AppleHealthSourceKind>) async throws {
         guard HKHealthStore.isHealthDataAvailable() else { throw LiveHealthKitError.unavailable }
         let shareTypes = Set(share.compactMap(Self.shareType(for:)))
         let readTypes = Self.readTypes(for: reading, readSleep: readSleep)
+            .union(LiveAppleHealthSourceStore.readTypes(for: sources))
         guard !shareTypes.isEmpty || !readTypes.isEmpty else { return }
         try await store.requestAuthorization(toShare: shareTypes, read: readTypes)
     }
@@ -42,9 +63,18 @@ public final class LiveHealthHistoryClient: HealthHistoryQueryClient, HealthHist
     }
 
     public func historyReadAccessRequested(reading: Set<HealthHistoryQuantity>, readSleep: Bool) async -> Bool {
+        await historyReadAccessRequested(reading: reading, readSleep: readSleep, sources: [])
+    }
+
+    /// True once the person has answered the read request for the history
+    /// types and the given Apple Health source kinds together.
+    public func historyReadAccessRequested(reading: Set<HealthHistoryQuantity>, readSleep: Bool,
+                                           sources: Set<AppleHealthSourceKind>) async -> Bool {
         guard HKHealthStore.isHealthDataAvailable() else { return false }
+        let types = Self.readTypes(for: reading, readSleep: readSleep)
+            .union(LiveAppleHealthSourceStore.readTypes(for: sources))
         return await withCheckedContinuation { continuation in
-            store.getRequestStatusForAuthorization(toShare: [], read: Self.readTypes(for: reading, readSleep: readSleep)) { status, error in
+            store.getRequestStatusForAuthorization(toShare: [], read: types) { status, error in
                 continuation.resume(returning: error == nil && status == .unnecessary)
             }
         }
@@ -151,6 +181,12 @@ extension LiveHealthKitClient: HealthHistoryAuthorizing {
     public func requestAuthorization(sharing share: Set<ExportMetricKind>, reading: Set<HealthHistoryQuantity>,
                                      readSleep: Bool) async throws {
         try await LiveHealthHistoryClient().requestAuthorization(sharing: share, reading: reading, readSleep: readSleep)
+    }
+
+    public func requestAuthorization(sharing share: Set<ExportMetricKind>, reading: Set<HealthHistoryQuantity>,
+                                     readSleep: Bool, sources: Set<AppleHealthSourceKind>) async throws {
+        try await LiveHealthHistoryClient().requestAuthorization(sharing: share, reading: reading,
+                                                                 readSleep: readSleep, sources: sources)
     }
 }
 #endif

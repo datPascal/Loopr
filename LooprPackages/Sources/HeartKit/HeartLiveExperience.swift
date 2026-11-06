@@ -86,7 +86,7 @@ struct HeartLiveExperience: View {
                     Circle()
                         .fill(Color.loopr(reading?.zone?.token ?? .heart))
                         .frame(width: 7, height: 7)
-                    LooprText(reading == nil ? "HEART RATE" : "LIVE HEART RATE", style: .sectionLabel,
+                    LooprText(reading == nil ? "Heart rate" : "Live heart rate", style: .sectionLabel,
                               color: reading?.zone?.textToken ?? (reading == nil ? .inkSecondary : .heart))
                     Spacer()
                     if let zone = reading?.zone { HeartZonePill(zone: zone) }
@@ -193,7 +193,7 @@ struct HeartLiveExperience: View {
                 HStack {
                     LooprText("This session", style: .cardTitle)
                     Spacer()
-                    LooprText("LAST 3 MIN", style: .sectionLabel, color: .inkMuted)
+                    LooprText("Last 3 min", style: .sectionLabel, color: .inkMuted)
                 }
                 HeartLiveRollingChart(reading: reading, zones: zones?.zones)
                     .frame(height: 168)

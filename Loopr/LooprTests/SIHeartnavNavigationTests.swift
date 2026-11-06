@@ -5,9 +5,9 @@ import TodayKit
 @MainActor
 struct SIHeartnavNavigationTests {
     @Test func rootsSelectTheirOwningTab() {
-        #expect(TodayTabOwnership.tab(for: .sleep) == .sleep)
-        #expect(TodayTabOwnership.tab(for: .heart) == .heart)
-        #expect(TodayTabOwnership.tab(for: .body) == .body)
+        #expect(TodayTabOwnership.tab(for: .sleep) == .data)
+        #expect(TodayTabOwnership.tab(for: .heart) == .data)
+        #expect(TodayTabOwnership.tab(for: .body) == .data)
     }
 
     @Test func detailAndUtilityRoutesStillPush() {

@@ -278,9 +278,21 @@ struct LooprPhoneActionSink: DevicePhoneActionSink {
 
 enum LooprStrapAlarmError: Error, Equatable, Sendable, LocalizedError {
     case noOccurrence
+    case cancellationPending
+    case phoneCancellationPending
+    case bothCancellationsPending
 
     var errorDescription: String? {
-        "Pick a time and at least one weekday so Loopr knows when to wake you."
+        switch self {
+        case .noOccurrence:
+            "Pick a time and at least one weekday so Loopr knows when to wake you."
+        case .cancellationPending:
+            "The phone alarm is off. Reconnect your band so Loopr can cancel its alarm too."
+        case .phoneCancellationPending:
+            "Loopr could not turn off the phone alarm. It may still ring. Try again."
+        case .bothCancellationsPending:
+            "Loopr could not turn off the phone or band alarm. They may still ring. Reconnect your band and try again."
+        }
     }
 }
 
@@ -306,6 +318,10 @@ nonisolated final class LooprStrapAlarmArmRecord: @unchecked Sendable {
     static let readbackAtKey = "loopr.device-center.alarm-last-readback-at"
     static let confirmedKey = "loopr.device-center.alarm-confirmed-by-event"
     static let writeFailedKey = "loopr.device-center.alarm-write-failed"
+    static let sessionKey = "loopr.device-center.alarm-process-session"
+    static let pendingDisableKey = "loopr.device-center.alarm-disable-pending"
+    static let firedDateKey = "loopr.device-center.alarm-last-fired-date"
+    static let processSession = UUID().uuidString
 
     struct Entry: Equatable, Sendable {
         /// The wall instant Loopr asked the band to buzz at.
@@ -324,13 +340,15 @@ nonisolated final class LooprStrapAlarmArmRecord: @unchecked Sendable {
         let confirmedByEvent: Bool
         /// The SET_ALARM write itself failed, so the band is holding nothing.
         let writeFailed: Bool
+        let processSession: String?
 
         /// Only event 56 counts. The band read back the right time all night
         /// on 21 Sep and still never fired, so a read-back is a diagnostic,
         /// not evidence.
-        var isTrusted: Bool { confirmedByEvent }
+        var isTrusted: Bool { confirmedByEvent && !writeFailed }
     }
 
+    private static let lock = NSLock()
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -338,6 +356,8 @@ nonisolated final class LooprStrapAlarmArmRecord: @unchecked Sendable {
     }
 
     func read() -> Entry? {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
         guard let seconds = defaults.object(forKey: Self.fireDateKey) as? Double else { return nil }
         return Entry(
             fireDate: Date(timeIntervalSince1970: seconds),
@@ -347,13 +367,16 @@ nonisolated final class LooprStrapAlarmArmRecord: @unchecked Sendable {
             lastReadback: Self.date(defaults.object(forKey: Self.readbackKey)),
             lastReadbackAt: Self.date(defaults.object(forKey: Self.readbackAtKey)),
             confirmedByEvent: defaults.bool(forKey: Self.confirmedKey),
-            writeFailed: defaults.bool(forKey: Self.writeFailedKey)
+            writeFailed: defaults.bool(forKey: Self.writeFailedKey),
+            processSession: defaults.string(forKey: Self.sessionKey)
         )
     }
 
     /// Records a fresh SET_ALARM write. Every piece of evidence resets: the
     /// band has not agreed to this one yet.
     func write(fireDate: Date, armedAt: Date, linkGeneration: UInt64) {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
         defaults.set(fireDate.timeIntervalSince1970, forKey: Self.fireDateKey)
         defaults.set(armedAt.timeIntervalSince1970, forKey: Self.armedAtKey)
         defaults.set(NSNumber(value: linkGeneration), forKey: Self.generationKey)
@@ -362,16 +385,21 @@ nonisolated final class LooprStrapAlarmArmRecord: @unchecked Sendable {
         defaults.removeObject(forKey: Self.readbackAtKey)
         defaults.set(false, forKey: Self.confirmedKey)
         defaults.set(false, forKey: Self.writeFailedKey)
+        defaults.set(Self.processSession, forKey: Self.sessionKey)
     }
 
     /// The SET_ALARM write never reached the band.
     func markWriteFailed() {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
         defaults.set(true, forKey: Self.writeFailedKey)
     }
 
     /// Stores what the band answered, matching or not, and stamps the link it
     /// was asked on so a failed read does not re-ask every minute.
     func markReadback(_ readback: Date?, at date: Date, linkGeneration: UInt64) {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
         if let readback {
             defaults.set(readback.timeIntervalSince1970, forKey: Self.readbackKey)
         } else {
@@ -382,10 +410,14 @@ nonisolated final class LooprStrapAlarmArmRecord: @unchecked Sendable {
     }
 
     func markVerified(at date: Date) {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
         defaults.set(date.timeIntervalSince1970, forKey: Self.verifiedAtKey)
     }
 
     func markConfirmedByEvent(at date: Date) {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
         defaults.set(true, forKey: Self.confirmedKey)
         defaults.set(date.timeIntervalSince1970, forKey: Self.verifiedAtKey)
     }
@@ -393,19 +425,40 @@ nonisolated final class LooprStrapAlarmArmRecord: @unchecked Sendable {
     /// Drops the evidence without dropping the target, so the next reconcile
     /// asks the band again. Used when the band reports its clock was set.
     func invalidateVerification() {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
         defaults.removeObject(forKey: Self.verifiedAtKey)
         defaults.set(false, forKey: Self.confirmedKey)
         defaults.set(NSNumber(value: UInt64(0)), forKey: Self.generationKey)
     }
 
     func clear() {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
         for key in [
             Self.fireDateKey, Self.generationKey, Self.armedAtKey,
             Self.verifiedAtKey, Self.readbackKey, Self.readbackAtKey,
-            Self.confirmedKey, Self.writeFailedKey
+            Self.confirmedKey, Self.writeFailedKey, Self.sessionKey
         ] {
             defaults.removeObject(forKey: key)
         }
+    }
+
+    var needsDisable: Bool { Self.lock.withLock { defaults.bool(forKey: Self.pendingDisableKey) } }
+
+    var lastFiredDate: Date? { Self.lock.withLock { Self.date(defaults.object(forKey: Self.firedDateKey)) } }
+
+    func recordFiredDate(_ date: Date?) {
+        Self.lock.withLock {
+            if let date { defaults.set(date.timeIntervalSince1970, forKey: Self.firedDateKey) }
+            else { defaults.removeObject(forKey: Self.firedDateKey) }
+        }
+    }
+
+    func setNeedsDisable(_ value: Bool) {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
+        defaults.set(value, forKey: Self.pendingDisableKey)
     }
 
     private static func date(_ value: Any?) -> Date? {
@@ -445,6 +498,7 @@ nonisolated struct LooprStrapAlarmService: Sendable {
     /// Whether the person wants the phone layer. On unless they switched it
     /// off on the wake alarm screen.
     var phonePreference = LooprPhoneAlarmPreference()
+    var operations = LooprAlarmOperationQueue.shared
 
     func load() async throws -> StrapAlarmConfiguration? {
         try await DeviceAlarmSetupService(repository: repository).load()
@@ -453,15 +507,20 @@ nonisolated struct LooprStrapAlarmService: Sendable {
     /// Persists the configuration, then arms or clears both layers. Returns
     /// the occurrence Loopr promised, or nil when the alarm was turned off.
     ///
-    /// A band that refuses the write does not fail the save. The iPhone alarm
-    /// is scheduled first and on its own, so somebody whose band is flat, out
-    /// of range, or wedged is still woken; the status screen is where the band
-    /// failure shows up.
+    /// A band write failure appears in the saved alarm's status. When the
+    /// phone backup is enabled, it is scheduled before the band write.
     @discardableResult
-    func save(_ configuration: StrapAlarmConfiguration) async throws -> Date? {
+    func save(_ configuration: StrapAlarmConfiguration, waitForBand: Bool = true) async throws -> Date? {
+        try await operations.withLock {
+            try await saveLocked(configuration, waitForBand: waitForBand)
+        }
+    }
+
+    private func saveLocked(_ configuration: StrapAlarmConfiguration, waitForBand: Bool) async throws -> Date? {
         let validated = try await DeviceAlarmSetupService(repository: repository).save(configuration)
+        armRecord.recordFiredDate(nil)
         guard validated.isEnabled else {
-            await turnOff()
+            try await turnOffLocked()
             return nil
         }
         guard let fireDate = StrapAlarmSchedulePlanner.nextFireDate(
@@ -471,17 +530,37 @@ nonisolated struct LooprStrapAlarmService: Sendable {
         ) else {
             throw LooprStrapAlarmError.noOccurrence
         }
-        await phoneAlarm?.prepare()
-        await schedulePhoneBackup(for: fireDate)
-        await arm(fireDate, reason: "saved")
+        if phonePreference.isEnabled { await phoneAlarm?.prepare() }
+        armRecord.setNeedsDisable(false)
+        try await schedulePhoneBackup(for: fireDate, configuration: validated)
+        if waitForBand {
+            await armLocked(fireDate, reason: "saved")
+        } else {
+            Task { await armIfCurrent(fireDate, configuration: validated, reason: "saved") }
+        }
         return fireDate
     }
 
     /// Clears both layers. Used when the alarm is switched off.
-    func turnOff() async {
-        try? await runtime.disableBandAlarm()
+    func turnOff() async throws {
+        try await operations.withLock { try await turnOffLocked() }
+    }
+
+    private func turnOffLocked() async throws {
+        armRecord.setNeedsDisable(true)
+        var phoneFailed = false
+        var bandFailed = false
+        do { try await phoneAlarm?.cancelChecked() }
+        catch { phoneFailed = true }
+        do { try await runtime.disableBandAlarm() }
+        catch { bandFailed = true }
+        if phoneFailed || bandFailed {
+            armRecord.invalidateVerification()
+            if phoneFailed && bandFailed { throw LooprStrapAlarmError.bothCancellationsPending }
+            throw phoneFailed ? LooprStrapAlarmError.phoneCancellationPending : .cancellationPending
+        }
         armRecord.clear()
-        await phoneAlarm?.cancel()
+        armRecord.setNeedsDisable(false)
         BandActionLog.write("alarm turned off on the strap and on this iPhone")
     }
 
@@ -494,22 +573,23 @@ nonisolated struct LooprStrapAlarmService: Sendable {
 
     /// Brings both layers back in line with the next planned occurrence.
     ///
-    /// The band is never trusted from memory. Every pass either has fresh
-    /// evidence that the band is holding the right time, a read-back that
-    /// agrees or an event 56 for this arm, or it writes the alarm again. The
-    /// old version compared a stored connection generation against the live
-    /// one and skipped the write when they matched. Generations restart at the
-    /// same value in each process, so a record written at 01:16 matched a
-    /// 06:50 relaunch, nothing was written, and the 07:00 alarm never buzzed.
+    /// A confirmation is reusable only within the same process and link.
+    /// Generations can restart at the same value after a process relaunch.
+    /// Unconfirmed writes are throttled before retrying that occurrence.
     @discardableResult
     func reconcile() async throws -> Date? {
+        try await operations.withLock { try await reconcileLocked() }
+    }
+
+    private func reconcileLocked(after date: Date? = nil) async throws -> Date? {
         guard let configuration = try await load(), configuration.isEnabled else {
-            if armRecord.read() != nil { await turnOff() }
+            if armRecord.read() != nil || armRecord.needsDisable { try await turnOffLocked() }
+            else { try await phoneAlarm?.cancelChecked() }
             return nil
         }
         guard let fireDate = StrapAlarmSchedulePlanner.nextFireDate(
             for: configuration,
-            after: now(),
+            after: max(date ?? now(), armRecord.lastFiredDate ?? .distantPast),
             calendar: calendar
         ) else {
             return nil
@@ -517,18 +597,19 @@ nonisolated struct LooprStrapAlarmService: Sendable {
 
         // The iPhone layer comes first and does not depend on the band being
         // connected. It is the one that survives the app being killed.
-        await schedulePhoneBackup(for: fireDate)
+        try await schedulePhoneBackup(for: fireDate, configuration: configuration)
 
         guard await runtime.runtimeState().acceptsBandCommands else { return nil }
         let generation = await runtime.runtimeState().generation ?? 0
         let existing = armRecord.read()
 
         guard let existing, abs(existing.fireDate.timeIntervalSince(fireDate)) < 1 else {
-            await arm(fireDate, reason: existing == nil ? "no arm on record" : "the next occurrence moved")
+            await armLocked(fireDate, reason: existing == nil ? "no arm on record" : "the next occurrence moved")
             return fireDate
         }
 
         let sameLink = existing.linkGeneration == generation && generation != 0
+            && existing.processSession == LooprStrapAlarmArmRecord.processSession
         let recentlyWritten = now().timeIntervalSince(existing.armedAt) < Self.rearmThrottle
         if sameLink, existing.isTrusted || recentlyWritten {
             return nil
@@ -539,12 +620,11 @@ nonisolated struct LooprStrapAlarmService: Sendable {
         if let readback, abs(readback.timeIntervalSince(fireDate)) <= Self.readbackTolerance {
             BandActionLog.write("strap reads back \(Self.label(fireDate)); arming again for event 56")
         }
-        if recentlyWritten, existing.confirmedByEvent { return nil }
 
         // A read-back that agrees is not proof: the band read back 07:00 all
         // night on 21 Sep and stayed silent. Every new link arms again and
         // waits for event 56.
-        await arm(
+        await armLocked(
             fireDate,
             reason: readback == nil
                 ? "the strap did not read back an alarm"
@@ -559,45 +639,61 @@ nonisolated struct LooprStrapAlarmService: Sendable {
         armRecord.invalidateVerification()
     }
 
-    /// Records event 56 for the alarm currently on file.
-    func noteLatchConfirmed() {
-        guard armRecord.read() != nil else { return }
-        armRecord.markConfirmedByEvent(at: now())
-        BandActionLog.write("strap confirmed the alarm latched; event 56")
+    /// Execution events do not acknowledge the phone alarm. Leave its
+    /// system-owned recurrence alone while lining up the next band occurrence.
+    func noteFired(eventID: UInt16) async {
+        await operations.withLock { await noteFiredLocked(eventID: eventID) }
     }
 
-    /// The band fired. Cancel the iPhone backup so it does not go off a moment
-    /// later, then line up the next occurrence.
-    func noteFired(eventID: UInt16) async {
-        // The band reports one fire as 57 and 58, and replays both after a
-        // reconnect. Once the next occurrence is on record, a fire event
+    private func noteFiredLocked(eventID: UInt16) async {
+        // The band can replay a fire event after a reconnect. Once the next
+        // occurrence is on record, a fire event
         // belongs to the alarm that already went, not to the one ahead.
         if let entry = armRecord.read(), entry.fireDate.timeIntervalSince(now()) > 120 {
             BandActionLog.write("alarm fire event \(eventID) after re-arm; ignored")
             return
         }
         BandActionLog.write("alarm fired on the strap; event \(eventID)")
-        await phoneAlarm?.cancel()
+        let nextAfter = max(now(), armRecord.read()?.fireDate ?? now())
+        armRecord.recordFiredDate(nextAfter)
         armRecord.clear()
-        _ = try? await reconcile()
+        _ = try? await reconcileLocked(after: nextAfter)
     }
 
     /// Writes the alarm to the band, then waits for the band to agree.
     ///
     /// The sequence is clear, arm, wait for event 56, read back. A band that
-    /// stays silent gets one retry. After that the record says unconfirmed and
-    /// the iPhone layer is what this person is relying on, which is exactly
-    /// what the status screen then tells them.
+    /// stays silent gets one retry. After that the record says unconfirmed.
     func arm(_ fireDate: Date, reason: String) async {
+        await operations.withLock { await armLocked(fireDate, reason: reason) }
+    }
+
+    func armIfCurrent(_ fireDate: Date, configuration: StrapAlarmConfiguration, reason: String) async {
+        await operations.withLock {
+            guard !Task.isCancelled, configuration.isEnabled,
+                  (try? await load()) == configuration, fireDate > now() else { return }
+            await armLocked(fireDate, reason: reason)
+        }
+    }
+
+    private func armLocked(_ fireDate: Date, reason: String) async {
+        await operations.setArming(true)
+        await performArm(fireDate, reason: reason)
+        await operations.setArming(false)
+    }
+
+    private func performArm(_ fireDate: Date, reason: String) async {
         for attempt in 1...2 {
+            guard !Task.isCancelled, fireDate > now() else { return }
             let generation = await runtime.runtimeState().generation ?? 0
-            await latchSignal?.expectLatch()
+            await latchSignal?.expectLatch(generation: generation)
             do {
                 // The runtime clears the band's slot before every write.
                 try await runtime.setBandAlarm(fireDate: fireDate)
             } catch {
                 armRecord.write(fireDate: fireDate, armedAt: now(), linkGeneration: generation)
                 armRecord.markWriteFailed()
+                await latchSignal?.reset()
                 BandActionLog.write("alarm write failed (\(reason)): \(error)")
                 return
             }
@@ -612,7 +708,8 @@ nonisolated struct LooprStrapAlarmService: Sendable {
                 BandActionLog.write("strap latched the alarm; event 56 arrived")
             }
 
-            let readback = try? await runtime.readBandAlarm()
+            let readbackStatus = (try? await runtime.readBandAlarmStatus()) ?? .unknown
+            let readback = readbackStatus.fireDate
             armRecord.markReadback(readback, at: now(), linkGeneration: generation)
             let matches = readback.map { abs($0.timeIntervalSince(fireDate)) <= Self.readbackTolerance } ?? false
             if matches { armRecord.markVerified(at: now()) }
@@ -620,7 +717,8 @@ nonisolated struct LooprStrapAlarmService: Sendable {
                 "alarm readback=\(readback.map(Self.label) ?? "none") matches=\(matches) latched=\(latched)"
             )
 
-            if latched { return }
+            if latched, readbackStatus != .empty, readback == nil || matches { return }
+            if latched { armRecord.invalidateVerification() }
             if attempt == 2 {
                 BandActionLog.write("strap never confirmed the alarm; this iPhone is the wake now")
             }
@@ -631,7 +729,7 @@ nonisolated struct LooprStrapAlarmService: Sendable {
         guard let configuration = try await load() else { return nil }
         return StrapAlarmSchedulePlanner.nextFireDate(
             for: configuration,
-            after: now(),
+            after: max(now(), armRecord.lastFiredDate ?? .distantPast),
             calendar: calendar
         )
     }
@@ -640,10 +738,11 @@ nonisolated struct LooprStrapAlarmService: Sendable {
     /// to an exact time.
     func plannedWindow() async throws -> (start: Date, end: Date)? {
         guard let configuration = try await load(), configuration.isEnabled else { return nil }
+        let referenceDate = max(now(), armRecord.lastFiredDate ?? .distantPast)
         guard let end = StrapAlarmSchedulePlanner.nextFireDate(
-            for: configuration, after: now(), calendar: calendar
+            for: configuration, after: referenceDate, calendar: calendar
         ), let start = StrapAlarmSchedulePlanner.nextWindowStart(
-            for: configuration, after: now(), calendar: calendar
+            for: configuration, after: referenceDate, calendar: calendar
         ) else {
             return nil
         }
@@ -664,9 +763,12 @@ nonisolated struct LooprStrapAlarmService: Sendable {
     /// confirmed unless the band said so.
     func assurance() async -> StrapAlarmAssurance {
         let configuration = try? await load()
+        let phoneOutcome = await phoneAlarm?.lastOutcome()
         let phoneBackup: StrapAlarmAssurance.PhoneBackup = phonePreference.isEnabled
-            ? await phoneAlarm?.lastOutcome()?.assurance ?? .unavailable("Loopr has no backup alarm on this iPhone.")
-            : .unavailable("You switched the phone alarm off, so only your band will wake you.")
+            ? phoneOutcome?.assurance ?? .unavailable("Loopr has no backup alarm on this iPhone.")
+            : .unavailable(phoneOutcome == nil
+                ? "You switched the phone alarm off, so only your band will wake you."
+                : "Loopr could not confirm that the phone alarm is off. It may still ring. Try turning it off again.")
         guard let configuration, configuration.isEnabled, let entry = armRecord.read() else {
             return StrapAlarmAssurance(band: .off, phoneBackup: phoneBackup)
         }
@@ -690,15 +792,15 @@ nonisolated struct LooprStrapAlarmService: Sendable {
         )
     }
 
-    private func schedulePhoneBackup(for fireDate: Date) async {
+    private func schedulePhoneBackup(for fireDate: Date, configuration: StrapAlarmConfiguration) async throws {
         guard let phoneAlarm else { return }
         guard phonePreference.isEnabled else {
             // Switched off on the wake alarm screen. Clear anything an earlier
             // arm left behind, once, rather than every reconcile.
-            if await phoneAlarm.lastOutcome() != nil { await phoneAlarm.cancel() }
+            if await phoneAlarm.lastOutcome() != nil { try await phoneAlarm.cancelChecked() }
             return
         }
-        let outcome = await phoneAlarm.schedule(at: fireDate)
+        let outcome = await phoneAlarm.schedule(at: fireDate, repeating: configuration)
         BandActionLog.write("phone backup for \(Self.label(fireDate)): \(outcome)")
     }
 
@@ -721,27 +823,37 @@ actor LooprAlarmLatchSignal {
 
     private var expectedSince: Date?
     private var latchedAt: Date?
+    private var expectedGeneration: UInt64?
 
     init() {}
 
-    func expectLatch() {
+    func expectLatch(generation: UInt64? = nil) {
         expectedSince = Date()
+        expectedGeneration = generation
         latchedAt = nil
     }
 
     /// Called by the band event consumer for every event 56.
-    func noteLatch() {
-        guard expectedSince != nil else { return }
-        latchedAt = Date()
+    func noteLatch(generation: UInt64? = nil, receivedAt: Date = Date()) {
+        guard let expectedSince, receivedAt >= expectedSince,
+              generation == nil || expectedGeneration == generation else { return }
+        latchedAt = receivedAt
     }
 
     func waitForLatch(timeout: TimeInterval) async -> Bool {
+        defer { reset() }
         let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
+        while Date() < deadline, !Task.isCancelled {
             if latchedAt != nil { return true }
-            try? await Task.sleep(for: .milliseconds(200))
+            do { try await Task.sleep(for: .milliseconds(200)) } catch { return false }
         }
-        return latchedAt != nil
+        return !Task.isCancelled && latchedAt != nil
+    }
+
+    func reset() {
+        expectedSince = nil
+        expectedGeneration = nil
+        latchedAt = nil
     }
 }
 
@@ -918,12 +1030,8 @@ actor BandEventActionConsumer {
     static let doubleTapEventID: UInt16 = 14
     static let clockSetEventID: UInt16 = 16
     static let alarmLatchedEventID: UInt16 = 56
-    static let alarmExecutedEventIDs: Set<UInt16> = [57, 58]
     static let alarmDisabledEventID: UInt16 = 59
     static let hapticsFiredEventID: UInt16 = 60
-    /// How close to the armed time event 60 has to land before it counts as
-    /// the alarm firing rather than an ordinary buzz or a test.
-    static let hapticsFiredWindow: TimeInterval = 120
     static let doubleTapWindow: TimeInterval = 2
     /// The band stores taps in flash and replays them on the next drain. A tap
     /// the band timestamps as older than this is history, not a person tapping
@@ -948,6 +1056,7 @@ actor BandEventActionConsumer {
     private let bandStateRecorder: (any LooprBandStateRecording)?
     private var task: Task<Void, Never>?
     private var alarmTask: Task<Void, Never>?
+    private var alarmEventTask: Task<Void, Never>?
     private var lastDoubleTapAt: Date?
 
     init(
@@ -994,13 +1103,20 @@ actor BandEventActionConsumer {
         }
     }
 
-    func stop() {
-        task?.cancel()
+    func stop() async {
+        let eventReader = task
+        let reconciler = alarmTask
+        let eventWork = alarmEventTask
+        eventReader?.cancel()
         task = nil
-        alarmTask?.cancel()
+        reconciler?.cancel()
         alarmTask = nil
-        let watcher = smartWake
-        Task { await watcher?.stop() }
+        eventWork?.cancel()
+        alarmEventTask = nil
+        await smartWake?.stop()
+        await eventReader?.value
+        await reconciler?.value
+        await eventWork?.value
     }
 
     /// Every alarm-shaped event id, named, so the morning log reads as a
@@ -1019,6 +1135,12 @@ actor BandEventActionConsumer {
     }
 
     func handle(_ envelope: BandEventEnvelope) async {
+        guard envelope.generation == (await runtime.runtimeState()).generation else { return }
+        if [UInt16(56), 57, 58, 59, 60].contains(envelope.eventID),
+           let occurredAt = envelope.occurredAt,
+           abs(envelope.receivedAt.timeIntervalSince(occurredAt)) > Self.doubleTapRecencyWindow {
+            return
+        }
         BandActionLog.alarm("band event \(envelope.eventID) (\(Self.eventName(envelope.eventID)))")
         switch envelope.eventID {
         case BandEventID.batteryLevel, BandEventID.chargingOn, BandEventID.chargingOff,
@@ -1026,33 +1148,46 @@ actor BandEventActionConsumer {
             await bandStateRecorder?.recordBandState(envelope)
         case Self.doubleTapEventID:
             await handleDoubleTap(envelope)
-        case let id where Self.alarmExecutedEventIDs.contains(id):
-            await smartWake?.stop()
-            await alarmService?.noteFired(eventID: id)
-        case Self.hapticsFiredEventID:
-            // 60 also fires for a test buzz and for "find my strap", so it
-            // only counts as the alarm when it lands near the armed time.
-            guard await firedNearArmedTime(envelope) else { break }
-            await smartWake?.stop()
-            await alarmService?.noteFired(eventID: envelope.eventID)
+        case 57:
+            enqueueAlarmEvent(fired: envelope.eventID)
+        case 58, Self.hapticsFiredEventID:
+            // A test, Find My Strap, or workout cue can produce these even
+            // seconds before the wake. Only the scheduled execution event
+            // can consume that occurrence.
+            break
         case Self.alarmLatchedEventID:
-            await latchSignal?.noteLatch()
-            alarmService?.noteLatchConfirmed()
+            await latchSignal?.noteLatch(generation: envelope.generation, receivedAt: envelope.receivedAt)
         case Self.clockSetEventID:
             // A clock set moves the frame the band's armed epoch lives in and
             // may drop the alarm outright. Drop the evidence and ask again.
             BandActionLog.alarm("strap clock was set; re-verifying the alarm")
-            alarmService?.forgetArmRecord()
-            await reconcileAlarm()
+            enqueueAlarmEvent()
         case Self.alarmDisabledEventID:
             // The band says it is holding no alarm. If the person still wants
             // one, forgetting what we last wrote makes the next reconcile
             // write it again instead of trusting a stale record.
+            // SET clears the slot first. Waiting for another SET here blocks
+            // the only event reader from consuming its following latch.
+            if await alarmService?.operations.isArming == true { break }
             BandActionLog.alarm("strap reports its alarm was cleared")
-            alarmService?.forgetArmRecord()
-            await reconcileAlarm()
+            enqueueAlarmEvent()
         default:
             break
+        }
+    }
+
+    private func enqueueAlarmEvent(fired eventID: UInt16? = nil) {
+        let previous = alarmEventTask
+        alarmEventTask = Task { [weak self] in
+            await previous?.value
+            guard !Task.isCancelled, let self else { return }
+            if let eventID {
+                await self.smartWake?.stop()
+                await self.alarmService?.noteFired(eventID: eventID)
+            } else {
+                self.alarmService?.forgetArmRecord()
+                await self.reconcileAlarm()
+            }
         }
     }
 
@@ -1085,11 +1220,6 @@ actor BandEventActionConsumer {
         }
         guard await runtime.runtimeState().acceptsBandCommands else { return }
         await smartWake.start(earliest: window.start, latest: window.end)
-    }
-
-    private func firedNearArmedTime(_ envelope: BandEventEnvelope) async -> Bool {
-        guard let planned = try? await alarmService?.plannedFireDate() else { return false }
-        return abs(envelope.receivedAt.timeIntervalSince(planned)) <= Self.hapticsFiredWindow
     }
 
     private func handleDoubleTap(_ envelope: BandEventEnvelope) async {

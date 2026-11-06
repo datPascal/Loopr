@@ -1,5 +1,7 @@
 import Foundation
 import CycleKit
+import NotificationKit
+import AlarmKit
 
 #if canImport(ActivityKit)
 import ActivityKit
@@ -226,14 +228,18 @@ struct UserNotificationCycleReminderScheduler: CycleReminderScheduler {
 struct LooprNotificationDataDeletionDeleter: PersistentDataDeletionDeleter {
     nonisolated let storeName = "notifications.loopr-owned"
     private let client: any LooprNotificationCenterClient
+    /// Clears the list and history of reminders the person set, which the notification layer also holds in memory.
+    private let forgetReminders: (@Sendable () async throws -> Void)?
 
-    init(client: any LooprNotificationCenterClient) {
+    init(client: any LooprNotificationCenterClient, forgetReminders: (@Sendable () async throws -> Void)? = nil) {
         self.client = client
+        self.forgetReminders = forgetReminders
     }
 
     #if canImport(UserNotifications)
     init(center: UNUserNotificationCenter = .current()) {
         self.client = LiveLooprNotificationCenterClient(center: center)
+        self.forgetReminders = { try await LooprNotificationRuntime.shared.policy.forgetUserReminders() }
     }
     #endif
 
@@ -242,6 +248,7 @@ struct LooprNotificationDataDeletionDeleter: PersistentDataDeletionDeleter {
         // covers dynamic family/object/day identifiers as well as the legacy cycle ID.
         await client.removeAllPendingNotificationRequests()
         await client.removeAllDeliveredNotifications()
+        try await forgetReminders?()
     }
 }
 
@@ -253,6 +260,34 @@ private struct UnavailableLooprNotificationCenterClient: LooprNotificationCenter
     func removeDeliveredNotifications(withIdentifiers identifiers: [String]) async {}
     func removeAllPendingNotificationRequests() async {}
     func removeAllDeliveredNotifications() async {}
+}
+
+nonisolated protocol LooprSystemAlarmDeletionClient: Sendable {
+    func cancel(id: UUID) async throws
+}
+
+private struct LiveLooprSystemAlarmDeletionClient: LooprSystemAlarmDeletionClient {
+    func cancel(id: UUID) async throws {
+        guard try AlarmManager.shared.alarms.contains(where: { $0.id == id }) else { return }
+        try AlarmManager.shared.cancel(id: id)
+    }
+}
+
+/// AlarmKit schedules are separate from notification requests and survive
+/// deletion of the app's database. Remove the owned wake explicitly.
+struct LooprAlarmDataDeletionDeleter: PersistentDataDeletionDeleter {
+    nonisolated let storeName = "alarms.loopr-owned"
+    private let client: any LooprSystemAlarmDeletionClient
+
+    init(client: any LooprSystemAlarmDeletionClient = LiveLooprSystemAlarmDeletionClient()) {
+        self.client = client
+    }
+
+    func deleteAll() async throws {
+        try await LooprAlarmOperationQueue.shared.withLock {
+            try await client.cancel(id: PhoneAlarmFallback.alarmID)
+        }
+    }
 }
 
 #if canImport(Security)
@@ -333,7 +368,7 @@ struct LooprAppGroupDataDeletionDeleter: PersistentDataDeletionDeleter, @uncheck
 struct LooprIntegrationLedgerDeletionDeleter: PersistentDataDeletionDeleter, @unchecked Sendable {
     nonisolated let storeName = "application-support.integration-ledgers"
     private let applicationSupportURL: URL
-    private let directoryNames = ["NotificationKit", "HealthKitBridge", "AIKit"]
+    private let directoryNames = ["NotificationKit", "HealthKitBridge", "AIKit", "FoodPhotos"]
 
     init(applicationSupportURL: URL = FileManager.default.urls(
         for: .applicationSupportDirectory, in: .userDomainMask
@@ -379,7 +414,7 @@ struct LooprTemporaryExportDataDeletionDeleter: PersistentDataDeletionDeleter, @
     }
 }
 
-protocol LooprWatchSnapshotDeletionClient: Sendable {
+nonisolated protocol LooprWatchSnapshotDeletionClient: Sendable {
     func clearSnapshot() async throws
 }
 
@@ -407,7 +442,7 @@ struct LooprWatchSnapshotDataDeletionDeleter: PersistentDataDeletionDeleter {
 
 #if canImport(ActivityKit)
 
-protocol LooprLiveActivityDeletionClient: Sendable {
+nonisolated protocol LooprLiveActivityDeletionClient: Sendable {
     func endWorkoutActivities() async
     func endBreathingActivities() async
 }

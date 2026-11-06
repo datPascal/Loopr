@@ -25,6 +25,8 @@ public struct DesignSystemGallery: View {
         case pickerRow
         case inlineMessage
         case detailScaffold
+        case train
+        case craft
 
         var identifier: String { "design-system-section-\(rawValue)" }
     }
@@ -122,6 +124,12 @@ public struct DesignSystemGallery: View {
                     detailScaffoldShowcase
                         .id(Section.detailScaffold.identifier)
                         .accessibilityIdentifier(Section.detailScaffold.identifier)
+                    LooprTrainGallerySection()
+                        .id(Section.train.identifier)
+                        .accessibilityIdentifier(Section.train.identifier)
+                    LooprCraftGallerySection()
+                        .id(Section.craft.identifier)
+                        .accessibilityIdentifier(Section.craft.identifier)
                 }
                 .padding(LooprSpacing.screenGutter)
             }

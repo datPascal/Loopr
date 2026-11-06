@@ -63,6 +63,7 @@ actor SyncKitStressLiveConsumer: LiveConsumer {
 
     private let runtime: any LooprHeartLiveRuntime
     private var active: [UUID: ActiveSubscription] = [:]
+    private var acquisitions: [UUID: UUID] = [:]
     private var releases: [UUID: Task<Void, Never>] = [:]
 
     init(runtime: any LooprHeartLiveRuntime) {
@@ -70,12 +71,25 @@ actor SyncKitStressLiveConsumer: LiveConsumer {
     }
 
     func acquire(generation: UUID) async throws -> AsyncStream<LiveCardiacSample> {
-        guard active[generation] == nil else { throw StressError.staleGeneration }
-
-        let source = try await runtime.acquireLiveEventStream(
-            kind: .compactHeartRateRR,
-            consumer: .breathing
-        )
+        try Task.checkCancellation()
+        guard active[generation] == nil, acquisitions[generation] == nil,
+              releases[generation] == nil else { throw StressError.staleGeneration }
+        let attempt = UUID()
+        acquisitions[generation] = attempt
+        let source: LiveStreamEventSubscription
+        do {
+            source = try await runtime.acquireLiveEventStream(kind: .compactHeartRateRR, consumer: .breathing)
+        } catch {
+            if acquisitions[generation] == attempt { acquisitions[generation] = nil }
+            throw error
+        }
+        guard acquisitions[generation] == attempt, !Task.isCancelled else {
+            if acquisitions[generation] == attempt { acquisitions[generation] = nil }
+            _ = await source.cancel()
+            try Task.checkCancellation()
+            throw StressError.staleGeneration
+        }
+        acquisitions[generation] = nil
         let pair = AsyncStream<LiveCardiacSample>.makeStream(
             bufferingPolicy: .bufferingNewest(256)
         )
@@ -89,10 +103,10 @@ actor SyncKitStressLiveConsumer: LiveConsumer {
                 _ = pair.continuation.yield(sample)
             }
             pair.continuation.finish()
-            await self?.sourceEnded(generation: generation)
+            await self?.release(generation: generation, subscriptionID: source.id)
         }
         pair.continuation.onTermination = { [weak self] _ in
-            Task { await self?.release(generation: generation) }
+            Task { await self?.release(generation: generation, subscriptionID: source.id) }
         }
         active[generation] = ActiveSubscription(
             source: source,
@@ -103,6 +117,7 @@ actor SyncKitStressLiveConsumer: LiveConsumer {
     }
 
     func release(generation: UUID) async {
+        acquisitions[generation] = nil
         if let release = releases[generation] {
             await release.value
             return
@@ -120,8 +135,9 @@ actor SyncKitStressLiveConsumer: LiveConsumer {
 
     func activeGenerationCount() -> Int { active.count }
 
-    private func sourceEnded(generation: UUID) {
-        active.removeValue(forKey: generation)
+    private func release(generation: UUID, subscriptionID: UUID) async {
+        guard active[generation]?.source.id == subscriptionID else { return }
+        await release(generation: generation)
     }
 }
 

@@ -1,0 +1,54 @@
+{
+  "_comment": "One entry per package capture step. suite: the LooprUITests class; tests: its exact test count; screens: slug (named after the contract phone) and the identifier of the last element on that screen.",
+  "lv04": {"suite": "LongevityTodayVisualUITests", "tests": 5, "screens": [
+    {"slug": "p-today", "end": "today-timeline-end"},
+    {"slug": "p-today-evening", "end": "today-timeline-end"},
+    {"slug": "p-today-learning", "end": "today-timeline-end"},
+    {"slug": "p-today-absent", "end": "today-timeline-end"},
+    {"slug": "p-today-breakdown", "end": "today-breakdown-recovery-metric"}
+  ]},
+  "lv05": {"suite": "LongevityFoodVisualUITests", "tests": 7, "screens": [
+    {"slug": "p-food", "end": "food-week"},
+    {"slug": "p-food-absent", "end": "food-week"},
+    {"slug": "p-lab", "end": "food-lab-summary"},
+    {"slug": "p-lab-edit", "end": "food-lab-edit-value"},
+    {"slug": "p-lab-saved", "end": "food-lab-saved"},
+    {"slug": "p-lab-de", "end": "food-lab-summary"},
+    {"slug": "p-lab-empty", "end": "food-lab-empty"}]},
+  "lv06": {"suite": "LongevityFitnessVisualUITests", "tests": 8, "screens": [
+      {"slug": "p-fit", "end": "fitness-capacity-heart-rate-recovery"},
+      {"slug": "p-fit-absent", "end": "fitness-capacity-heart-rate-recovery"},
+      {"slug": "p-fit-test-grip", "end": "fitness-test-instructions"},
+      {"slug": "p-fit-test-grip-trial", "end": "fitness-test-instructions"},
+      {"slug": "p-fit-test-dead-hang", "end": "fitness-test-instructions"},
+      {"slug": "p-fit-test-sit-to-stand", "end": "fitness-test-instructions"},
+      {"slug": "p-fit-test-balance", "end": "fitness-test-instructions"},
+      {"slug": "p-fit-test-result", "end": "fitness-capacity-history-row-0"}
+  ]},
+  "lv07": {"suite": "LongevityProtocolVisualUITests", "tests": 11, "screens": [
+      {"slug": "p-proto", "end": "protocol-evening-open"},
+      {"slug": "p-proto-evening", "end": "journal-privacy"},
+      {"slug": "p-proto-experiments", "end": "protocol-experiment-start-github"},
+      {"slug": "p-proto-rules", "end": "protocol-rule-add"},
+      {"slug": "p-proto-empty", "end": "protocol-templates-github"},
+      {"slug": "p-proto-template-preview", "end": "protocol-template-preview-rule-alcohol"},
+      {"slug": "p-result", "end": "experiment-result-share"},
+      {"slug": "p-share", "end": "protocol-pass-github"},
+      {"slug": "p-rule-editor", "end": "rule-editor-delete"},
+      {"slug": "p-versions", "end": "protocol-version-1"},
+      {"slug": "p-version-detail", "end": "protocol-version-changes"}
+  ]},
+  "lv08b": {"suite": "LongevityDataVisualUITests", "tests": 11, "screens": [
+      {"slug": "p-data", "end": "data-vault"},
+      {"slug": "p-data-absent", "end": "health-explore-settings"},
+      {"slug": "p-method", "end": "method-medical"},
+      {"slug": "p-method-recovery", "end": "method-medical"},
+      {"slug": "p-methods", "end": "methods-list-lab-unit-conversion"},
+      {"slug": "p-labs", "end": "labs-disclaimer"},
+      {"slug": "p-lab-report", "end": "labs-report-delete"},
+      {"slug": "p-lab-entry", "end": "labs-entry-add-value"},
+      {"slug": "p-lab-clock", "end": "labs-clock-note"},
+      {"slug": "p-publish", "end": "publish-save"},
+      {"slug": "p-body-log", "end": "body-log-health-footnote"}
+    ]}
+}

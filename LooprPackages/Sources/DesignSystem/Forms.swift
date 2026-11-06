@@ -7,6 +7,7 @@ public extension LooprSpacing {
     static let formRowVerticalPadding: CGFloat = 13
     static let toolbarSpace: CGFloat = 54
     static let interactiveRowHeight: CGFloat = 56
+    static let headerControlDiameter: CGFloat = 48
     static let formButtonHeight: CGFloat = 44
     static let surfaceShadowOffset: CGFloat = 1
 }
@@ -56,7 +57,7 @@ public struct LooprSectionGroup<Content: View>: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: LooprSpacing.xs + LooprSpacing.hairline) {
-            LooprText(title.uppercased(), style: .sectionLabel, color: .inkSecondary)
+            LooprText(title.looprLabelCased, style: .sectionLabel, color: .inkSecondary)
                 .accessibilityLabel(title)
                 .accessibilityAddTraits(.isHeader)
             content
@@ -148,7 +149,7 @@ public struct LooprMenuGroup: View {
 
     @ViewBuilder
     private var heading: some View {
-        let label = LooprText(title.uppercased(), style: .sectionLabel, color: .inkSecondary)
+        let label = LooprText(title.looprLabelCased, style: .sectionLabel, color: .inkSecondary)
             .accessibilityLabel(title)
             .accessibilityAddTraits(.isHeader)
         if let headingIdentifier {
@@ -184,7 +185,8 @@ public struct LooprPrimaryButtonStyle: ButtonStyle {
         configuration.label
             .looprTypography(.label)
             .foregroundStyle(labelColor)
-            .frame(maxWidth: .infinity, minHeight: LooprSpacing.formButtonHeight)
+            .frame(maxWidth: .infinity, minHeight: LooprButtonStyle.minimumTargetHeight)
+            .contentShape(RoundedRectangle(cornerRadius: LooprRadius.control, style: .continuous))
             .background(fillColor, in: RoundedRectangle(cornerRadius: LooprRadius.control, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(
@@ -196,7 +198,7 @@ public struct LooprPrimaryButtonStyle: ButtonStyle {
     }
 
     private var labelColor: Color {
-        Color.loopr(isEnabled ? .background : .inkMuted)
+        isEnabled ? accent.filledLabelColor : Color.loopr(.inkSecondary)
     }
 
     private var fillColor: Color {
@@ -214,7 +216,8 @@ public struct LooprDestructiveButtonStyle: ButtonStyle {
         configuration.label
             .looprTypography(.label)
             .foregroundStyle(labelColor)
-            .frame(maxWidth: .infinity, minHeight: LooprSpacing.formButtonHeight)
+            .frame(maxWidth: .infinity, minHeight: LooprButtonStyle.minimumTargetHeight)
+            .contentShape(RoundedRectangle(cornerRadius: LooprRadius.control, style: .continuous))
             .background(
                 fillColor,
                 in: RoundedRectangle(cornerRadius: LooprRadius.control, style: .continuous)
@@ -258,20 +261,40 @@ public struct LooprToolbarSpace: View {
     }
 }
 
+/// A settings row with a switch.
+///
+/// `accent` colours the switch when it is on. It stays `.brand` unless a tab asks for its own accent,
+/// as Train does with `.movement`. `identifier` names the switch itself, so a UI test reads and taps it
+/// as `app.switches[identifier]`.
 public struct LooprToggleRow: View {
     @Binding private var isOn: Bool
 
     private let title: String
     private let subtitle: String?
+    private let accent: LooprColorToken
+    private let identifier: String?
 
-    public init(title: String, subtitle: String? = nil, isOn: Binding<Bool>) {
+    public init(title: String, subtitle: String? = nil, accent: LooprColorToken = .brand,
+                identifier: String? = nil, isOn: Binding<Bool>) {
         self.title = title
         self.subtitle = subtitle
+        self.accent = accent
+        self.identifier = identifier
         self._isOn = isOn
     }
 
+    /// The token behind the switch tint.
+    public var tintToken: LooprColorToken { accent }
+
+    /// The accessibility identifier of the switch, nil when the caller sets it from outside.
+    public var switchIdentifier: String? { identifier }
+
+    @Environment(\.isEnabled) private var isEnabled
+
     public var body: some View {
-        Toggle(isOn: $isOn) {
+        // The whole row is the control. A plain Toggle only takes taps on its switch, and its
+        // accessibility frame is just its texts and switch (40 pt for two lines), whatever the padding.
+        HStack(spacing: LooprSpacing.sm) {
             VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
                 LooprText(title, style: .settingsRow)
                 if let subtitle {
@@ -279,11 +302,25 @@ public struct LooprToggleRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Toggle(title, isOn: $isOn)
+                .labelsHidden()
+                .tint(Color.loopr(accent))
         }
-        .tint(Color.loopr(.brand))
-        .padding(.horizontal, LooprSpacing.formCardPadding)
         .padding(.vertical, LooprSpacing.formRowVerticalPadding)
-        .frame(maxWidth: .infinity, minHeight: LooprSpacing.interactiveRowHeight, alignment: .leading)
+        .frame(minHeight: LooprSpacing.interactiveRowHeight)
+        .contentShape(Rectangle())
+        .onTapGesture { if isEnabled { isOn.toggle() } }
+        .accessibilityRepresentation {
+            // One text for the label. Two texts in the label closure left VoiceOver and UI tests with only the last one, the
+            // subtitle, and no name for the switch. The subtitle is the hint.
+            Toggle(isOn: $isOn) { Text(title) }
+                .accessibilityLabel(title)
+                .accessibilityHint(subtitle ?? "")
+        }
+        .modifier(LooprOptionalIdentifier(identifier))
+        .padding(.horizontal, LooprSpacing.formCardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -308,17 +345,32 @@ public struct LooprTextFieldRow: View {
 
             Spacer(minLength: LooprSpacing.sm)
 
-            TextField(placeholder, text: $text)
+            // The typed value reads at row size; the placeholder stays quiet until something is typed. Muted ink was
+            // hard to read on the dark background (ICP R2-LAB-24), and secondary ink at 80 % still read very pale
+            // there in round 3, so it is full secondary ink. The typed value stays apart by being full ink.
+            TextField(text: $text, prompt: Text(placeholder).font(LooprTextStyle.settingsRow.font)
+                .foregroundStyle(Color.loopr(.inkSecondary))) { Text(title) }
                 .textFieldStyle(.plain)
-                .looprTypography(.metricUnit)
+                .font(.custom("SpaceGrotesk-Medium", size: 16, relativeTo: .body))
+                .monospacedDigit()
                 .foregroundStyle(Color.loopr(.ink))
                 .tint(Color.loopr(.brand))
                 .multilineTextAlignment(.trailing)
                 .focused($isFocused)
         }
+        .background(alignment: .bottom) {
+            // A thin line under the focused row shows where typing goes.
+            Capsule().fill(Color.loopr(.brand)).frame(height: 2)
+                .padding(.horizontal, LooprSpacing.formCardPadding)
+                .opacity(isFocused ? 1 : 0)
+                .animation(LooprMotion.stateChange, value: isFocused)
+                .accessibilityHidden(true)
+        }
         .padding(.horizontal, LooprSpacing.formCardPadding)
         .padding(.vertical, LooprSpacing.formRowVerticalPadding)
         .frame(maxWidth: .infinity, minHeight: LooprSpacing.interactiveRowHeight, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture { isFocused = true }
     }
 }
 
@@ -449,14 +501,16 @@ public struct LooprInlineMessage: View {
 
 public struct LooprDetailScaffold<Content: View>: View {
     private let content: Content
+    private let spacing: CGFloat
 
-    public init(@ViewBuilder content: () -> Content) {
+    public init(spacing: CGFloat = LooprSpacing.sm, @ViewBuilder content: () -> Content) {
+        self.spacing = spacing
         self.content = content()
     }
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: LooprSpacing.sm) {
+            VStack(alignment: .leading, spacing: spacing) {
                 content
             }
             .padding(.horizontal, LooprSpacing.screenGutter)

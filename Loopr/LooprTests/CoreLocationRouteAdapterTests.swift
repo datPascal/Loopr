@@ -8,6 +8,39 @@ import Testing
 @MainActor
 struct CoreLocationRouteAdapterTests {
     @Test
+    func stoppingAfterPermissionCallbackCannotRestartLocation() async throws {
+        let driver = FakeCoreLocationRouteDriver(status: .notDetermined)
+        let adapter = CoreLocationRouteAdapter(driverFactory: { driver })
+        let start = Task { @MainActor in try await adapter.start() }
+        for _ in 0..<100 where driver.requestCount == 0 { await Task.yield() }
+        #expect(driver.requestCount == 1)
+
+        // Resume the permission waiter, but stop before its task can run.
+        driver.resolve(.authorizedWhenInUse)
+        await adapter.stop()
+        await #expect(throws: CancellationError.self) { try await start.value }
+        #expect(driver.startCount == 0)
+
+        // Stopping the old attempt must not prevent a later explicit start.
+        try await adapter.start()
+        #expect(driver.startCount == 1)
+        await adapter.stop()
+    }
+
+    @Test
+    func cancellingTheStartTaskReleasesItsPermissionWaiter() async throws {
+        let driver = FakeCoreLocationRouteDriver(status: .notDetermined)
+        let adapter = CoreLocationRouteAdapter(driverFactory: { driver })
+        let start = Task { @MainActor in try await adapter.start() }
+        for _ in 0..<100 where driver.requestCount == 0 { await Task.yield() }
+        #expect(driver.requestCount == 1)
+        start.cancel()
+        await #expect(throws: CancellationError.self) { try await start.value }
+        driver.resolve(.authorizedWhenInUse)
+        #expect(driver.startCount == 0)
+    }
+
+    @Test
     func permissionIsNotRequestedUntilExplicitStartAndStopIsIdempotent() async throws {
         let driver = FakeCoreLocationRouteDriver(status: .notDetermined)
         let adapter = CoreLocationRouteAdapter(driverFactory: { driver })

@@ -95,7 +95,7 @@ nonisolated enum SIPolishFixtureWorld {
     static var headline: String? {
         let summary = summary
         let context = DebugCaptureFixtures.siMorningContext(day: summary.day, summary: summary, mode: "good")
-        return TodayDashboard(summary: summary, context: context, pinned: [], isToday: true).hero.reading?.driver
+        return TodayDashboard(summary: summary, context: context, isToday: true).hero.reading?.driver
     }
     static var beats: BeatToBeatSummary {
         BeatToBeatSummary(sd1Milliseconds: 38.7, sd2Milliseconds: 74.6,

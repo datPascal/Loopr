@@ -1,3 +1,4 @@
+import AIKit
 import Observation
 import Foundation
 import BodyKit
@@ -12,6 +13,8 @@ import WorkoutKit
 
 enum AppModalRoute: String, Identifiable, Hashable {
     case settings
+    case ask
+    case yourData
     case activeWorkout
     #if DEBUG
     case designSystem
@@ -23,6 +26,8 @@ enum AppModalRoute: String, Identifiable, Hashable {
     var accessibilityIdentifier: String {
         switch self {
         case .settings: "settings-modal"
+        case .ask: "ask-sheet"
+        case .yourData: "your-data-screen"
         case .activeWorkout: "active-workout-modal"
         #if DEBUG
         case .designSystem: "design-system-gallery"
@@ -49,6 +54,10 @@ enum AppRootRoute: Hashable {
 @Observable
 final class AppRouter {
     var modal: AppModalRoute?
+    /// Where the Settings sheet opens. It lives beside `modal` so the sheet reads the path set with it; a separate
+    /// `@State` in the shell reached a freshly presented sheet one update late, so "Add your age" opened the root.
+    var settingsInitialPath: [SettingsFlowRoute] = []
+    var settingsFocusAge = false
 
     func present(_ route: AppModalRoute) { modal = route }
     func dismiss() { modal = nil }
@@ -56,6 +65,7 @@ final class AppRouter {
 
 nonisolated enum ShellDeepLink: Equatable {
     case todayHome
+    case dataHome, foodHome, fitnessHome, protocolHome
     case breathing(start: Bool, bandPacing: Bool)
     case intervals
     case syncBand
@@ -66,9 +76,12 @@ nonisolated enum ShellDeepLink: Equatable {
     case heartTrends
     case bodyDetail
     case workoutsDetail
+    /// A finished gym session's page, as its row on Fitness opens it. Debug links only.
+    case trainSession(UUID)
     #if DEBUG
     case zoneCapture
     #endif
+    case patterns
     case habitInsights
     case habitSetup
     case habitManagement
@@ -79,17 +92,43 @@ nonisolated enum ShellDeepLink: Equatable {
     case recordsRecap
     case gestureMapping
     case coach
+    /// A briefing notification: the coach opens this chat.
+    case coachChat(UUID)
     case goals
     case stress
     case settings(SettingsRouteDestination)
     case workout(UUID?)
     case wakeAlarm
     case settingsHome
+    /// A source button under an Ask answer. `MainTabShell+Agent.swift` maps it to a screen.
+    case agentSource(AgentSourceLink)
+    /// The weekly review sheet (LV-09.2), from its reminder or the Protocol tab.
+    case weeklyReview
+    /// The Protocol tab at its root, on one segment, such as Experiments from Today's experiment strip.
+    case protocolSegment(ProtocolSegment)
 
     init?(url: URL) {
         guard url.scheme?.lowercased() == "loopr" else { return nil }
         switch url.host?.lowercased() {
         case "today": self = .todayHome
+        // The tab names are the hosts from DEC-12.1. Every host build 21 shipped keeps working.
+        case "health", "data": self = .dataHome
+        case "food": self = .foodHome
+        case "journal", "protocol": self = .protocolHome
+        case "train", "workouts", "fitness":
+            switch url.path {
+            case "/detail": self = .workoutsDetail
+            case "/intervals": self = .intervals
+            default: self = .fitnessHome
+            }
+        case "sleep": self = .sleepDetail
+        case "heart":
+            switch url.path {
+            case "/detail": self = .heartDetail
+            case "/trends": self = .heartTrends
+            default: self = .heartHome
+            }
+        case "body": self = .bodyDetail
         case "intervals": self = .intervals
         case "breathing":
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -111,13 +150,17 @@ nonisolated enum ShellDeepLink: Equatable {
             } else {
                 .habitInsights
             }
-        case .coach: .coach
+        case .coach(let target): UUID(uuidString: target).map(Self.coachChat) ?? .coach
         case .sleep: .sleepDetail
         case .hydration: .todayDetail
         case .device: .settings(.deviceCenter)
         case .stress: .stress
         case .cycle: .settings(.cycle)
         case .heartAlert: .settings(.heartAlerts)
+        // A reminder from Ask opens Ask. A Patterns test reminder opens Patterns.
+        case .ask: .coach
+        case .patterns: .patterns
+        case .weeklyReview: .weeklyReview
         }
     }
 
@@ -125,9 +168,23 @@ nonisolated enum ShellDeepLink: Equatable {
     static func parse(arguments: [String]) -> Self? {
         guard let raw = arguments.first(where: { $0.hasPrefix("--loopr-deep-link=") })?
             .dropFirst("--loopr-deep-link=".count) else { return nil }
+        if raw.hasPrefix("workouts/session/"), let id = UUID(uuidString: String(raw.dropFirst("workouts/session/".count))) {
+            return .trainSession(id)
+        }
+        if raw.hasPrefix("workouts/page/"), let id = UUID(uuidString: String(raw.dropFirst("workouts/page/".count))) {
+            return .workout(id)
+        }
         return switch raw {
         case "today/detail": .todayDetail
         case "today": .todayHome
+        case "today/patterns", "patterns": .patterns
+        case "today/goals": .goals
+        case "health", "data": .dataHome
+        case "food": .foodHome
+        case "train", "workouts", "fitness": .fitnessHome
+        case "journal", "protocol": .protocolHome
+        case "protocol/experiments": .protocolSegment(.experiments)
+        case "weekly-review": .weeklyReview
         case "sleep", "sleep/detail": .sleepDetail
         case "heart": .heartHome
         case "heart/detail": .heartDetail
@@ -167,9 +224,7 @@ let looprNotificationDeepLinkName = Notification.Name("com.loopr.notification.de
 enum TodayTabOwnership {
     static func tab(for route: TodayRoute) -> MainTab? {
         switch route {
-        case .sleep: .sleep
-        case .heart: .heart
-        case .body: .body
+        case .sleep, .heart, .body: .data
         default: nil
         }
     }

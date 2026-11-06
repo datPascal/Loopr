@@ -87,9 +87,20 @@ private final class LooprNotificationSchedulingAdapter: @unchecked Sendable, Not
         // notification was being scheduled for a moment already gone. A nil
         // trigger is the supported way to deliver immediately.
         let secondsFromNow = request.fireDate.timeIntervalSinceNow
-        let trigger: UNNotificationTrigger? = secondsFromNow > 0.5
-            ? UNTimeIntervalNotificationTrigger(timeInterval: secondsFromNow, repeats: false)
-            : nil
+        let trigger: UNNotificationTrigger?
+        if request.repeats == .daily {
+            // A daily request comes back at the same local time until it is removed.
+            let time = Calendar.current.dateComponents([.hour, .minute], from: request.fireDate)
+            trigger = UNCalendarNotificationTrigger(dateMatching: time, repeats: true)
+        } else if request.repeats == .weekly {
+            // A weekly request comes back on the same weekday at the same local time until it is removed.
+            let time = Calendar.current.dateComponents([.weekday, .hour, .minute], from: request.fireDate)
+            trigger = UNCalendarNotificationTrigger(dateMatching: time, repeats: true)
+        } else {
+            trigger = secondsFromNow > 0.5
+                ? UNTimeIntervalNotificationTrigger(timeInterval: secondsFromNow, repeats: false)
+                : nil
+        }
         let identifier = Self.identifier(for: request.identity)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)) { error in
@@ -103,6 +114,11 @@ private final class LooprNotificationSchedulingAdapter: @unchecked Sendable, Not
         let identifiers = identities.map(Self.identifier(for:))
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
         center.removeDeliveredNotifications(withIdentifiers: identifiers)
+    }
+
+    func pending(among identities: Set<NotificationIdentity>) async -> Set<NotificationIdentity>? {
+        let held = Set(await center.pendingNotificationRequests().map(\.identifier))
+        return Set(identities.filter { held.contains(Self.identifier(for: $0)) })
     }
 
     static func identifier(for identity: NotificationIdentity) -> String {
@@ -126,7 +142,10 @@ actor LooprNotificationRuntime: NotificationSettingsEntryPoint {
             claims: NotificationClaimLedger(persistenceURL: root.appendingPathComponent("claims.json")),
             preferenceURL: root.appendingPathComponent("preferences.json"),
             deliveryURL: root.appendingPathComponent("delivery.json"),
-            pendingURL: root.appendingPathComponent("pending.json")
+            pendingURL: root.appendingPathComponent("pending.json"),
+            reminderURL: root.appendingPathComponent("reminders.json"),
+            historyURL: root.appendingPathComponent("reminder-history.json"),
+            standingURL: root.appendingPathComponent("standing-reminders.json")
         )
         self.policy = policy
         self.events = ProductNotificationEventSource(policy: policy)
@@ -189,6 +208,7 @@ actor LooprNotificationRuntime: NotificationSettingsEntryPoint {
     func prepareAtLaunch() async {
         registerCategories()
         _ = await refreshAuthorization()
+        await migrateLegacyReminders()
     }
 
     func registerCategories() {
@@ -266,8 +286,8 @@ actor LooprNotificationRuntime: NotificationSettingsEntryPoint {
             targetID: targetID,
             day: Self.dayString(date),
             fireDate: date,
-            title: "Strap update",
-            detail: "Open Device Center for details."
+            title: "Band update",
+            detail: "Open Loopr's Settings, then Band."
         )
     }
 
@@ -284,7 +304,7 @@ actor LooprNotificationRuntime: NotificationSettingsEntryPoint {
         case .validatedHealthChanges: "Health changes"
         case .goals: "Goals"
         case .detectedWorkouts: "Detected workouts"
-        case .journaling: "Journal reminders"
+        case .journaling: "Check-in reminders"
         case .briefings: "Briefings"
         case .windDown: "Wind-down"
         case .hydration: "Hydration"
@@ -299,6 +319,7 @@ actor LooprNotificationRuntime: NotificationSettingsEntryPoint {
         case .lowHeartRate: "Low heart rate"
         case .overnightCheck: "Overnight check"
         case .cardioFitness: "Cardio fitness"
+        case .userReminders: "Reminders you set"
         }
     }
 }

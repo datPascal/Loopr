@@ -16,12 +16,16 @@ struct LooprNotificationSettingsScreen: View {
     @State private var families: [NotificationPreferenceSetting] = []
     @State private var loaded = false
     @State private var message: String?
+    @State private var reminderRefresh = 0
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: LooprSpacing.lg) {
                 LooprSectionGroup(title: "Permission") { permissionCard }
                 LooprSectionGroup(title: "Quiet hours") { quietHoursCard }
+                LooprSectionGroup(title: "Reminders you set") {
+                    UserRemindersSettingsSection(runtime: runtime, refreshToken: reminderRefresh)
+                }
                 LooprSectionGroup(title: "Heart") {
                     LooprFormCard(padding: 0) {
                         Button(action: openHeartAlerts) {
@@ -218,6 +222,7 @@ struct LooprNotificationSettingsScreen: View {
         authorization = await runtime.refreshAuthorization()
         delivery = await runtime.deliverySettings()
         families = await runtime.preferences()
+        reminderRefresh += 1
         loaded = true
     }
 }

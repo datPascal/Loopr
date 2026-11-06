@@ -87,14 +87,24 @@ public enum OnboardingCopy {
 
     public enum Welcome {
         public static let headerTitle = "Welcome"
-        public static let title = "Your band, your data."
-        public static let promise = "Loopr reads your WHOOP band over Bluetooth and does every calculation on this iPhone."
-        public static let sectionTitle = "Before you start"
+        public static let title = "Your health data, on your iPhone."
+        public static let promise = "Loopr puts sleep, training, food and blood tests into one daily view. It reads a WHOOP 4.0 band and Apple Health, and does every calculation on this iPhone."
+        /// What works for someone with no band, said once, before they choose.
+        public static let noBandLine = "No band yet? Food, fitness tests, your protocol and blood tests work without one. Apple Health adds steps, daylight and weight."
+        public static let sectionTitle = "Your privacy"
+        public static let accountTitle = "No account"
+        public static let accountDetail = "Nothing to sign up for, and no Loopr server."
         public static let privateTitle = "Stays on this iPhone"
-        public static let privateDetail = "No Loopr account or server. You choose when to export data or save it to Apple Health. This build does not send AI requests."
+        public static let privateDetail = "Loopr stores your health data here. You choose when to export it or save it to Apple Health."
+        public static let coachTitle = "Ask is off"
+        public static let coachDetail = "It stays off until you add your own OpenAI or Claude key. Then it sends only what you approve."
+        public static let goodToKnowTitle = "Good to know"
         public static let wellnessTitle = "Wellness, not medicine"
         public static let independentTitle = "Not made by WHOOP"
-        public static let action = "Continue"
+        /// The band path: the three band steps come next.
+        public static let action = "I have a WHOOP band"
+        /// The no-band path: straight to About you.
+        public static let noBandAction = "Continue without a band"
     }
 
     /// Getting the WHOOP app off the band.
@@ -120,16 +130,20 @@ public enum OnboardingCopy {
     }
 
     public enum Prepare {
-        public static let headerTitle = "Pairing mode"
-        public static let title = "Put your band in pairing mode"
-        public static let detail = "The side light pulses blue when it's ready. Tapping can take 15 to 20 seconds."
-        public static let sectionTitle = "How to"
+        public static let headerTitle = "Your band"
+        public static let title = "Get your band ready"
+        public static let detail = "Two quick steps before you connect. About a minute."
+        public static let sectionTitle = "Get your band ready"
+        public static let whoopTitle = "Turn off WHOOP's Bluetooth"
+        public static let whoopDetail = "The WHOOP app grabs the band in the background. In Settings, open Privacy & Security, then Bluetooth, and switch WHOOP off. Then swipe the WHOOP app away. Using WHOOP on an iPad too? Do the same there."
         public static let offTitle = "Take it off"
         public static let offDetail = "Take the band off your wrist. Wait for the green lights underneath to go out."
         public static let tapTitle = "Tap until it pulses blue"
-        public static let tapDetail = "Hold it by the sides and tap the top firmly with two fingers. Keep tapping until the side light pulses blue. Don't set it down while you tap."
+        public static let tapDetail = "Take the band off your wrist. Hold it by the sides and tap the top firmly with two fingers until the side light pulses blue. This can take 15 to 20 seconds."
         public static let newBandTitle = "New band, never paired?"
         public static let newBandDetail = "Slide on a battery pack that has charged for at least 15 minutes. The side light pulses blue."
+        public static let newBandNote = "New band that was never paired? Slide on a battery pack charged for at least 15 minutes and the side light pulses blue."
+        public static let noWhoopNote = "No WHOOP app on this iPhone? Skip the first step. To use WHOOP again later, switch its Bluetooth back on."
         public static let heroCaption = "Side light pulses blue"
         public static let action = "The light is pulsing blue"
         public static let later = "Set up my band later"
@@ -221,18 +235,24 @@ public enum OnboardingCopy {
 
     public enum Profile {
         public static let headerTitle = "About you"
-        public static let detail = "Age sets your heart rate zones and strain. Height, weight and sex tune calorie estimates. Leave anything blank and Loopr won't guess it."
+        public static let detail = "Your birth year sets your real age and your heart rate zones. Sex picks the reference curves. Leave anything blank and Loopr won't guess it."
         public static let youSection = "You"
+        public static let doneEditing = "Hide keyboard"
         public static let bodySection = "Body"
+        public static let moreTitle = "More about you"
+        public static let moreSummary = "Name, units, height and weight. All optional."
         public static let nameTitle = "Name"
         public static let namePlaceholder = "Optional"
-        public static let ageTitle = "Age"
+        public static let birthYearTitle = "Birth year"
+        public static let birthYearPlaceholder = "e.g. 1990"
+        /// Beside the year: the age it gives, "36 yrs".
+        public static func ageCaption(_ age: Int) -> String { "\(age) yrs" }
         public static let sexTitle = "Sex"
         public static let unitsTitle = "Units"
         public static let heightTitle = "Height"
         public static let weightTitle = "Weight"
         public static let maxHeartRateTitle = "Estimated max heart rate"
-        public static let maxHeartRateEmpty = "Add your age to see it"
+        public static let maxHeartRateEmpty = "Add your birth year to see it"
         public static let maxHeartRateNote = "208 minus 0.7 × age (Tanaka). If Loopr records a higher peak from you, it uses that instead."
         public static let action = "Continue"
 
@@ -243,16 +263,22 @@ public enum OnboardingCopy {
 
     public enum Health {
         public static let headerTitle = "Apple Health"
-        public static let title = "Share with Apple Health"
-        public static let detail = "Loopr saves what it measures to Apple Health. It also reads what's already there, so your charts start with history."
-        public static let writeOnlyDetail = "Loopr saves what it measures to Apple Health, so your other apps can use it too."
+        public static let title = "Read from Apple Health"
+        public static let detail = "Loopr reads what's already in Apple Health, so your charts start with your history. It can also save what it measures there, for your other apps."
+        public static let writeOnlyDetail = "Loopr can save what it measures to Apple Health, so your other apps can use it too."
         public static let savesTitle = "Loopr saves"
         public static let readsTitle = "Loopr reads"
         public static let savesCaption = "Saves"
         public static let readsCaption = "Reads"
-        public static let choiceNote = "iOS asks next, with a switch for each type. Change it any time in Settings or the Health app."
+        public static let choiceNote = "iOS asks next, with a switch for each type. You can allow reading and leave saving off. Change it any time in Settings or the Health app."
         public static let allow = "Connect Apple Health"
         public static let skip = "Not now"
+
+        public static let writeOnlyTitle = "Save to Apple Health"
+
+        public static func title(for request: OnboardingHealthRequest) -> String {
+            request.importsHistory ? title : writeOnlyTitle
+        }
 
         public static func detail(for request: OnboardingHealthRequest) -> String {
             request.importsHistory ? detail : writeOnlyDetail
@@ -268,13 +294,38 @@ public enum OnboardingCopy {
         public static let headerTitle = "Notifications"
         public static let title = "What Loopr tells you"
         public static let detail = "A few alerts about workouts and your band. Anything about your heart stays off until you turn it on."
+        public static let noBandDetail = "Loopr tells you when a workout or breathing session is saved, and sends the reminders you set. Heart alerts stay off until you turn them on."
         public static let onSection = "On by default"
         public static let offSection = "Off until you turn them on"
-        /// Two real notifications, for the illustration at the top.
+        /// Two real notifications, for the illustration at the top. The
+        /// second matches the band notification the app posts.
         public static let sample = [
             (title: "Workout detected", detail: "Review the detected workout in Loopr."),
-            (title: "Strap update", detail: "Open Device Center for details.")
+            (title: "Band update", detail: "Open Loopr's Settings, then Band.")
         ]
+        /// Without a band: an evening rule reminder quoting the person's own
+        /// words (ProtocolRuleReminder), and a saved workout.
+        public static let noBandSample = [
+            (title: "Screens off", detail: "You wrote this morning: \"The news can wait.\""),
+            (title: "Workout saved", detail: "Your workout summary is ready.")
+        ]
+
+        public static func detail(on path: OnboardingPath) -> String {
+            path == .noBand ? noBandDetail : detail
+        }
+
+        public static func sample(on path: OnboardingPath) -> [(title: String, detail: String)] {
+            path == .noBand ? noBandSample : sample
+        }
+
+        /// The groups listed as on by default. A band alert can never fire
+        /// without a band, so that path lists reminders instead.
+        public static func onGroups(on path: OnboardingPath) -> [OnboardingNotificationGroup] {
+            let groups: [OnboardingNotificationGroup] = path == .noBand
+                ? [.workouts, .breathing, .reminders]
+                : [.workouts, .breathing, .band]
+            return groups.filter { !$0.families.isEmpty }
+        }
         public static let sampleApp = "LOOPR"
         public static let sampleTime = "now"
         public static let allow = "Allow notifications"
@@ -285,8 +336,16 @@ public enum OnboardingCopy {
             case .workouts: "Workouts"
             case .breathing: "Breathing"
             case .band: "Your band"
+            case .reminders: "Reminders you set"
             case .offUntilChosen: "Heart alerts and reminders"
             }
+        }
+
+        /// Detection reads the band's heart rate, so without one only saved
+        /// workouts notify.
+        public static func detail(for group: OnboardingNotificationGroup, on path: OnboardingPath) -> String {
+            if path == .noBand, group == .workouts { return "When a workout you recorded in Loopr is saved." }
+            return detail(for: group)
         }
 
         public static func detail(for group: OnboardingNotificationGroup) -> String {
@@ -294,7 +353,8 @@ public enum OnboardingCopy {
             case .workouts: "When Loopr detects a workout, and when one you recorded is saved."
             case .breathing: "When a breathing session ends."
             case .band: "Low battery, charging, a lost connection, or data that stopped syncing."
-            case .offUntilChosen: "High and low heart rate, overnight checks, cardio fitness, and journal and cycle reminders. Turn them on in Settings."
+            case .reminders: "Reminders from Ask, a Patterns test, a supplement or medication stack, or an evening rule. Each arrives at the time you chose, even in quiet hours."
+            case .offUntilChosen: "High and low heart rate, overnight checks, cardio fitness, and check-in and cycle reminders. Turn them on in Settings."
             }
         }
 
@@ -303,6 +363,7 @@ public enum OnboardingCopy {
             case .workouts: "figure.run"
             case .breathing: "wind"
             case .band: "battery.50"
+            case .reminders: "bell"
             case .offUntilChosen: "bell.slash"
             }
         }
@@ -314,7 +375,7 @@ public enum OnboardingCopy {
         public static let title = "How much sleep do you need?"
         /// Watson et al. 2015, AASM and Sleep Research Society consensus:
         /// adults should sleep 7 or more hours per night on a regular basis.
-        public static let detail = "Today and Sleep measure each night against this. Most adults need 7 hours or more."
+        public static let detail = "Today measures each night against this. Most adults need 7 hours or more."
         public static let options: [Double] = [7, 7.5, 8, 8.5, 9]
         public static let ringCaption = "Sleep need"
         public static let save = "Save sleep need"
@@ -334,11 +395,11 @@ public enum OnboardingCopy {
     public enum Finish {
         public static let headerTitle = "Ready"
         public static let title = "You're set"
-        public static let deferredTitle = "Your band comes next"
+        public static let deferredTitle = "You're set"
         public static let ringCaption = "Nights learned"
-        public static let sectionTitle = "What happens next"
+        public static let sectionTitle = "What comes next"
         public static let wearTitle = "Wear it tonight"
-        public static let wearDetail = "Sleep, HRV and resting heart rate come from overnight data."
+        public static let wearDetail = "Keep your iPhone near the band. The first sync reads days of history and can take a while."
         public static let syncTitle = "The first sync takes a while"
         public static let syncDetail = "Your band holds days of history. Loopr reads it in the background while your iPhone is near the band. If you swipe Loopr away, reading stops until you open it again."
         public static let laterTitle = "Connect your band later"
@@ -350,6 +411,21 @@ public enum OnboardingCopy {
         public static let openSettings = "Open Settings"
         public static let action = "Open Loopr"
 
+        /// Without a band: what to do first, and how a band joins later.
+        public static let noBandSectionTitle = "Where to start"
+        public static let mealTitle = "Log a meal"
+        public static let mealDetail = "Take a photo of your plate or scan a barcode in Food."
+        public static let protocolTitle = "Pick a protocol"
+        public static let protocolDetail = "Start one from a template in Protocol. Today lists its rules and ticks the ones Food, Fitness and Apple Health can check."
+        public static let healthTitle = "Steps and daylight from Apple Health"
+        public static let healthDetail = "Today shows them once you allow Loopr to read them. Change that any time in Settings, under Apple Health."
+        public static let addBandTitle = "Add a band later"
+        public static let addBandDetail = "Got a WHOOP 4.0? Tap Connect band on Today, or open Settings, then Band."
+
+        /// With a band, the longevity side: it needs no nights of wear (ICP R2-UPG-9).
+        public static let longevityTitle = "Food, workouts and blood tests work from today"
+        public static let longevityDetail = "They need no band. Log a meal in Food, start a workout in Fitness, or add a lab report in Data."
+
         public static func ringText(nights: Int) -> String { "0/\(nights)" }
 
         public static func baselineTitle(nights: Int) -> String {
@@ -357,7 +433,7 @@ public enum OnboardingCopy {
         }
 
         public static func baselineDetail(nights: Int) -> String {
-            "Loopr learns your usual from your first \(nights) nights, then scores each night against it. Today shows how many it has so far."
+            "Recovery appears after \(nights) nights, once Loopr knows your usual."
         }
     }
 

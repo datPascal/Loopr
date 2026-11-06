@@ -37,36 +37,38 @@ protocol PhoneAlarmScheduling: Sendable {
 
     @discardableResult
     func schedule(at fireDate: Date) async -> PhoneAlarmOutcome
-
+    func schedule(at fireDate: Date, repeating configuration: StrapAlarmConfiguration) async -> PhoneAlarmOutcome
     func cancel() async
-
-    /// The outcome of the last schedule, for the status screen.
+    func cancelChecked() async throws
     func lastOutcome() async -> PhoneAlarmOutcome?
 }
 
-/// The real backup: AlarmKit first, a time-sensitive notification when
-/// AlarmKit refuses.
-///
-/// Both layers are scheduled by the system, not by Loopr, so they survive the
-/// app being killed, the phone being locked, and Bluetooth being off. That is
-/// the whole point: on the night this was written the app process was dead
-/// from 01:46 to 06:50 and nothing on the phone was holding the 07:00 wake.
-///
-/// One alarm identifier is reused for every arm. Loopr only ever promises one
-/// next wake, so rescheduling has to replace rather than accumulate.
+extension PhoneAlarmScheduling {
+    func cancelChecked() async throws { await cancel() }
+    func schedule(at fireDate: Date, repeating configuration: StrapAlarmConfiguration) async -> PhoneAlarmOutcome {
+        await schedule(at: fireDate)
+    }
+}
+
+/// iOS owns the repeating schedule, so locking or terminating Loopr does not
+/// remove tomorrow's phone alarm. Reconciliation preserves an unchanged alarm.
 @MainActor
 final class PhoneAlarmFallback: PhoneAlarmScheduling {
-    /// Stable across launches so a relaunch can cancel the alarm the previous
-    /// process scheduled.
-    static let alarmID = UUID(uuidString: "6F8A2C41-0B7E-4E2B-9E7B-1C0A0D5A9F10")!
-    static let notificationID = "loopr.alarm.phone-backup"
-    static let outcomeKey = "loopr.alarm.phone-backup-outcome"
+    nonisolated static let alarmID = UUID(uuidString: "6F8A2C41-0B7E-4E2B-9E7B-1C0A0D5A9F10")!
+    nonisolated static let notificationID = "loopr.alarm.phone-backup"
+    nonisolated static let notificationIDs = [notificationID] + AlarmWeekday.allCases.map { notificationID + "." + $0.rawValue }
+    nonisolated static let outcomeKey = "loopr.alarm.phone-backup-outcome"
 
     private let defaults: UserDefaults
     private var outcome: PhoneAlarmOutcome?
+    private let cancelSystemAlarm: (@MainActor @Sendable () throws -> Void)?
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, cancelSystemAlarm: (@MainActor @Sendable () throws -> Void)? = nil) {
         self.defaults = defaults
+        self.cancelSystemAlarm = cancelSystemAlarm
+        if let saved = defaults.string(forKey: Self.outcomeKey), saved.hasPrefix("unavailable:") {
+            outcome = .unavailable(String(saved.dropFirst("unavailable:".count)))
+        }
     }
 
     func prepare() async {
@@ -74,45 +76,79 @@ final class PhoneAlarmFallback: PhoneAlarmScheduling {
         if AlarmManager.shared.authorizationState == .notDetermined {
             _ = try? await AlarmManager.shared.requestAuthorization()
         }
+        if AlarmManager.shared.authorizationState == .authorized { return }
         #endif
-        _ = try? await UNUserNotificationCenter.current()
-            .requestAuthorization(options: [.alert, .sound, .badge])
+        _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
     }
 
     @discardableResult
     func schedule(at fireDate: Date) async -> PhoneAlarmOutcome {
-        await cancel()
+        await schedule(at: fireDate, configuration: nil)
+    }
+
+    func schedule(at fireDate: Date, repeating configuration: StrapAlarmConfiguration) async -> PhoneAlarmOutcome {
+        await schedule(at: fireDate, configuration: configuration)
+    }
+
+    private func schedule(at fireDate: Date, configuration: StrapAlarmConfiguration?) async -> PhoneAlarmOutcome {
         guard fireDate > Date() else {
             return record(.unavailable("That wake time has already passed on this iPhone."))
         }
-
         #if canImport(AlarmKit) && os(iOS)
-        if let alarmOutcome = await scheduleSystemAlarm(at: fireDate) {
+        if let alarmOutcome = await scheduleSystemAlarm(at: fireDate, repeating: configuration) {
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: Self.notificationIDs)
             return record(alarmOutcome)
         }
         #endif
-        return record(await scheduleNotification(at: fireDate))
+        return record(await scheduleNotification(at: fireDate, repeating: configuration))
     }
 
-    func cancel() async {
-        #if canImport(AlarmKit) && os(iOS)
-        try? AlarmManager.shared.cancel(id: Self.alarmID)
-        #endif
+    func cancel() async { try? await cancelChecked() }
+
+    func cancelChecked() async throws {
+        var cancellationError: (any Error)?
+        do {
+            if let cancelSystemAlarm {
+                try cancelSystemAlarm()
+            } else {
+                #if canImport(AlarmKit) && os(iOS)
+                if AlarmManager.shared.authorizationState == .authorized,
+                   try AlarmManager.shared.alarms.contains(where: { $0.id == Self.alarmID }) {
+                    try AlarmManager.shared.cancel(id: Self.alarmID)
+                }
+                #endif
+            }
+        } catch { cancellationError = error }
         UNUserNotificationCenter.current()
-            .removePendingNotificationRequests(withIdentifiers: [Self.notificationID])
+            .removePendingNotificationRequests(withIdentifiers: Self.notificationIDs)
+        if let cancellationError {
+            record(.unavailable("Loopr could not turn off the phone alarm. It may still ring. Try again."))
+            throw cancellationError
+        }
         outcome = nil
         defaults.removeObject(forKey: Self.outcomeKey)
         PhoneAlarmLog.write("phone backup cancelled")
     }
 
     func lastOutcome() async -> PhoneAlarmOutcome? {
-        if let outcome { return outcome }
-        guard let raw = defaults.string(forKey: Self.outcomeKey) else { return nil }
-        return switch raw {
-        case "systemAlarm": .systemAlarm
-        case "notification": .notification
-        default: nil
+        // A partial replacement is not a complete schedule, even if one old
+        // alarm or weekday request still exists.
+        if case .unavailable = outcome { return outcome }
+        #if canImport(AlarmKit) && os(iOS)
+        if AlarmManager.shared.authorizationState == .authorized,
+           let alarms = try? AlarmManager.shared.alarms,
+           alarms.contains(where: { $0.id == Self.alarmID }) {
+            return .systemAlarm
         }
+        #endif
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        if Self.notificationIsAudible(authorization: settings.authorizationStatus,
+                                     sound: settings.soundSetting, alert: settings.alertSetting),
+           await center.pendingNotificationRequests().contains(where: { Self.notificationIDs.contains($0.identifier) }) {
+            return .notification
+        }
+        return nil
     }
 
     // MARK: - Layers
@@ -121,13 +157,23 @@ final class PhoneAlarmFallback: PhoneAlarmScheduling {
     /// Returns nil when AlarmKit cannot be used at all, so the caller falls
     /// through to the notification. It never returns `.unavailable`: a refusal
     /// here is not the end of the backup chain.
-    private func scheduleSystemAlarm(at fireDate: Date) async -> PhoneAlarmOutcome? {
-        var state = AlarmManager.shared.authorizationState
-        if state == .notDetermined {
-            state = (try? await AlarmManager.shared.requestAuthorization()) ?? .denied
-        }
-        guard state == .authorized else {
+    private func scheduleSystemAlarm(at fireDate: Date, repeating configuration: StrapAlarmConfiguration?) async -> PhoneAlarmOutcome? {
+        // Only prepare(), called by a user action, may show permission UI.
+        // Reconciliation also runs behind the lock screen.
+        guard AlarmManager.shared.authorizationState == .authorized else {
             PhoneAlarmLog.write("AlarmKit not authorized; falling back to a notification")
+            return nil
+        }
+        let schedule = Self.systemSchedule(at: fireDate, repeating: configuration)
+        do {
+            if let existing = try AlarmManager.shared.alarms.first(where: { $0.id == Self.alarmID }) {
+                // Includes an alarm that is currently ringing. A minute tick
+                // must never stop it or replace an unchanged recurring wake.
+                if existing.schedule == schedule { return .systemAlarm }
+                try AlarmManager.shared.cancel(id: Self.alarmID)
+            }
+        } catch {
+            PhoneAlarmLog.write("Could not inspect or replace the system alarm: \(error)")
             return nil
         }
         let alert = AlarmPresentation.Alert(
@@ -143,12 +189,12 @@ final class PhoneAlarmFallback: PhoneAlarmScheduling {
             metadata: LooprAlarmMetadata(),
             tintColor: .orange
         )
-        let configuration = AlarmManager.AlarmConfiguration<LooprAlarmMetadata>(
-            schedule: .fixed(fireDate),
+        let alarmConfiguration = AlarmManager.AlarmConfiguration<LooprAlarmMetadata>(
+            schedule: schedule,
             attributes: attributes
         )
         do {
-            _ = try await AlarmManager.shared.schedule(id: Self.alarmID, configuration: configuration)
+            _ = try await AlarmManager.shared.schedule(id: Self.alarmID, configuration: alarmConfiguration)
             PhoneAlarmLog.write("AlarmKit alarm scheduled for \(fireDate.timeIntervalSince1970)")
             return .systemAlarm
         } catch {
@@ -158,38 +204,84 @@ final class PhoneAlarmFallback: PhoneAlarmScheduling {
     }
     #endif
 
-    private func scheduleNotification(at fireDate: Date) async -> PhoneAlarmOutcome {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        if settings.authorizationStatus == .notDetermined {
-            _ = try? await UNUserNotificationCenter.current()
-                .requestAuthorization(options: [.alert, .sound, .badge])
+    private func scheduleNotification(at fireDate: Date, repeating configuration: StrapAlarmConfiguration?) async -> PhoneAlarmOutcome {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        guard Self.notificationIsAudible(authorization: settings.authorizationStatus,
+                                         sound: settings.soundSetting, alert: settings.alertSetting) else {
+            center.removePendingNotificationRequests(withIdentifiers: Self.notificationIDs)
+            return .unavailable("Allow notifications and sounds for Loopr in Settings to use the phone backup.")
         }
-        let content = UNMutableNotificationContent()
-        content.title = "Time to wake up"
-        content.body = "Your Loopr alarm is due. Your band may not have buzzed."
-        content.sound = .default
-        content.interruptionLevel = .timeSensitive
-
-        let components = Calendar.autoupdatingCurrent.dateComponents(
-            [.year, .month, .day, .hour, .minute, .second],
-            from: fireDate
-        )
-        let request = UNNotificationRequest(
-            identifier: Self.notificationID,
-            content: content,
-            trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-        )
+        let requests = Self.notificationRequests(at: fireDate, repeating: configuration)
+        let desiredIDs = Set(requests.map(\.identifier))
+        let existing = await center.pendingNotificationRequests()
         do {
-            try await UNUserNotificationCenter.current().add(request)
-            PhoneAlarmLog.write("notification backup scheduled for \(fireDate.timeIntervalSince1970)")
+            for request in requests {
+                if let old = existing.first(where: { $0.identifier == request.identifier }),
+                   let oldTrigger = old.trigger as? UNCalendarNotificationTrigger,
+                   let newTrigger = request.trigger as? UNCalendarNotificationTrigger,
+                   oldTrigger.dateComponents == newTrigger.dateComponents,
+                   oldTrigger.repeats == newTrigger.repeats { continue }
+                try await center.add(request)
+            }
+            center.removePendingNotificationRequests(withIdentifiers: Self.notificationIDs.filter { !desiredIDs.contains($0) })
             return .notification
         } catch {
             PhoneAlarmLog.write("notification backup failed: \(error)")
-            return .unavailable(
-                "Loopr could not set a backup alarm on this iPhone. Turn on alarms and notifications for Loopr in Settings."
-            )
+            return .unavailable("Loopr could not schedule every wake day on this iPhone. Try saving the alarm again.")
         }
     }
+
+    static func notificationIsAudible(
+        authorization: UNAuthorizationStatus, sound: UNNotificationSetting, alert: UNNotificationSetting
+    ) -> Bool {
+        authorization == .authorized && sound == .enabled && alert == .enabled
+    }
+
+    static func notificationRequests(at fireDate: Date, repeating configuration: StrapAlarmConfiguration?) -> [UNNotificationRequest] {
+        let content = UNMutableNotificationContent()
+        content.title = "Time to wake up"
+        content.body = "Your Loopr alarm is due."
+        content.sound = .default
+        content.interruptionLevel = .timeSensitive
+        if let configuration, configuration.isEnabled, let minute = configuration.guaranteedMinute {
+            return AlarmWeekday.allCases.filter(configuration.weekdays.contains).map { weekday in
+                UNNotificationRequest(
+                    identifier: notificationID + "." + weekday.rawValue,
+                    content: content,
+                    trigger: UNCalendarNotificationTrigger(
+                        dateMatching: DateComponents(hour: minute / 60, minute: minute % 60, second: 0,
+                                                     weekday: weekday.calendarWeekday), repeats: true
+                    )
+                )
+            }
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: fireDate)
+        components.timeZone = calendar.timeZone
+        return [UNNotificationRequest(identifier: notificationID, content: content,
+                                      trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false))]
+    }
+
+    #if canImport(AlarmKit) && os(iOS)
+    static func systemSchedule(at fireDate: Date, repeating configuration: StrapAlarmConfiguration?) -> Alarm.Schedule {
+        guard let configuration, configuration.isEnabled, let minute = configuration.guaranteedMinute,
+              !configuration.weekdays.isEmpty else { return .fixed(fireDate) }
+        let weekdays: [Locale.Weekday] = AlarmWeekday.allCases.filter(configuration.weekdays.contains).map {
+            switch $0 {
+            case .sunday: .sunday
+            case .monday: .monday
+            case .tuesday: .tuesday
+            case .wednesday: .wednesday
+            case .thursday: .thursday
+            case .friday: .friday
+            case .saturday: .saturday
+            }
+        }
+        return .relative(.init(time: .init(hour: minute / 60, minute: minute % 60), repeats: .weekly(weekdays)))
+    }
+    #endif
 
     @discardableResult
     private func record(_ outcome: PhoneAlarmOutcome) -> PhoneAlarmOutcome {
@@ -197,7 +289,7 @@ final class PhoneAlarmFallback: PhoneAlarmScheduling {
         switch outcome {
         case .systemAlarm: defaults.set("systemAlarm", forKey: Self.outcomeKey)
         case .notification: defaults.set("notification", forKey: Self.outcomeKey)
-        case .unavailable: defaults.removeObject(forKey: Self.outcomeKey)
+        case .unavailable(let reason): defaults.set("unavailable:" + reason, forKey: Self.outcomeKey)
         }
         return outcome
     }

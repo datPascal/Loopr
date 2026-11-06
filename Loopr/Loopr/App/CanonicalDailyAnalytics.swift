@@ -270,7 +270,7 @@ actor CanonicalDailyAnalytics: PersistentDataDeletionDeleter {
     /// it re-derives every cached day.
     // v16 combines byte-72 vitals, the published Today summary, sleep/day
     // heart metrics and Body's shared training load.
-    static let version = "loopr.daily.17.morning"
+    static let version = "loopr.daily.18.typed-energy"
     // A zone edit changes Body's strain and zone minutes even when no new
     // band record arrives. Keep the saved generation keyed to that edit.
     static var zoneVersion: String {
@@ -953,7 +953,7 @@ actor CanonicalDailyAnalytics: PersistentDataDeletionDeleter {
                 confidence: debt.hasFreeNight ? "From your free nights" : "Sleep in on a free day to set this",
                 source: snapshot.source, algorithmVersion: SleepAlgorithm.version,
                 numericValue: debt.optimalSleepHours, numericUnit: .hours))
-            metrics.append(SleepMetricValue(id: "debt", title: "Sleep debt", value: debt.debtHours.map { String(format: "%.1f", $0) },
+            metrics.append(SleepMetricValue(id: "debt", title: "Nightly shortfall", value: debt.debtHours.map { String(format: "%.1f", $0) },
                 unit: "hours", state: debt.debtHours == nil ? .settling : .partial,
                 confidence: "Sleep need minus your recent nights",
                 source: snapshot.source, algorithmVersion: SleepAlgorithm.version,
@@ -1167,7 +1167,7 @@ actor CanonicalDailyAnalytics: PersistentDataDeletionDeleter {
         }
         let context = TodayDayContext(day: day, dayStart: dayStart, history: history,
             recovery: LooprTodayContextSource.recoveryBreakdown(summary: summary, history: history, dayStart: dayStart, calendar: calendar))
-        let hero = TodayDashboard(summary: summary, context: context, pinned: [], isToday: isToday, calendar: calendar).hero
+        let hero = TodayDashboard(summary: summary, context: context, isToday: isToday, calendar: calendar).hero
         return (summary.withHeadline(hero.reading?.driver), readiness.confidence)
     }
 
@@ -1557,9 +1557,11 @@ actor CanonicalDailyAnalytics: PersistentDataDeletionDeleter {
             motion: activity.motion.value?.minutes ?? [], restingHR: resting, maximumHR: configuredHRMax)
 
         let bodySnapshot = BodyDaySnapshot(day: day, state: daytime.isEmpty ? .absent : .partial, metrics: [
-            BodyMetricValue(id: .strain, title: "Strain", value: strain.map { String(format: "%.1f", $0) }, unit: "/21", state: wearState ?? state(strain, confidence: activity.strain.confidence), confidence: strainCaption, source: source, algorithmVersion: ActivityAlgorithm.version),
+            BodyMetricValue(id: .strain, title: "Strain", value: strain.map { String(format: "%.1f", $0) }, unit: "/21", state: wearState ?? state(strain, confidence: activity.strain.confidence), confidence: strainCaption, source: source, algorithmVersion: ActivityAlgorithm.version, numericValue: strain, numericUnit: .strainScore, qualityQualified: hasEnoughWear),
             BodyMetricValue(id: .steps, title: "Estimated steps", value: display(steps), unit: "steps", state: stepState, confidence: stepCaption, source: source, algorithmVersion: ActivityAlgorithm.version),
-            BodyMetricValue(id: .energy, title: "Active energy", value: display(activeKcal), unit: "kcal", state: energyState, confidence: energyCaption, source: source, algorithmVersion: WorkoutAlgorithm.version)
+            BodyMetricValue(id: .energy, title: "Active energy", value: display(activeKcal), unit: "kcal", state: energyState, confidence: energyCaption, source: source, algorithmVersion: WorkoutAlgorithm.version,
+                numericValue: activeKcal, numericUnit: .kilocalories,
+                qualityQualified: hasEnoughWear && !usedDefaultAnchors && resting != nil && !wakingHRPerMinute.isEmpty)
         ], composition: BodyCompositionContext(weight: profile?.weightKilograms.map { String(format: "%.1f kg", $0) },
             height: profile?.heightCentimeters.map { String(format: "%.0f cm", $0) }, bodyFat: nil,
             state: profile == nil ? .absent : .partial, source: "Your profile"), cardioAge: nil, looprAge: nil, source: source, algorithmVersion: ActivityAlgorithm.version,

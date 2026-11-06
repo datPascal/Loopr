@@ -3,10 +3,10 @@ import AnalyticsKit
 import DomainKit
 import DesignSystem
 
-/// A metric Today can compare with its usual, pin as a tile, or chart.
+/// A metric Today can compare with its usual or chart.
 ///
-/// Each case maps to one metric-history series (`linkID`), so the value on a
-/// tile is the value its detail page ends on.
+/// Each case maps to one metric-history series (`linkID`), so the value shown
+/// is the value its detail page ends on.
 public enum TodayTrackedMetric: String, Codable, CaseIterable, Hashable, Sendable, Identifiable {
     case hrv
     case restingHeartRate
@@ -37,15 +37,6 @@ public enum TodayTrackedMetric: String, Codable, CaseIterable, Hashable, Sendabl
         case .stress: "Stress"
         case .steps: "Estimated steps"
         case .activeEnergy: "Active energy"
-        }
-    }
-
-    /// The name on a half-width tile.
-    public var shortTitle: String {
-        switch self {
-        case .restingHeartRate: "Resting HR"
-        case .sleepEfficiency: "Efficiency"
-        default: title
         }
     }
 
@@ -109,23 +100,7 @@ public enum TodayTrackedMetric: String, Codable, CaseIterable, Hashable, Sendabl
         }
     }
 
-    public var accent: LooprColorToken {
-        switch self {
-        // The overnight signals share the recovery accent: heart red on a
-        // number that went the good way reads as a warning.
-        case .hrv, .restingHeartRate, .respiratoryRate, .recovery: .recovery
-        case .sleep, .sleepEfficiency, .deepSleep, .remSleep: .sleep
-        case .strain: .strain
-        case .stress: .stress
-        case .steps, .activeEnergy: .movement
-        }
-    }
-
-    /// Steps and active energy are estimates from wrist motion and heart rate.
-    public var isEstimate: Bool { self == .steps || self == .activeEnergy }
-
-    /// The number and its unit as a tile or row prints them: `58` `ms`,
-    /// `7 h 42 m`, `8,240`, `14.6` `br/min`.
+    /// The number and its unit as a row prints them: `58` `ms`, `7 h 42 m`, `8,240`, `14.6` `br/min`.
     public func formatted(_ value: Double) -> (value: String, unit: String?) {
         switch self {
         case .sleep, .deepSleep, .remSleep:
@@ -138,12 +113,6 @@ public enum TodayTrackedMetric: String, Codable, CaseIterable, Hashable, Sendabl
             return (LooprUnitFormatter.number(value.rounded(), digits: 0) ?? "", unit)
         }
     }
-
-    /// The metrics a person can pin, in the order the edit sheet lists them.
-    public static let pinnable: [TodayTrackedMetric] = [
-        .hrv, .restingHeartRate, .respiratoryRate, .steps, .activeEnergy, .strain, .stress,
-        .recovery, .sleep, .sleepEfficiency, .deepSleep, .remSleep
-    ]
 }
 
 /// The inputs to the recovery score for one day, split by how much each
@@ -288,7 +257,6 @@ public struct TodayDayContext: Equatable, Sendable {
     public let zoneMinutes: [TodayZoneMinutes]
     public let tonight: TodayTonightInputs?
     public let overnightAssessment: OvernightVitalsAssessment?
-    public let temperatureMissingReason: String?
 
     public init(
         day: DayIdentity,
@@ -301,8 +269,7 @@ public struct TodayDayContext: Equatable, Sendable {
         strainTarget: StrainTarget? = nil,
         zoneMinutes: [TodayZoneMinutes] = [],
         tonight: TodayTonightInputs? = nil,
-        overnightAssessment: OvernightVitalsAssessment? = nil,
-        temperatureMissingReason: String? = nil
+        overnightAssessment: OvernightVitalsAssessment? = nil
     ) {
         self.day = day
         self.dayStart = dayStart
@@ -315,7 +282,6 @@ public struct TodayDayContext: Equatable, Sendable {
         self.zoneMinutes = zoneMinutes
         self.tonight = tonight
         self.overnightAssessment = overnightAssessment
-        self.temperatureMissingReason = temperatureMissingReason
     }
 
     /// The metrics the context loader reads history for.

@@ -123,13 +123,19 @@ private struct WorkoutLiveActivity: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    HStack {
-                        if let distance = visual.distance { Text(distance) }
-                        if let pace = visual.pace { Text(pace) }
-                        Spacer()
-                        if visual.isStale { Text(visual.status) }
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let summary = visual.setSummary { Text(summary).font(.caption.weight(.semibold)) }
+                        if let restEndsAt = visual.restEndsAt {
+                            LooprWorkoutRestCountdown(endsAt: restEndsAt).font(.caption.weight(.semibold))
+                        }
+                        HStack {
+                            if let distance = visual.distance { Text(distance) }
+                            if let pace = visual.pace { Text(pace) }
+                            Spacer()
+                            if visual.isStale { Text(visual.status) }
+                        }
+                        .font(.caption)
                     }
-                    .font(.caption)
                 }
             } compactLeading: {
                 Image(systemName: "heart.fill")
@@ -234,6 +240,50 @@ private struct IntervalLiveActivity: Widget {
     }
 }
 
+private struct BedtimeLiveActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: LooprBedtimeActivityAttributes.self) { context in
+            LooprBedtimeLockScreenView(visual: visual(context))
+                .activityBackgroundTint(Color.black.opacity(0.72))
+                .activitySystemActionForegroundColor(.white)
+                .widgetURL(URL(string: "loopr://today"))
+        } dynamicIsland: { context in
+            let visual = visual(context)
+            return DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    LooprBedtimeIslandLeading(visual: visual)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    LooprBedtimeCountdown(visual: visual, font: .title2)
+                        .foregroundStyle(Color.loopr(.sleepChip))
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    LooprBedtimeIslandBottom(visual: visual)
+                }
+            } compactLeading: {
+                Image(systemName: "moon.fill")
+                    .foregroundStyle(Color.loopr(.sleepChip))
+                    .accessibilityLabel("Bedtime")
+            } compactTrailing: {
+                LooprBedtimeCountdown(visual: visual, font: .caption)
+                    .frame(maxWidth: 52)
+                    .foregroundStyle(Color.loopr(.sleepChip))
+            } minimal: {
+                Image(systemName: "moon.fill")
+                    .foregroundStyle(Color.loopr(.sleepChip))
+                    .accessibilityLabel("Bedtime")
+            }
+            .widgetURL(URL(string: "loopr://today"))
+        }
+    }
+
+    private func visual(
+        _ context: ActivityViewContext<LooprBedtimeActivityAttributes>
+    ) -> LooprBedtimeActivityVisual {
+        .init(attributes: context.attributes, state: context.state, isStale: context.isStale)
+    }
+}
+
 @main
 struct LooprWidgetsBundle: WidgetBundle {
     var body: some Widget {
@@ -242,5 +292,6 @@ struct LooprWidgetsBundle: WidgetBundle {
         WorkoutLiveActivity()
         BreathingLiveActivity()
         IntervalLiveActivity()
+        BedtimeLiveActivity()
     }
 }

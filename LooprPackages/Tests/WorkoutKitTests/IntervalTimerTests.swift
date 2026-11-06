@@ -6,9 +6,10 @@ import XCTest
 final class IntervalTimerTests: XCTestCase, @unchecked Sendable {
     private let start = Date(timeIntervalSince1970: 100)
 
-    func testWorkRestBoundariesAndCompletionIncludeFinalRest() {
+    func testWorkRestBoundariesAndNoRestAfterTheLastRound() {
+        // Eight rounds of 20/10 end after the eighth work interval: 8 x 20 + 7 x 10 (R2-VET-05).
         let schedule = IntervalSchedule(configuration: .init(workSeconds: 20, restSeconds: 10, rounds: 8), startedAt: start)
-        XCTAssertEqual(schedule.endsAt, start.addingTimeInterval(240))
+        XCTAssertEqual(schedule.endsAt, start.addingTimeInterval(230))
         XCTAssertEqual(schedule.progress(at: start).phase, .work)
         XCTAssertEqual(schedule.progress(at: start).remainingSeconds, 20)
         let rest = schedule.progress(at: start.addingTimeInterval(20))
@@ -18,8 +19,8 @@ final class IntervalTimerTests: XCTestCase, @unchecked Sendable {
         let second = schedule.progress(at: start.addingTimeInterval(30))
         XCTAssertEqual(second.phase, .work)
         XCTAssertEqual(second.round, 2)
-        XCTAssertEqual(schedule.progress(at: start.addingTimeInterval(239.5)).remainingSeconds, 1)
-        XCTAssertEqual(schedule.progress(at: start.addingTimeInterval(240)).phase, .complete)
+        XCTAssertEqual(schedule.progress(at: start.addingTimeInterval(229.5)).remainingSeconds, 1)
+        XCTAssertEqual(schedule.progress(at: start.addingTimeInterval(230)).phase, .complete)
     }
 
     func testWakeAfterSuspensionResolvesCurrentPhase() {
@@ -85,14 +86,72 @@ final class IntervalTimerTests: XCTestCase, @unchecked Sendable {
         withExtendedLifetime(observation) {}
     }
 
+    @MainActor
+    func testOldStopCannotClearANewTimer() async {
+        let gate = IntervalLifecycleGate()
+        let model = IntervalTimerModel()
+        await model.start(configuration: .thirtyThirty, hooks: .init(ended: { _ in await gate.enter() }))
+        let stopping = Task { await model.stop() }
+        await gate.waitForEntry()
+        await model.start(configuration: .tabata)
+        XCTAssertEqual(model.schedule?.configuration, .tabata)
+        await gate.release()
+        await stopping.value
+        XCTAssertTrue(model.isRunning)
+        XCTAssertEqual(model.schedule?.configuration, .tabata)
+        await model.stop()
+    }
+
+    @MainActor
+    func testCancelledStartDoesNotLeaveATimerRunning() async {
+        let gate = IntervalLifecycleGate()
+        let model = IntervalTimerModel()
+        let starting = Task {
+            await model.start(configuration: .thirtyThirty, hooks: .init(started: { _, _ in await gate.enter() }))
+        }
+        await gate.waitForEntry()
+        starting.cancel()
+        await gate.release()
+        await starting.value
+        XCTAssertFalse(model.isRunning)
+        XCTAssertNil(model.schedule)
+        await model.stop()
+    }
+
+    @MainActor
+    func testCancelledSensorAcquisitionStopsTheTimer() async {
+        struct Source: WorkoutLiveSampleSource {
+            func acquire(generation: UUID) async throws -> WorkoutLiveSampleLease { throw CancellationError() }
+        }
+        let model = IntervalTimerModel()
+        await model.start(configuration: .thirtyThirty, liveSource: Source())
+        XCTAssertFalse(model.isRunning)
+        XCTAssertNil(model.schedule)
+    }
+
     func testZeroRestOneRoundAndInputLimits() {
         let schedule = IntervalSchedule(configuration: .init(workSeconds: 1, restSeconds: 0, rounds: 3), startedAt: start)
         XCTAssertEqual(schedule.phaseStarts.count, 3)
         XCTAssertEqual(schedule.progress(at: start.addingTimeInterval(1)).round, 2)
         XCTAssertEqual(schedule.progress(at: start.addingTimeInterval(3)).phase, .complete)
-        XCTAssertEqual(IntervalConfiguration(workSeconds: 20, restSeconds: 10, rounds: 1).duration, 30)
+        XCTAssertEqual(IntervalConfiguration(workSeconds: 20, restSeconds: 10, rounds: 1).duration, 20)
         XCTAssertFalse(IntervalConfiguration(workSeconds: 0).isValid)
         XCTAssertFalse(IntervalConfiguration(restSeconds: -1).isValid)
         XCTAssertFalse(IntervalConfiguration(rounds: 101).isValid)
     }
+}
+
+private actor IntervalLifecycleGate {
+    private var entered = false
+    private var entry: CheckedContinuation<Void, Never>?
+    private var blocked: CheckedContinuation<Void, Never>?
+    func enter() async {
+        entered = true
+        entry?.resume(); entry = nil
+        await withCheckedContinuation { blocked = $0 }
+    }
+    func waitForEntry() async {
+        if !entered { await withCheckedContinuation { entry = $0 } }
+    }
+    func release() { blocked?.resume(); blocked = nil }
 }

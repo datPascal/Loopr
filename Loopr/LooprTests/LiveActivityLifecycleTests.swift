@@ -1,6 +1,7 @@
 import Foundation
 import AnalyticsKit
 import Testing
+import TrainKit
 import WorkoutKit
 
 @testable import Loopr
@@ -245,5 +246,119 @@ struct WorkoutRecoveryPathTests {
         let other = UUID()
         #expect(WorkoutRecoveryPathTransition.path(after: workout, in: [.recovery(other)])
                 == [.recovery(other)])
+    }
+}
+
+/// The mini-player hides only while the active workout's own live screen is in front.
+struct ActiveWorkoutAccessoryTests {
+    private let active = UUID(uuidString: "00000000-0000-0000-0000-000000000111")!
+    private let other = UUID(uuidString: "00000000-0000-0000-0000-000000000222")!
+
+    private func shown(_ selection: MainTab, _ path: [AppWorkoutRoute], hasActive: Bool = true) -> Bool {
+        ActiveWorkoutAccessoryVisibility.isShown(activeWorkoutID: hasActive ? active : nil, selection: selection, path: path)
+    }
+
+    @Test
+    func hidesOnlyOnTheActiveWorkoutsOwnLiveScreen() {
+        #expect(!shown(.fitness, [.train(.live)]))
+        #expect(!shown(.fitness, [.live(active, .run)]))
+        #expect(shown(.fitness, [.live(other, .run)]))
+        #expect(shown(.fitness, []))
+        #expect(shown(.fitness, [.train(.live), .catalog]))
+        #expect(shown(.today, [.train(.live)]))
+        #expect(!shown(.today, [], hasActive: false))
+    }
+}
+
+/// The strength session adds a rest end and a set line to the workout Live Activity. Both are
+/// optional with a nil default, so an activity that was already running when the app updated
+/// must still decode, and every other workout must look as it did.
+struct TrainLiveActivityStateTests {
+    private let started = Date(timeIntervalSince1970: 1_700_000_000)
+
+    private var workout: WorkoutRecord {
+        WorkoutRecord(id: UUID(uuidString: "00000000-0000-0000-0000-000000000333")!, identity: .init(canonicalKey: "strength-live"),
+                      activity: .strength, source: .live, state: .active, createdAt: started, startedAt: started)
+    }
+
+    @Test
+    func anActivityEncodedBeforeTheUpdateStillDecodes() throws {
+        // The exact keys the previous build wrote: no restEndsAt and no setSummary.
+        let old = """
+        {"elapsedSeconds":1450,"heartRate":142,"status":"Active","startedAt":720000000,"heartRateObservedAt":720001450,
+         "zone":3,"distanceMeters":null,"paceSecondsPerKilometer":null,"targetName":"Zone 2","targetStatus":"In zone"}
+        """
+        let state = try JSONDecoder().decode(LooprWorkoutActivityAttributes.ContentState.self, from: Data(old.utf8))
+        #expect(state.restEndsAt == nil && state.setSummary == nil)
+        #expect(state.elapsedSeconds == 1_450 && state.heartRate == 142 && state.targetName == "Zone 2")
+        // An even older payload that predates the zone target decodes too.
+        let older = """
+        {"elapsedSeconds":60,"status":"Active","zone":2}
+        """
+        let bare = try JSONDecoder().decode(LooprWorkoutActivityAttributes.ContentState.self, from: Data(older.utf8))
+        #expect(bare.restEndsAt == nil && bare.setSummary == nil && bare.heartRate == nil && bare.targetName == nil)
+    }
+
+    @Test
+    func theNewFieldsRoundTripAndAnOldBuildIgnoresThem() throws {
+        var state = LooprWorkoutActivityAttributes.ContentState(
+            elapsedSeconds: 600, heartRate: 120, status: "Active", startedAt: started, heartRateObservedAt: started, zone: 2,
+            distanceMeters: nil, paceSecondsPerKilometer: nil)
+        state.restEndsAt = started.addingTimeInterval(700)
+        state.setSummary = "Bench press · set 3 of 4"
+        let data = try JSONEncoder().encode(state)
+        let decoded = try JSONDecoder().decode(LooprWorkoutActivityAttributes.ContentState.self, from: data)
+        #expect(decoded == state && decoded.restEndsAt == started.addingTimeInterval(700))
+        // A reader that does not know the new keys decodes what it knows.
+        struct OldShape: Decodable { let elapsedSeconds: Int; let status: String; let zone: Int? }
+        let old = try JSONDecoder().decode(OldShape.self, from: data)
+        #expect(old.elapsedSeconds == 600 && old.status == "Active" && old.zone == 2)
+    }
+
+    @Test
+    func theProjectionCarriesTheRestEndAndTheSetLineOnlyWhileTheRestIsAhead() {
+        let now = started.addingTimeInterval(600)
+        let overlay = TrainActivityOverlay(restEndsAt: now.addingTimeInterval(45), setSummary: "Bench press · set 3 of 4")
+        let resting = LooprWorkoutActivityProjection.state(for: workout, zones: nil, now: now, train: overlay)
+        #expect(resting.restEndsAt == now.addingTimeInterval(45) && resting.setSummary == "Bench press · set 3 of 4")
+        // After the end date the rest is gone but the set line stays.
+        let after = LooprWorkoutActivityProjection.state(for: workout, zones: nil, now: now.addingTimeInterval(60), train: overlay)
+        #expect(after.restEndsAt == nil && after.setSummary == "Bench press · set 3 of 4")
+        // Without an overlay the state is what it always was.
+        let plain = LooprWorkoutActivityProjection.state(for: workout, zones: nil, now: now)
+        #expect(plain.restEndsAt == nil && plain.setSummary == nil)
+        #expect(plain == LooprWorkoutActivityProjection.state(for: workout, zones: nil, now: now, train: nil))
+    }
+
+    @Test
+    func aRestChangeOrANewSetReachesTheLockScreenAtOnce() {
+        let base = LooprWorkoutActivityAttributes.ContentState(
+            elapsedSeconds: 600, heartRate: 120, status: "Active", startedAt: started, heartRateObservedAt: started, zone: 2,
+            distanceMeters: nil, paceSecondsPerKilometer: nil)
+        var resting = base
+        resting.restEndsAt = started.addingTimeInterval(700)
+        #expect(LooprLiveActivityRuntime.shouldPublish(previous: base, next: resting, elapsedSinceUpdate: 0))
+        var extended = resting
+        extended.restEndsAt = started.addingTimeInterval(730)
+        #expect(LooprLiveActivityRuntime.shouldPublish(previous: resting, next: extended, elapsedSinceUpdate: 0))
+        var nextSet = resting
+        nextSet.setSummary = "Bench press · set 4 of 4"
+        #expect(LooprLiveActivityRuntime.shouldPublish(previous: resting, next: nextSet, elapsedSinceUpdate: 0))
+        #expect(!LooprLiveActivityRuntime.shouldPublish(previous: resting, next: resting, elapsedSinceUpdate: 0))
+    }
+
+    @Test
+    func theViewShowsTheRestOnlyWhileItIsAheadAndTheActivityIsFresh() {
+        var state = LooprWorkoutActivityAttributes.ContentState(
+            elapsedSeconds: 600, heartRate: 120, status: "Active", startedAt: started, heartRateObservedAt: started, zone: 2,
+            distanceMeters: nil, paceSecondsPerKilometer: nil)
+        state.restEndsAt = Date().addingTimeInterval(60)
+        state.setSummary = "Bench press · set 3 of 4"
+        let fresh = LooprWorkoutLiveActivityVisual(name: "Strength", state: state, isStale: false)
+        #expect(fresh.restEndsAt == state.restEndsAt && fresh.setSummary == "Bench press · set 3 of 4")
+        let stale = LooprWorkoutLiveActivityVisual(name: "Strength", state: state, isStale: true)
+        #expect(stale.restEndsAt == nil && stale.setSummary == nil)
+        state.restEndsAt = Date().addingTimeInterval(-5)
+        #expect(LooprWorkoutLiveActivityVisual(name: "Strength", state: state, isStale: false).restEndsAt == nil)
     }
 }

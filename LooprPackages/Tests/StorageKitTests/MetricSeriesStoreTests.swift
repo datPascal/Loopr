@@ -24,7 +24,29 @@ final class MetricSeriesStoreTests: XCTestCase {
 
     func testMigrationIsRegisteredAfterTheV24Migration() {
         let identifiers = StorageMigrationHarness.registeredMigrationIdentifiers(applicationVersion: "test")
-        XCTAssertEqual(identifiers.last, "storage-009-v24-skin-temperature")
+        XCTAssertTrue(identifiers.contains(StorageMigrationIdentifier.experiments))
+        XCTAssertEqual(identifiers.firstIndex(of: StorageMigrationIdentifier.capacity).map { $0 + 1 },
+                       identifiers.firstIndex(of: StorageMigrationIdentifier.experiments))
+        XCTAssertEqual(identifiers.firstIndex(of: StorageMigrationIdentifier.foodWeight).map { $0 + 1 },
+                       identifiers.firstIndex(of: StorageMigrationIdentifier.routine))
+        XCTAssertEqual(identifiers.firstIndex(of: StorageMigrationIdentifier.routine).map { $0 + 1 },
+                       identifiers.firstIndex(of: StorageMigrationIdentifier.labs))
+        XCTAssertEqual(identifiers.firstIndex(of: StorageMigrationIdentifier.train).map { $0 + 1 },
+                       identifiers.firstIndex(of: StorageMigrationIdentifier.foodWeight))
+        XCTAssertEqual(identifiers.firstIndex(of: StorageMigrationIdentifier.labs).map { $0 + 1 },
+                       identifiers.firstIndex(of: StorageMigrationIdentifier.foodLongevity))
+        XCTAssertEqual(identifiers.firstIndex(of: StorageMigrationIdentifier.foodLongevity).map { $0 + 1 },
+                       identifiers.firstIndex(of: StorageMigrationIdentifier.capacity))
+        XCTAssertEqual(identifiers.firstIndex(of: StorageMigrationIdentifier.foodReview).map { $0 + 1 },
+                       identifiers.firstIndex(of: StorageMigrationIdentifier.train))
+        XCTAssertEqual(identifiers.firstIndex(of: StorageMigrationIdentifier.foodCapture).map { $0 + 1 },
+                       identifiers.firstIndex(of: StorageMigrationIdentifier.foodReview))
+        XCTAssertEqual(identifiers.firstIndex(of: StorageMigrationIdentifier.foodOverview).map { $0 + 1 },
+                       identifiers.firstIndex(of: StorageMigrationIdentifier.foodCapture))
+        XCTAssertEqual(identifiers.firstIndex(of: StorageMigrationIdentifier.food).map { $0 + 1 },
+                       identifiers.firstIndex(of: StorageMigrationIdentifier.foodOverview))
+        XCTAssertEqual(identifiers.firstIndex(of: "storage-009-v24-skin-temperature").map { $0 + 1 },
+                       identifiers.firstIndex(of: StorageMigrationIdentifier.food))
         XCTAssertEqual(identifiers.firstIndex(of: StorageMigrationIdentifier.metricSeriesSource).map { $0 + 1 },
                        identifiers.firstIndex(of: "storage-009-v24-skin-temperature"))
         XCTAssertEqual(identifiers.firstIndex(of: "storage-007-v24-adc-fields").map { $0 + 1 },

@@ -22,6 +22,9 @@ public struct BandEventEnvelope: Sendable, Equatable {
     /// long enough to carry it.  The band RTC can be unset, so this is not a
     /// wall-clock timestamp and callers must guard on plausibility.
     public let bandEpochSeconds: UInt32?
+    /// Event time translated with this connection's known clock correlation.
+    /// Nil when the runtime cannot relate the band's RTC to wall time.
+    public let occurredAt: Date?
 
     public init(
         eventID: UInt16,
@@ -30,7 +33,8 @@ public struct BandEventEnvelope: Sendable, Equatable {
         bandEpochSeconds: UInt32?,
         batteryPercentage: Double? = nil,
         charging: Bool? = nil,
-        onWrist: Bool? = nil
+        onWrist: Bool? = nil,
+        occurredAt: Date? = nil
     ) {
         self.batteryPercentage = batteryPercentage
         self.charging = charging
@@ -39,6 +43,7 @@ public struct BandEventEnvelope: Sendable, Equatable {
         self.generation = generation
         self.receivedAt = receivedAt
         self.bandEpochSeconds = bandEpochSeconds
+        self.occurredAt = occurredAt
     }
 }
 
@@ -51,6 +56,19 @@ public enum BandCommandError: Error, Sendable, Equatable {
     case timedOut
     case rejected(String)
     case invalidName
+}
+
+/// A decoded empty slot is evidence that the alarm is absent. An unanswered
+/// or unsupported readback provides no evidence either way.
+public enum BandAlarmStatus: Equatable, Sendable {
+    case armed(Date)
+    case empty
+    case unknown
+
+    public var fireDate: Date? {
+        if case .armed(let date) = self { return date }
+        return nil
+    }
 }
 
 /// The band's alarm time split, plus the wall-to-band clock shift.
@@ -73,7 +91,11 @@ public struct BandAlarmFrame: Equatable, Sendable {
     /// the reference does when it has no clock correlation yet.
     public init(fireDate: Date, driftSeconds: Int64) throws {
         let shifted = fireDate.addingTimeInterval(-TimeInterval(driftSeconds))
-        let milliseconds = Int64((shifted.timeIntervalSince1970 * 1_000).rounded(.down))
+        let interval = shifted.timeIntervalSince1970
+        guard interval.isFinite, interval >= 0, interval < TimeInterval(UInt32.max) + 1 else {
+            throw ClockSequenceError.unrepresentableDate
+        }
+        let milliseconds = Int64((interval * 1_000).rounded(.down))
         let seconds = milliseconds.dividedReportingOverflow(by: 1_000)
         guard !seconds.overflow,
               seconds.partialValue >= 0,

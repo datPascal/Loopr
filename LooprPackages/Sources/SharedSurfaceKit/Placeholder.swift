@@ -42,7 +42,7 @@ public nonisolated enum SurfaceStaleReason: String, Codable, CaseIterable, Senda
     public var displayName: String {
         switch self {
         case .noRecentSync: "No recent sync"
-        case .disconnected: "Strap disconnected"
+        case .disconnected: "Band disconnected"
         case .permissionRevoked: "Permission needed"
         }
     }

@@ -53,42 +53,6 @@ public enum TodayHeroState: Equatable, Sendable {
     }
 }
 
-extension LooprDelta {
-    /// Rings and tiles stay quiet while a usual range is still building; the
-    /// hero explains recovery learning once.
-    var unlessLearning: LooprDelta? {
-        if case .learning = kind { return nil }
-        return self
-    }
-}
-
-/// One of the three secondary rings.
-public struct TodayRingItem: Equatable, Sendable, Identifiable {
-    public let id: TodayMetricID
-    public let caption: String
-    public let text: String
-    let reading: TodayRingReading
-    public let accent: LooprColorToken
-    public let delta: LooprDelta?
-    public let needsAge: Bool
-    /// Strain and Stress while the day has too little wear for a number, as
-    /// "23 of 60 min worn". Nil once the ring has a reading.
-    public let settlingCaption: String?
-    /// Strain only: the range that suits today's recovery, on the 0 to 21 scale.
-    public let suggestedRange: ClosedRange<Double>?
-}
-
-/// A pinned "Your numbers" tile.
-public struct TodayNumberTile: Equatable, Sendable, Identifiable {
-    public let metric: TodayTrackedMetric
-    public let value: String?
-    public let unit: String?
-    public let delta: LooprDelta?
-    public let detail: String?
-
-    public var id: String { metric.rawValue }
-}
-
 /// The card that appears when two or more overnight signals sit outside the
 /// usual range in the unwanted direction.
 public struct TodayHeadsUp: Equatable, Sendable {
@@ -113,58 +77,41 @@ public struct TodayTonightPlan: Equatable, Sendable {
     public let title: String
     /// "That gives you the 7 h 50 m you need before your 07:00 alarm."
     public let detail: String
-}
-
-/// The coach line, only when the coach has something to say.
-public struct TodayCoachLine: Equatable, Sendable {
-    public let title: String
-    public let detail: String
+    /// The bedtime in minutes after midnight, rounded to five minutes.
+    public let bedtimeMinute: Int
+    /// The sleep need the bedtime was worked out from.
+    public let needMinutes: Double
 }
 
 /// Everything the Today screen draws for one day, built once per change of
-/// summary, context or pinned metrics. All the rules live here so they can be
+/// summary or context. All the rules live here so they can be
 /// tested without a view.
 public struct TodayDashboard: Equatable, Sendable {
     public let hero: TodayHeroState
-    public let rings: [TodayRingItem]
     public let headsUp: TodayHeadsUp?
-    public let tiles: [TodayNumberTile]
     public let tonight: TodayTonightPlan?
-    public let coach: TodayCoachLine?
-    public let contributors: [TodayMorningContributor]
-    public let morningSignals: TodayMorningSignals
-    public let morningSignalsSubtitle: String?
+    /// The Sleep and Strain rows of the Your day card.
+    public let yourDay: [TodayYourDayMetric]
+    /// How far HRV sits from the usual range, for the prompt chip on the Ask card.
+    public let hrvChange: Double?
 
     public init(
         summary: TodaySummary,
         context: TodayDayContext?,
-        pinned: [TodayTrackedMetric],
         isToday: Bool,
-        headsUpDismissed: Bool = false,
         dayLabel: (Date) -> String = TodayDashboard.shortDayLabel,
         calendar: Calendar = .current
     ) {
         let values = TodayValues(summary: summary, context: context, calendar: calendar)
         hero = TodayHeroRules.hero(summary: summary, context: context, values: values, isToday: isToday,
                                    dayLabel: dayLabel, calendar: calendar)
-        rings = TodayDashboard.rings(summary: summary, values: values, context: context)
-        headsUp = headsUpDismissed ? nil : TodayHeadsUpRules.evaluate(values: values, context: context)
-        tiles = pinned.map { metric in
-            let value = values.value(metric)
-            let formatted = value.map(metric.formatted)
-            return TodayNumberTile(metric: metric, value: formatted?.value, unit: formatted?.unit,
-                                   delta: values.delta(metric, withinRange: .word),
-                                   detail: value == nil ? "Sync your band to see this reading." : nil)
-        }
+        headsUp = TodayHeadsUpRules.evaluate(values: values, context: context)
         tonight = isToday ? TodayTonightRules.plan(TodayTonightInputs(
             needMinutes: TodaySleepNeed.minutes(from: summary.goals),
             alarmMinute: context?.tonight?.alarmMinute,
             suggestedWakeMinute: context?.tonight?.suggestedWakeMinute)) : nil
-        coach = nil
-        contributors = TodayDashboard.contributors(values: values, context: context, calendar: calendar)
-        morningSignals = TodayMorningSignals(rows: contributors,
-            stale: TodayHeroRules.staleDays(values: values, context: context, isToday: isToday, calendar: calendar) != nil)
-        morningSignalsSubtitle = morningSignals.subtitle(hasRecovery: hero.reading != nil)
+        yourDay = TodayYourDayRules.metrics(summary: summary, values: values, context: context)
+        hrvChange = values.vital(.hrv)?.delta ?? values.value(.hrv).flatMap { value in values.usual(.hrv).map { value - $0.center } }
     }
 
     /// "Wed 23 Sep"
@@ -172,63 +119,6 @@ public struct TodayDashboard: Equatable, Sendable {
         var style = Date.FormatStyle().weekday(.abbreviated).day(.defaultDigits).month(.abbreviated)
         style.locale = Locale(identifier: "en_GB")
         return date.formatted(style).replacingOccurrences(of: ",", with: "")
-    }
-
-    static func coachLine(_ slot: TodayCoachPlanSlot) -> TodayCoachLine? {
-        guard case .plan(let plan) = slot, plan.recommendationCount > 0,
-              plan.state != .absent, plan.state != .noRecords,
-              !plan.title.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
-        return TodayCoachLine(title: plan.title, detail: plan.detail)
-    }
-
-    /// The settling caption as VoiceOver should say it.
-    static func spokenSettling(_ caption: String) -> String {
-        caption.replacingOccurrences(of: " min worn", with: " minutes worn")
-    }
-
-    static func missingRingCaption(_ id: TodayMetricID, metric: TodayMetricValue?) -> String {
-        if let caption = metric?.confidence?.trimmingCharacters(in: .whitespacesAndNewlines), !caption.isEmpty { return caption }
-        switch id {
-        case .stress: return "No clean heart data today"
-        case .strain: return "Wear your band for 60 minutes today"
-        case .sleep: return "Sync after your next night"
-        default: return "Sync your band to see this reading"
-        }
-    }
-
-    static func rings(summary: TodaySummary, values: TodayValues, context: TodayDayContext?) -> [TodayRingItem] {
-        let specs: [(TodayMetricID, String, LooprColorToken, TodayTrackedMetric)] = [
-            (.sleep, "Sleep", .sleep, .sleep),
-            (.strain, "Strain", .strain, .strain),
-            (.stress, "Stress", .stress, .stress)
-        ]
-        return specs.map { id, caption, accent, tracked in
-            let metric = summary.metric(id)
-            let reading = TodayRingReading.reading(for: id, metric: metric, summary: summary)
-            let text: String = {
-                guard let value = reading.value else { return "—" }
-                switch id {
-                case .sleep: return LooprRingNumberFormat.hoursMinutes.text(for: value)
-                case .strain: return String(format: "%.1f", value)
-                default: return String(format: "%.0f", value)
-                }
-            }()
-            return TodayRingItem(
-                id: id, caption: caption, text: text, reading: reading, accent: accent,
-                delta: reading.value.flatMap { value in
-                    if id == .sleep {
-                        let difference = value - TodayRingReading.sleepReference(in: summary).minutes
-                        return LooprDelta(kind: .change(difference), isOutsideUsual: difference < -60,
-                                          higherIsBetter: true, format: .duration, reference: "need")
-                    }
-                    return values.delta(tracked, withinRange: .word)
-                },
-                needsAge: id == .strain && reading.value == nil
-                    && metric?.confidence?.localizedCaseInsensitiveContains("add your age") == true,
-                settlingCaption: reading.value == nil ? missingRingCaption(id, metric: metric) : nil,
-                suggestedRange: id == .strain ? context?.suggestedStrainRange : nil
-            )
-        }
     }
 }
 
@@ -501,9 +391,37 @@ enum TodayHeadsUpRules {
                 spoken: "\(metric.name) \(LooprUnitFormatter.number(abs(delta), digits: digits) ?? "") \(unit) \(direction) your usual")
         }
         let factors = (context?.journalFactors ?? []).prefix(4).map { $0.prefix(1).uppercased() + $0.dropFirst() }
-        return TodayHeadsUp(title: LooprSignalFormatting.outsideRangeHeadline(count: signals.count),
+        let named = zip(assessment.outliers, signals).map { outlier, signal in
+            (name: signal.metric.name, above: outlier.direction == .higher)
+        }
+        return TodayHeadsUp(title: title(naming: named),
             detail: "Alcohol, late meals, a hot room, hard training or travel can move these readings. Illness can too. Take it easy and see how tonight compares.",
             signals: signals, factors: Array(factors))
+    }
+}
+
+extension TodayHeadsUpRules {
+    /// "Resting heart rate above and HRV below your usual range": the card names the signals and which way each moved
+    /// (R1-OPT-20, ICP R2-OPT-2), so a higher HRV never reads like a warning about a lower one. Past three names it falls
+    /// back to the count.
+    static func title(naming names: [(name: String, above: Bool)]) -> String {
+        guard (1...3).contains(names.count) else { return LooprSignalFormatting.outsideRangeHeadline(count: names.count) }
+        let words = names.enumerated().map { index, signal in
+            (index == 0 ? signal.name : signal.name.lowercasedUnlessAcronym) + (signal.above ? " above" : " below")
+        }
+        let list = words.count < 3 ? words.joined(separator: " and ")
+            : words.dropLast().joined(separator: ", ") + " and " + (words.last ?? "")
+        return "\(list) your usual range"
+    }
+}
+
+private extension String {
+    /// "Skin temperature" to "skin temperature"; "HRV" stays.
+    var lowercasedUnlessAcronym: String {
+        guard let first = split(separator: " ").first, first.count > 1, first == first.uppercased() else {
+            return prefix(1).lowercased() + dropFirst()
+        }
+        return self
     }
 }
 
@@ -523,7 +441,8 @@ enum TodayTonightRules {
             ? "before your \(wakeText) alarm."
             : "before \(wakeText), when you usually wake."
         return TodayTonightPlan(title: "Asleep by \(clock(bed))",
-                                detail: "That gives you the \(needText) you need \(ending)")
+                                detail: "That gives you the \(needText) you need \(ending)",
+                                bedtimeMinute: bed, needMinutes: need)
     }
 
     static func clock(_ minute: Int) -> String {

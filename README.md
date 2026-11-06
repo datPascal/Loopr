@@ -1,20 +1,22 @@
-# Loopr
+# Loopr Longevity
 
-Loopr is an experimental native iOS app that reads data from supported fitness bands over Bluetooth, stores it locally, and calculates fitness and wellness estimates on the iPhone.
+The open-source longevity app for iPhone. Loopr reads your band over Bluetooth and the Apple Health data you allow, keeps everything on the phone, and shows how your days add up over years: sleep, training, food, the rules you set yourself, and your blood tests.
 
 Loopr is under active development. There is no App Store release and no public beta. TestFlight builds go to a few invited testers. Anyone can build it from source.
 
-## What Loopr does
+## What's in the app
 
-- Connects to a supported band over Bluetooth Low Energy.
-- Stores sensor records and app data in a local SQLite database.
-- Calculates sleep, recovery, activity, heart, stress, and workout estimates on the device.
-- Integrates with Apple Health, widgets, Live Activities, App Intents, and a read-only Apple Watch companion.
-- Lets the user export and delete local data.
+Five tabs.
 
-Core operation does not require a Loopr account, Loopr subscription, Loopr backend, or third-party account credentials.
+- **Today.** A day dial of sleep, meals, training and your rules. Tap any part of the dial to open it. After 18:00 the dial counts down to bedtime, and an optional Live Activity shows the evening rules on the lock screen.
+- **Food.** Rings for energy, protein and fibre, plants per week, the ultra-processed share of barcoded food, and a morning and evening stack for supplements and medication. Photo logging uses your own AI key. Barcodes go to Open Food Facts.
+- **Fitness.** A weekly dose of zone 2, hard, strength and mobility time. A VO₂max gauge against age norms. Capacity tests for grip, dead hang, sit to stand and one-leg balance, plus heart rate recovery from your workouts.
+- **Protocol.** Your rules, with versions and a daily check-in. Experiments get a design up front: alternating days, blocks, or before and after, with a washout and a minimum number of nights. A result shows only when the difference is larger than your own night-to-night spread. Protocols are JSON files you can share, and the starter templates live in [`protocols/`](protocols/).
+- **Data.** Tiles for sleep, recovery, strain, stress, body and blood tests, each opening its own page. Under them, an age ruler puts blood age (PhenoAge, Levine 2018) and Cardio Age beside your real age. Blood tests are typed in or read from a photo of the report, in English or German, and keep the lab's own reference ranges. Every number has a method page that names its inputs, the paper behind it, and its limits.
 
-An optional bring-your-own-key AI feature can send data to a provider chosen by the user. It stays off until the user configures it, reviews the request contents, and confirms the request. That provider handles the submitted data under its own terms and privacy policy.
+Rules on the phone write the morning and evening notes and the weekly review. They run offline and send nothing. Ask, the chat coach, is optional and uses your own OpenAI or Claude API key. Blood tests and supplements stay out of Ask until you switch each one on.
+
+Loopr has no account, no subscription and no Loopr server.
 
 ## Try it
 
@@ -25,27 +27,36 @@ There is no public TestFlight. To run Loopr on your own iPhone, follow the steps
 These screens use deterministic test data, not personal health records.
 
 <p align="center">
-  <img src="docs/screenshots/today-dark.png" width="19%" alt="Loopr Today screen">
-  <img src="docs/screenshots/sleep-dark.png" width="19%" alt="Loopr Sleep tab with sleep stages timeline">
-  <img src="docs/screenshots/heart-dark.png" width="19%" alt="Loopr Heart screen">
-  <img src="docs/screenshots/body-dark.png" width="19%" alt="Loopr Body screen">
-  <img src="docs/screenshots/workouts-dark.png" width="19%" alt="Loopr Workouts screen">
+  <img src="docs/screenshots/today-dark.png" width="19%" alt="Today: the day dial with sleep, meals, training and rules">
+  <img src="docs/screenshots/food-dark.png" width="19%" alt="Food: energy, protein and fibre rings">
+  <img src="docs/screenshots/fitness-dark.png" width="19%" alt="Fitness: the week with zone 2 and hard minutes">
+  <img src="docs/screenshots/protocol-dark.png" width="19%" alt="Protocol: daily check-in against your rules">
+  <img src="docs/screenshots/data-dark.png" width="19%" alt="Data: tiles for sleep, recovery, strain, stress, body and blood tests">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/today-light.png" width="19%" alt="Today in light mode">
+  <img src="docs/screenshots/food-light.png" width="19%" alt="Food in light mode">
+  <img src="docs/screenshots/fitness-light.png" width="19%" alt="Fitness in light mode">
+  <img src="docs/screenshots/protocol-light.png" width="19%" alt="Protocol in light mode">
+  <img src="docs/screenshots/data-light.png" width="19%" alt="Data in light mode">
 </p>
 
 ## Privacy model
 
-The current release configuration has no Loopr account system, advertising SDK, or remote telemetry provider. Health records remain in the app's local storage unless the user starts an export, authorizes an Apple Health operation, or confirms a request to a configured AI provider.
+Health records stay in the app's storage on the iPhone. They leave only when you export a file, publish a dashboard, share a protocol, approve an Apple Health write, look up a barcode, or send a question to your AI provider. The release build has no analytics, ads or remote telemetry.
 
-See [PRIVACY.md](PRIVACY.md) for the data and network boundaries in the current code.
+[PRIVACY.md](PRIVACY.md) lists every data type and every network destination in the current code.
 
 ## Current status
 
-Don't use Loopr for health decisions. Most behavior has automated offline tests. Testing on real bands is ongoing, and so far it covers one WHOOP 4.0 worn daily.
+Don't use Loopr for health decisions. Blood age, Cardio Age and every score are estimates for general wellness, not medical results. Most behavior has automated offline tests. Testing on real bands is ongoing, and so far it covers one WHOOP 4.0 worn daily.
 
 | Hardware | Status |
 | --- | --- |
 | WHOOP 4.0 | Main target. Used daily on a real band. Firmware-by-firmware test records are not complete. |
 | WHOOP 5.0 and MG | Experimental support is included behind an explicit opt-in. Tested-with claims require separate hardware and firmware checks. |
+| Apple Health | Loopr reads VO₂max, weight, body composition, blood pressure, blood glucose, daylight and steps, each labelled with the app or device that recorded it. |
 
 Compatibility depends on third-party hardware and firmware that Loopr does not control. A device or firmware update may change or stop Bluetooth communication. Loopr does not guarantee continued compatibility.
 
@@ -53,8 +64,10 @@ Compatibility depends on third-party hardware and firmware that Loopr does not c
 
 Requirements:
 
-- Xcode 26 or later
-- iOS 26 SDK
+- Xcode 27 or later
+- iOS 27 SDK
+
+The app runs on iOS 26 and later. Tests run on iOS 27.0 simulators.
 
 Clone the repository, then open `Loopr/Loopr.xcodeproj` in Xcode and select the `Loopr` scheme. Code signing, Apple Health, App Groups, widgets, and the Watch targets require Apple development settings for your own team.
 
@@ -91,6 +104,7 @@ LooprPackages/         Swift packages for Bluetooth, storage, analytics, and fea
 LooprWatch/            Apple Watch app
 LooprWatchWidgets/     Watch complications and widgets
 Fixtures/              Synthetic protocol, analytics, and UI test fixtures
+protocols/             Protocol templates you can import into the app
 Tools/                 Development and parity tools
 docs/                  Architecture, protocol, and design notes
 scripts/               Local test and verification scripts

@@ -11,6 +11,9 @@ public protocol HabitStore: Sendable {
     func dayRecord(for day: DayIdentity) async throws -> HabitDayRecord?
     func dayRecords() async throws -> [HabitDayRecord]
     func saveDayRecord(_ record: HabitDayRecord) async throws
+    /// The read, update, validation, and save must run without an intervening
+    /// mutation. A check-in changes one answer, not a stale copy of the day.
+    func updateDayRecord(for day: DayIdentity, _ update: @Sendable (HabitDayRecord?) throws -> HabitDayRecord?) async throws
 
     func outcome(for day: DayIdentity) async throws -> HabitOutcomeSnapshot?
     func outcomes() async throws -> [HabitOutcomeSnapshot]
@@ -94,6 +97,7 @@ public actor InMemoryHabitStore: HabitStore {
         guard definitionRows.removeValue(forKey: id) != nil else { throw HabitStoreError.missingHabit }
         for (day, var record) in dayRows {
             record.responses.removeAll { $0.habitID == id }
+            record.userOverrideHabitIDs?.remove(id)
             dayRows[day] = record
         }
         estimateRows[id] = nil
@@ -109,6 +113,12 @@ public actor InMemoryHabitStore: HabitStore {
     public func saveDayRecord(_ record: HabitDayRecord) throws {
         try HabitStoreValidator.validate(record: record, definitions: definitionRows)
         dayRows[record.behaviorDay] = record
+    }
+
+    public func updateDayRecord(for day: DayIdentity, _ update: @Sendable (HabitDayRecord?) throws -> HabitDayRecord?) throws {
+        guard let record = try update(dayRows[day]) else { return }
+        guard record.behaviorDay == day else { throw HabitStoreError.responseDayMismatch }
+        try saveDayRecord(record)
     }
 
     public func outcome(for day: DayIdentity) -> HabitOutcomeSnapshot? { outcomeRows[day] }
@@ -215,10 +225,15 @@ public enum HabitStoreValidator {
         guard TimeZone(identifier: record.behaviorTimeZoneID) != nil else { throw HabitStoreError.timeZoneMismatch }
         let ids = record.responses.map(\.habitID)
         guard Set(ids).count == ids.count else { throw HabitStoreError.duplicateResponse }
+        guard (record.userOverrideHabitIDs ?? []).allSatisfy({ definitions[$0] != nil }) else { throw HabitStoreError.missingHabit }
         for response in record.responses {
             guard definitions[response.habitID] != nil else { throw HabitStoreError.missingHabit }
             guard response.behaviorDay == record.behaviorDay else { throw HabitStoreError.responseDayMismatch }
             guard response.behaviorTimeZoneID == record.behaviorTimeZoneID else { throw HabitStoreError.timeZoneMismatch }
+            if response.lastUpdateSource == .autoFill {
+                guard response.answer != .skipped, let provenance = response.autoFillProvenance,
+                      provenance.isValid else { throw JournalAutoFillError.invalidEvidence }
+            }
         }
     }
 
@@ -272,37 +287,73 @@ public struct HabitCheckInService: Sendable {
         answer: HabitAnswer,
         source: HabitResponseSource
     ) async throws {
-        guard try await store.definition(id: habitID) != nil else { throw HabitStoreError.missingHabit }
+        guard source != .autoFill else { throw JournalAutoFillError.invalidEvidence }
         let now = dateProvider.now()
-        var record = try await store.dayRecord(for: day) ?? HabitDayRecord(
-            behaviorDay: day,
-            behaviorTimeZoneID: timeZoneID,
-            createdAt: now
-        )
-        guard record.behaviorTimeZoneID == timeZoneID else { throw HabitStoreError.timeZoneMismatch }
-        if let index = record.responses.firstIndex(where: { $0.habitID == habitID }) {
-            record.responses[index].answer = answer
-            record.responses[index].updatedAt = now
-            record.responses[index].lastUpdateSource = source
-        } else {
-            record.responses.append(HabitResponse(
-                habitID: habitID,
+        try await store.updateDayRecord(for: day) { existing in
+            var record = existing ?? HabitDayRecord(
                 behaviorDay: day,
                 behaviorTimeZoneID: timeZoneID,
-                answer: answer,
-                firstAnsweredAt: now,
-                firstAnswerSource: source
-            ))
+                createdAt: now
+            )
+            guard record.behaviorTimeZoneID == timeZoneID else { throw HabitStoreError.timeZoneMismatch }
+            if let index = record.responses.firstIndex(where: { $0.habitID == habitID }) {
+                record.responses[index].answer = answer
+                record.responses[index].updatedAt = now
+                record.responses[index].lastUpdateSource = source
+                record.responses[index].autoFillProvenance = nil
+            } else {
+                record.responses.append(HabitResponse(
+                    habitID: habitID,
+                    behaviorDay: day,
+                    behaviorTimeZoneID: timeZoneID,
+                    answer: answer,
+                    firstAnsweredAt: now,
+                    firstAnswerSource: source
+                ))
+            }
+            var overrides = record.userOverrideHabitIDs ?? []
+            overrides.insert(habitID)
+            record.userOverrideHabitIDs = overrides
+            record.updatedAt = now
+            return record
         }
-        record.updatedAt = now
-        try await store.saveDayRecord(record)
     }
 
     public func finish(day: DayIdentity) async throws {
-        guard var record = try await store.dayRecord(for: day) else { return }
         let now = dateProvider.now()
-        record.completedAt = now
-        record.updatedAt = now
-        try await store.saveDayRecord(record)
+        try await store.updateDayRecord(for: day) { existing in
+            guard var record = existing else { return nil }
+            record.completedAt = now
+            record.updatedAt = now
+            return record
+        }
+    }
+
+    public func clearAnswer(habitID: HabitID, day: DayIdentity) async throws {
+        let now = dateProvider.now()
+        try await store.updateDayRecord(for: day) { existing in
+            guard var record = existing else { return nil }
+            record.responses.removeAll { $0.habitID == habitID }
+            var overrides = record.userOverrideHabitIDs ?? []
+            overrides.insert(habitID)
+            record.userOverrideHabitIDs = overrides
+            record.completedAt = nil
+            record.updatedAt = now
+            return record
+        }
+    }
+
+    func updateWellbeing(day: DayIdentity, timeZoneID: String,
+                         update: @escaping @Sendable (inout JournalWellbeing, Date) -> Void) async throws {
+        let now = dateProvider.now()
+        try await store.updateDayRecord(for: day) { existing in
+            var record = existing ?? HabitDayRecord(behaviorDay: day, behaviorTimeZoneID: timeZoneID, createdAt: now)
+            guard record.behaviorTimeZoneID == timeZoneID else { throw HabitStoreError.timeZoneMismatch }
+            var wellbeing = record.wellbeing ?? JournalWellbeing()
+            update(&wellbeing, now)
+            record.wellbeing = wellbeing
+            record.updatedAt = now
+            return record
+        }
     }
 }

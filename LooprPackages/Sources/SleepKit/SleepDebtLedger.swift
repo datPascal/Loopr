@@ -89,7 +89,8 @@ public struct SleepDebtLedger: Equatable, Sendable {
         return min(max(perNight, 10), 60)
     }
 
-    /// The headline over the chart: "3 h 10 m behind", "1 h 20 m ahead", "Even".
+    /// The headline over the chart: "3 h 10 m under your need", "1 h 20 m over your need", "Even". It is a sum
+    /// against the sleep need set in Settings, not Loopr's estimated nightly shortfall, so it says whose number it is.
     public var headline: String {
         switch suggestion {
         case .needsNights(let measured, _):
@@ -105,7 +106,7 @@ public struct SleepDebtLedger: Equatable, Sendable {
         let net = netMinutes
         if abs(net) < 1 { return "Even" }
         let amount = LooprUnitFormatter.duration(minutes: abs(net)) ?? ""
-        return net > 0 ? "\(amount) ahead" : "\(amount) behind"
+        return net > 0 ? "\(amount) over your need" : "\(amount) under your need"
     }
 
     /// The one actionable line under the chart.

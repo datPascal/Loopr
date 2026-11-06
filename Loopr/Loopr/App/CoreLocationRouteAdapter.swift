@@ -39,6 +39,10 @@ final class CoreLocationManagerRouteDriver: NSObject, CoreLocationRouteDriver {
         manager.distanceFilter = kCLDistanceFilterNone
     }
 
+    private static var mayUpdateInBackground: Bool {
+        (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?.contains("location") == true
+    }
+
     var authorizationStatus: CLAuthorizationStatus { manager.authorizationStatus }
 
     var locationServicesEnabled: Bool { CLLocationManager.locationServicesEnabled() }
@@ -53,11 +57,20 @@ final class CoreLocationManagerRouteDriver: NSObject, CoreLocationRouteDriver {
     }
 
     func startUpdatingLocation() {
+        // A run is done with the phone in a belt. Background updates run only between start and stop, under
+        // When In Use, with the system's blue indicator showing. Asking without the Info.plist mode would crash.
+        if Self.mayUpdateInBackground {
+            manager.allowsBackgroundLocationUpdates = true
+            manager.showsBackgroundLocationIndicator = true
+        }
+        manager.pausesLocationUpdatesAutomatically = false
+        manager.activityType = .fitness
         manager.startUpdatingLocation()
     }
 
     func stopUpdatingLocation() {
         manager.stopUpdatingLocation()
+        if Self.mayUpdateInBackground { manager.allowsBackgroundLocationUpdates = false }
     }
 }
 
@@ -74,6 +87,7 @@ final class CoreLocationRouteAdapter: NSObject, @preconcurrency LocationStartGat
     private var fixContinuation: AsyncStream<RoutePoint>.Continuation
     private var authorizationContinuation: CheckedContinuation<CLAuthorizationStatus, Never>?
     private var startTask: Task<Void, Error>?
+    private var startID: UUID?
     private var isRunning = false
     private var isInterrupted = false
     private var lastAuthorizationStatus: CLAuthorizationStatus?
@@ -96,30 +110,42 @@ final class CoreLocationRouteAdapter: NSObject, @preconcurrency LocationStartGat
     }
 
     func start() async throws {
+        try Task.checkCancellation()
         guard !isRunning else { return }
         if let startTask {
             try await startTask.value
             return
         }
 
+        let id = UUID()
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
             try await self.performStart()
         }
         startTask = task
-        defer { startTask = nil }
-        try await task.value
+        startID = id
+        defer {
+            if startID == id { startTask = nil; startID = nil }
+        }
+        try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+            Task { @MainActor [weak self] in self?.cancelStart(id: id) }
+        }
     }
 
     func stop() async {
-        startTask?.cancel()
+        let pending = startTask
+        pending?.cancel()
         startTask = nil
+        startID = nil
         authorizationContinuation?.resume(returning: .denied)
         authorizationContinuation = nil
-        guard isRunning else { return }
+        if isRunning { driver?.stopUpdatingLocation() }
         isRunning = false
         isInterrupted = false
-        driver?.stopUpdatingLocation()
+        _ = await pending?.result
     }
 
     func events() -> AsyncStream<LocationGateEvent> { eventStream }
@@ -127,6 +153,7 @@ final class CoreLocationRouteAdapter: NSObject, @preconcurrency LocationStartGat
     func locationFixes() -> AsyncStream<RoutePoint> { fixStream }
 
     private func performStart() async throws {
+        try Task.checkCancellation()
         guard !isRunning else { return }
         let driver = ensureDriver()
         let status = driver.authorizationStatus
@@ -145,6 +172,7 @@ final class CoreLocationRouteAdapter: NSObject, @preconcurrency LocationStartGat
             resolvedStatus = status
         }
 
+        try Task.checkCancellation()
         switch resolvedStatus {
         case .authorizedAlways, .authorizedWhenInUse:
             permissionRevokedEmitted = false
@@ -159,6 +187,12 @@ final class CoreLocationRouteAdapter: NSObject, @preconcurrency LocationStartGat
         @unknown default:
             throw LocationGateError.unavailable
         }
+    }
+
+    private func cancelStart(id: UUID) {
+        guard startID == id else { return }
+        authorizationContinuation?.resume(returning: .denied)
+        authorizationContinuation = nil
     }
 
     /// What Core Location reports right now. Reading the status never prompts,

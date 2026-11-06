@@ -187,6 +187,7 @@ public struct LooprStageTimeline: View {
 
     private let model: LooprStageTimelineModel
     private let identifier: String
+    private let showsReadout: Bool
     /// An optional line above the lanes on the same clock axis, such as the
     /// overnight heart rate.
     private let line: LooprStageTimelineLine?
@@ -202,12 +203,14 @@ public struct LooprStageTimeline: View {
         timeZone: TimeZone = .current,
         identifier: String = "loopr-stage-timeline",
         line: LooprStageTimelineLine? = nil,
-        stageTotals: [SleepStage: Double]? = nil
+        stageTotals: [SleepStage: Double]? = nil,
+        showsReadout: Bool = true
     ) {
         model = LooprStageTimelineModel(spans: spans, timeZone: timeZone, stageTotals: stageTotals)
         _highlightedStage = highlightedStage
         externalSelection = selection
         self.identifier = identifier
+        self.showsReadout = showsReadout
         self.line = line.flatMap { $0.points.isEmpty ? nil : $0 }
     }
 
@@ -219,10 +222,11 @@ public struct LooprStageTimeline: View {
         timeZone: TimeZone = .current,
         identifier: String = "loopr-stage-timeline",
         line: LooprStageTimelineLine? = nil,
-        stageTotals: [SleepStage: Double]? = nil
+        stageTotals: [SleepStage: Double]? = nil,
+        showsReadout: Bool = true
     ) {
         self.init(spans: LooprStageSpan.spans(from: segments, start: start), highlightedStage: highlightedStage,
-                  selection: selection, timeZone: timeZone, identifier: identifier, line: line, stageTotals: stageTotals)
+                  selection: selection, timeZone: timeZone, identifier: identifier, line: line, stageTotals: stageTotals, showsReadout: showsReadout)
     }
 
     public var body: some View {
@@ -234,7 +238,7 @@ public struct LooprStageTimeline: View {
                 .accessibilityIdentifier(identifier)
         } else {
             VStack(alignment: .leading, spacing: LooprSpacing.xs) {
-                readoutLine
+                if showsReadout { readoutLine }
                 if let line {
                     lineRow(line)
                 }

@@ -68,7 +68,7 @@ public struct SpectralLens<Footer: View>: View {
         } else {
             VStack(spacing: 10) {
                 labelledLensCore(includeCaption: false)
-                Text(caption.uppercased())
+                Text(caption.looprLabelCased)
                     .looprTypography(.lensCaption)
                     .foregroundStyle(Color.loopr(.inkSecondary))
                     .lineLimit(1)
@@ -113,7 +113,7 @@ public struct SpectralLens<Footer: View>: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                 if includeCaption {
-                    Text(caption.uppercased())
+                    Text(caption.looprLabelCased)
                         .looprTypography(.lensCaption)
                         .foregroundStyle(Color.loopr(.inkSecondary))
                         .lineLimit(1)
@@ -273,7 +273,7 @@ public struct SpectralLens<Footer: View>: View {
 
     private var gradientAlphas: (accent: Double, partner: Double) {
         switch accent {
-        case .heart, .heartSoft, .heartSweep, .heartChip, .stress, .cycle, .cyclePlum, .critical:
+        case .heart, .heartSoft, .heartSweep, .heartChip, .stress, .cycle, .cyclePlum, .protocol, .critical:
             return isDark ? (0.85, 0.60) : (0.70, 0.50)
         case .strain, .strainSweep, .strainChip, .energy, .warning, .sleepAwake:
             return isDark ? (0.90, 0.60) : (0.80, 0.50)
@@ -287,7 +287,7 @@ public struct SpectralLens<Footer: View>: View {
     private var gradientLocations: (accent: Double, partner: Double, fade: Double) {
         if effectiveDiameter < 140 {
             switch accent {
-            case .heart, .heartSoft, .heartSweep, .stress, .cycle, .cyclePlum, .critical:
+            case .heart, .heartSoft, .heartSweep, .stress, .cycle, .cyclePlum, .protocol, .critical:
                 return (turnFraction(42), turnFraction(76), turnFraction(124))
             case .strain, .strainSweep, .strainChip, .energy, .warning, .sleepAwake:
                 return (turnFraction(44), turnFraction(78), turnFraction(128))
@@ -299,7 +299,7 @@ public struct SpectralLens<Footer: View>: View {
         }
 
         switch accent {
-        case .heart, .heartSoft, .heartSweep, .heartChip, .stress, .cycle, .cyclePlum, .critical:
+        case .heart, .heartSoft, .heartSweep, .heartChip, .stress, .cycle, .cyclePlum, .protocol, .critical:
             if isDark { return (turnFraction(42), turnFraction(76), turnFraction(124)) }
             return (turnFraction(42), turnFraction(76), turnFraction(122))
         case .strain, .strainSweep, .strainChip, .energy, .warning, .sleepAwake:
@@ -321,7 +321,7 @@ public struct SpectralLens<Footer: View>: View {
             switch accent {
             case .sleep, .sleepSweep, .sleepChip, .sleepLight, .sleepDeep, .sleepREM: return 0.18
             case .strain, .strainSweep, .strainChip, .energy, .warning, .sleepAwake: return 0.16
-            case .heart, .heartSoft, .heartSweep, .heartChip, .stress, .cycle, .cyclePlum, .critical: return 0.16
+            case .heart, .heartSoft, .heartSweep, .heartChip, .stress, .cycle, .cyclePlum, .protocol, .critical: return 0.16
             default: return 0.20
             }
         }
@@ -336,7 +336,7 @@ public struct SpectralLens<Footer: View>: View {
         if effectiveDiameter < 140 {
             switch accent {
             case .strain, .strainSweep, .strainChip, .energy, .warning, .sleepAwake: return (0.42, 0.35)
-            case .heart, .heartSoft, .heartSweep, .heartChip, .stress, .cycle, .cyclePlum, .critical: return (0.40, 0.32)
+            case .heart, .heartSoft, .heartSweep, .heartChip, .stress, .cycle, .cyclePlum, .protocol, .critical: return (0.40, 0.32)
             case .sleep, .sleepSweep, .sleepChip, .sleepLight, .sleepDeep, .sleepREM: return (0.40, 0.35)
             default: return (0.45, 0.40)
             }
@@ -344,7 +344,7 @@ public struct SpectralLens<Footer: View>: View {
 
         return switch accent {
         case .strain, .strainSweep, .strainChip, .energy, .warning, .sleepAwake: (0.42, 0.35)
-        case .heart, .heartSoft, .heartSweep, .heartChip, .stress, .cycle, .cyclePlum, .critical: (0.40, 0.32)
+        case .heart, .heartSoft, .heartSweep, .heartChip, .stress, .cycle, .cyclePlum, .protocol, .critical: (0.40, 0.32)
         default: (0.40, 0.35)
         }
     }
@@ -421,7 +421,7 @@ public struct ScoreArc: View {
                 if state == .present {
                     LooprText(unit, style: .metricUnit, color: .inkSecondary)
                 } else {
-                    LooprText(stateLabel.uppercased(), style: .confidence, color: .inkSecondary)
+                    LooprText(stateLabel.looprLabelCased, style: .confidence, color: .inkSecondary)
                 }
             }
         }
@@ -598,9 +598,9 @@ public struct Hypnogram: View {
             HStack {
                 Color.clear
                     .frame(width: LooprSpacing.hero + LooprSpacing.xs + LooprSpacing.sm)
-                Text(startLabel.uppercased())
+                Text(startLabel.looprLabelCased)
                 Spacer()
-                Text(endLabel.uppercased())
+                Text(endLabel.looprLabelCased)
             }
             .looprTypography(.sectionLabel)
             .foregroundStyle(Color.loopr(.inkSecondary))

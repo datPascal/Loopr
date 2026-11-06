@@ -1,7 +1,33 @@
 import DataKit
+import FoodKit
+import TrainKit
 import XCTest
 
 final class DataKitTests: XCTestCase {
+    func testInvalidBackupsAreRejectedBeforeReplacingExistingRecords() async throws {
+        let repository = DataRepository()
+        let original = record("original")
+        try await repository.insert(original)
+        let duplicate = record("duplicate")
+        let malformed = [
+            DataBackup(records: [duplicate, duplicate]),
+            DataBackup(records: [record(" ")]),
+            DataBackup(records: [DataRecord(id: "bad", day: "2026-02-30", table: "metrics", payload: [:], provenance: .imported)])
+        ]
+        for backup in malformed {
+            do {
+                try await repository.restore(backup)
+                XCTFail("Invalid backups must fail before any replacement")
+            } catch { XCTAssertEqual(error as? DataError, .invalidBackup) }
+            let records = await repository.records()
+            XCTAssertEqual(records, [original])
+        }
+        // An empty backup is a valid complete restore.
+        try await repository.restore(DataBackup(records: []))
+        let empty = await repository.records()
+        XCTAssertTrue(empty.isEmpty)
+    }
+
     private func record(_ id: String, provenance: DataProvenance = .looprComputed, algorithm: Int? = 1) -> DataRecord {
         DataRecord(id: id, day: "2026-08-18", table: "metrics", payload: ["value": id], provenance: provenance, algorithmVersion: algorithm)
     }
@@ -162,6 +188,15 @@ final class DataKitTests: XCTestCase {
         XCTAssertThrowsError(try WHOOPCSVParser.parse(Data("id,day,table,value\na,2026-08-18,t,\na,2026-08-18,t,2\n".utf8)))
     }
 
+    func testLegacyCSVAcceptsWindowsNewlinesBOMAndQuotedHeaders() throws {
+        let csv = "\u{FEFF}\"id\",day,table,notes\r\n"
+            + "a,2026-10-10,metrics,\"first\r\nsecond\"\r\n"
+            + "b,2026-10-11,metrics,last\r\n"
+        let parsed = try WHOOPCSVParser.parse(Data(csv.utf8))
+        XCTAssertEqual(parsed.map(\.id), ["a", "b"])
+        XCTAssertEqual(parsed.first?.payload["notes"], "first\r\nsecond")
+    }
+
     func testWHOOPCSVParserReadsRealAccountExportColumns() throws {
         let csv = "Cycle start time,Wake onset,Cycle timezone,Recovery score %,Heart rate variability (ms)\n"
             + "2022-06-04 22:00:00,2022-06-05 07:00:00,UTC+08:00,76,\n"
@@ -182,5 +217,92 @@ final class DataKitTests: XCTestCase {
         XCTAssertEqual(receipt.preview.source, .whoopCSV)
         let importedRows = await repository.records()
         XCTAssertEqual(importedRows.first?.provenance, .whoopCSV)
+    }
+
+    // MARK: Train in the backup envelope
+
+    private func trainArchive(day offset: Int = 0) throws -> TrainArchive {
+        let started = Date(timeIntervalSince1970: 1_700_000_000 + Double(offset) * 86_400)
+        let bench = ExerciseRef(key: "barbell-bench-press", name: "Barbell bench press")
+        let planned = TemplateExercise(exercise: bench, sets: 4, repsMin: 6, repsMax: 8, loadKg: 80, restSeconds: 150)
+        let template = WorkoutTemplate(revision: 1, name: "Upper A", weekdays: [.tuesday], exercises: [planned],
+                                       createdAt: started, updatedAt: started)
+        let set = LoggedSet(loadKg: 80, reps: 8, rpe: 7, loggedAt: started.addingTimeInterval(120), prefillSource: .template)
+        let session = try TrainSession(revision: 1, templateID: template.id, name: "Upper A", startedAt: started,
+            timeZoneIdentifier: "Australia/Perth", endedAt: started.addingTimeInterval(3_600), status: .completed,
+            exercises: [SessionExercise(planned: planned, status: .done, sets: [set])])
+        return TrainArchive(templates: [template], sessions: [session])
+    }
+
+    func testVersionThreeBackupRoundTripsTrainThroughJSON() async throws {
+        let archive = try trainArchive()
+        let backup = DataBackup(records: [record("one")], train: archive)
+        XCTAssertEqual(backup.schemaVersion, 3)
+        try backup.validate()
+        let decoded = try JSONDecoder().decode(DataBackup.self, from: try JSONEncoder().encode(backup))
+        XCTAssertEqual(decoded, backup)
+        try decoded.validate()
+        let repository = DataRepository()
+        try await repository.restore(decoded)
+        let exported = await repository.exportBackup()
+        XCTAssertEqual(exported, backup)
+        XCTAssertEqual(exported.train?.sessions.first?.exercises.first?.sets.count, 1)
+    }
+
+    func testVersionTwoAndOneBackupsStayReadableAndLeaveTrainIntact() async throws {
+        let archive = try trainArchive()
+        let repository = DataRepository()
+        try await repository.restore(DataBackup(records: [record("one")], train: archive))
+
+        let twoJSON = #"{"schemaVersion":2,"records":[],"food":{"schemaVersion":3,"meals":[],"photos":[]}}"#
+        let two = try JSONDecoder().decode(DataBackup.self, from: Data(twoJSON.utf8))
+        XCTAssertNil(two.train)
+        try await repository.restore(two)
+        var current = await repository.exportBackup()
+        XCTAssertEqual(current.train, archive)
+        XCTAssertEqual(current.food, FoodArchive(meals: [], photos: []))
+        XCTAssertTrue(current.records.isEmpty)
+
+        let one = try JSONDecoder().decode(DataBackup.self, from: Data(#"{"schemaVersion":1,"records":[]}"#.utf8))
+        try await repository.restore(one)
+        current = await repository.exportBackup()
+        XCTAssertEqual(current.train, archive)
+        XCTAssertEqual(current.schemaVersion, 3)
+    }
+
+    func testBackupVersionsRejectDomainsTheyDoNotCarry() throws {
+        let archive = try trainArchive()
+        let food = FoodArchive(meals: [], photos: [])
+        let invalid = [
+            DataBackup(schemaVersion: 1, records: [], train: archive),
+            DataBackup(schemaVersion: 2, records: [], food: food, train: archive),
+            DataBackup(schemaVersion: 3, records: [], food: food),
+            DataBackup(schemaVersion: 4, records: [], train: archive)
+        ]
+        for backup in invalid {
+            XCTAssertThrowsError(try backup.validate()) { error in XCTAssertEqual(error as? DataError, .invalidBackup, "\(backup.schemaVersion)") }
+        }
+        // A train archive from a newer app fails on its own version check.
+        XCTAssertThrowsError(try DataBackup(records: [], train: TrainArchive(schemaVersion: 9)).validate())
+    }
+
+    func testInMemoryRepositoryExportsAndDeletesTrainByDay() async throws {
+        let first = try trainArchive(day: 0)
+        let second = try trainArchive(day: 1)
+        let both = TrainArchive(templates: first.templates, sessions: first.sessions + second.sessions)
+        let repository = DataRepository()
+        try await repository.restore(DataBackup(records: [], train: both))
+        let day = try XCTUnwrap(first.sessions.first?.localDay)
+        let dayExport = await repository.exportDay(day)
+        XCTAssertEqual(dayExport.train?.sessions, first.sessions)
+        XCTAssertEqual(dayExport.train?.templates, [])
+        await repository.deleteDay(day)
+        let afterDelete = await repository.exportBackup()
+        XCTAssertEqual(afterDelete.train?.sessions, second.sessions)
+        XCTAssertEqual(afterDelete.train?.templates, first.templates)
+        await repository.completeDeletion()
+        let empty = await repository.exportBackup()
+        XCTAssertNil(empty.train)
+        XCTAssertEqual(empty.schemaVersion, 1)
     }
 }

@@ -205,6 +205,8 @@ struct MetricChartDataTests {
 
     @Test func metricLinkIDsAreUnique() {
         #expect(Set(LooprMetricLinkID.all).count == LooprMetricLinkID.all.count)
-        #expect(LooprMetricLinkID.all.count == 21)
+        #expect(LooprMetricLinkID.all.count == 23)
+        #expect(LooprMetricLinkID.all.contains(LooprMetricLinkID.sleepPerformance))
+        #expect(LooprMetricLinkID.all.contains(LooprMetricLinkID.sleepDebt))
     }
 }

@@ -27,9 +27,7 @@ final class SIBodyCaptureUITests: XCTestCase {
         let back = app.navigationBars.buttons.firstMatch
         XCTAssertTrue(back.waitForExistence(timeout: 20))
         back.tap()
-        let bodyTab = app.tabBars.buttons["Body"]
-        XCTAssertTrue(bodyTab.waitForExistence(timeout: 10))
-        bodyTab.tap()
+        XCTAssertTrue(app.openLooprArea("Body"))
         let load = element(app, "body-training-load")
         reveal(app, load)
         load.tap()

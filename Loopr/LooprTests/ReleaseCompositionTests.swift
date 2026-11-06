@@ -12,6 +12,23 @@ struct ReleaseCompositionTests {
         #expect(Bundle.main.object(forInfoDictionaryKey: "NSSupportsLiveActivities") as? Bool == true)
     }
 
+    /// AccessorySetupKit aborts the app when the picker is shown for a
+    /// service or name the manifest does not declare.
+    @Test
+    func productionManifestDeclaresEveryPairingDescriptor() {
+        let services = Set(
+            (Bundle.main.object(forInfoDictionaryKey: "NSAccessorySetupBluetoothServices") as? [String] ?? [])
+                .map { $0.uppercased() }
+        )
+        let names = Set(Bundle.main.object(forInfoDictionaryKey: "NSAccessorySetupBluetoothNames") as? [String] ?? [])
+        for descriptor in [AccessoryDiscoveryDescriptor.harvardWHOOP4, .whoop5, .whoopMG] {
+            #expect(services.contains(descriptor.bluetoothServiceUUID.uuidString))
+            if let name = descriptor.bluetoothNameSubstring {
+                #expect(names.contains(name))
+            }
+        }
+    }
+
     @Test
     @MainActor
     func productionCompositionKeepsFixtureResearchAndDiagnosticsSurfacesClosed() async throws {

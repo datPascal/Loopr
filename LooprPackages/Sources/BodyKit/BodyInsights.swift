@@ -53,18 +53,19 @@ public struct BodyStrainHero: Equatable, Sendable {
     /// One or two words under the number.
     public var verdict: String? {
         switch position {
-        case .below: "Below suggested range"
-        case .within: "In suggested range"
-        case .above: "Above suggested range"
+        // The range is Loopr's own rule from the morning's recovery, not a norm, so the words say whose it is
+        // (Data ICP R2-DES-05, R2-NEW-05, R2-VET-04). Its method page has the rule.
+        case .below: "Below the range for your recovery"
+        case .within: "In the range for your recovery"
+        case .above: "Above the range for your recovery"
         case nil: nil
         }
     }
 
-    /// The key under the ring for the brighter track segment: "Suggested
-    /// 14 to 18 · recovery 74".
+    /// The key under the ring for the brighter track segment: "14 to 18 · Loopr's range for recovery 74".
     public var rangeLegend: String? {
         guard let target else { return nil }
-        return "Suggested \(target.text) · recovery \(target.recovery)"
+        return "\(target.text) · Loopr's range for recovery \(target.recovery)"
     }
 
     /// A short line under the verdict, only where it adds something: what
@@ -74,8 +75,8 @@ public struct BodyStrainHero: Equatable, Sendable {
         guard case .measured = state else { return nil }
         guard target != nil else {
             return isToday
-                ? "There is no recovery score for today yet, so there is no suggested range."
-                : "There was no recovery score that day, so there is no suggested range."
+                ? "There is no recovery score for today yet, so there is no range to compare with."
+                : "There was no recovery score that day, so there is no range to compare with."
         }
         guard isToday else { return nil }
         switch position {
@@ -99,7 +100,7 @@ public struct BodyStrainHero: Equatable, Sendable {
     public func accessibilityLabel(isToday: Bool) -> String {
         switch state {
         case .measured(_, let text, _):
-            return ["Strain \(text) of 21", verdict, rangeLegend.map { $0.replacingOccurrences(of: " · ", with: ", from ") },
+            return ["Strain \(text) of 21", verdict, rangeLegend.map { $0.replacingOccurrences(of: " · ", with: ", ") },
                     sentence(isToday: isToday), target?.reason]
                 .compactMap { $0 }.map { $0.hasSuffix(".") ? String($0.dropLast()) : $0 }.joined(separator: ". ") + "."
         case .needsAge:
@@ -426,7 +427,7 @@ public struct BodyAgeLock: Equatable, Sendable {
         requirements.append(BodyAgeRequirement(
             id: "vo2max",
             title: "VO₂ max",
-            detail: "3 workout VO₂ max readings from Apple Health on different days, at least 2 weeks apart, in the last 6 weeks. A lab test from the last 6 months also works.",
+            detail: "3 readings from Apple Watch outdoor walks, runs or hikes, on different days at least 2 weeks apart, all in the last 6 weeks.",
             isMet: false))
         let names: [String] = requirements.filter { !$0.isMet }.map { requirement in
             switch requirement.id {
@@ -459,10 +460,22 @@ public struct BodyCompositionRows: Equatable, Sendable {
         public let id: String
         public let title: String
         public let value: String
+        /// Where the value came from. Nil when the section's own source line says it.
+        public let provenance: LooprProvenance?
+        /// The chip's second part, such as the day of the reading.
+        public let qualifier: String?
+
+        public init(id: String, title: String, value: String, provenance: LooprProvenance? = nil, qualifier: String? = nil) {
+            self.id = id
+            self.title = title
+            self.value = value
+            self.provenance = provenance
+            self.qualifier = qualifier
+        }
     }
 
     public let rows: [Row]
-    /// "From your profile" or "From Apple Health", nil without rows.
+    /// "From your profile" or "From Apple Health", nil without rows. Rows that carry their own chip leave it nil.
     public let source: String?
 
     public static func make(_ composition: BodyCompositionContext) -> BodyCompositionRows {
@@ -473,6 +486,32 @@ public struct BodyCompositionRows: Equatable, Sendable {
         guard !rows.isEmpty else { return BodyCompositionRows(rows: [], source: nil) }
         let source = composition.source.localizedCaseInsensitiveContains("health") ? "From Apple Health" : "From your profile"
         return BodyCompositionRows(rows: rows, source: source)
+    }
+
+    /// The rows with the log's newest values. Weight, body fat and lean mass read the newest of what was typed in and
+    /// what Apple Health holds, each with its own chip; the profile's weight stands in only while the log has none,
+    /// and the profile's height stays. An empty or missing log falls back to `make(_:)`.
+    public static func make(_ composition: BodyCompositionContext, log: BodyLogSummary?, system: LooprMeasurementSystem) -> BodyCompositionRows {
+        guard let log, !log.isEmpty else { return make(composition) }
+        func logged(_ quantity: BodyLogQuantity, id: String) -> Row? {
+            guard let reading = log.reading(quantity) else { return nil }
+            let day = reading.measuredAt.formatted(.dateTime.day().month(.abbreviated).locale(Locale(identifier: "en_US")))
+            return Row(id: id, title: quantity.title,
+                       value: BodyLogFormat.text(quantity, value: reading.value, system: system),
+                       provenance: reading.provenance, qualifier: day)
+        }
+        var rows: [Row] = []
+        if let weight = logged(.weight, id: "weight") {
+            rows.append(weight)
+        } else if let profile = composition.weight.flatMap(clean) {
+            rows.append(Row(id: "weight", title: "Weight", value: profile, provenance: .typedIn, qualifier: "profile"))
+        }
+        if let height = composition.height.flatMap(clean) {
+            rows.append(Row(id: "height", title: "Height", value: height, provenance: .typedIn, qualifier: "profile"))
+        }
+        if let fat = logged(.bodyFat, id: "bodyFat") { rows.append(fat) }
+        if let lean = logged(.leanMass, id: "leanMass") { rows.append(lean) }
+        return BodyCompositionRows(rows: rows, source: nil)
     }
 
     /// "70.0 kg" reads as "70 kg"; "72.4 kg" stays.

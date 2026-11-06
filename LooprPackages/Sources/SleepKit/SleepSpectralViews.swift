@@ -173,7 +173,7 @@ enum SleepDateFormatting {
         let day = LooprDay(year: snapshot.day.year, month: snapshot.day.month, day: snapshot.day.day)
         let current = LooprDay(date: today, calendar: calendar)
         let range = LooprDayLabel.nightRange(for: day, today: current, calendar: calendar)
-        return (day == current ? "Last night · \(range)" : range).uppercased()
+        return (day == current ? "Last night · \(range)" : range).looprLabelCased
     }
 }
 

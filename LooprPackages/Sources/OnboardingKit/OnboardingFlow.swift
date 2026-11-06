@@ -19,16 +19,19 @@ public enum OnboardingStage: String, Codable, CaseIterable, Sendable {
     case finish
     case mainShell
 
+    /// Since the UX simplification (2026-11-01) the visible path skips three stored stages: the WHOOP app step folded
+    /// into pairing mode, notifications are asked when there is something to send, and sleep need keeps its 8 hour
+    /// default and lives in Settings. A snapshot saved on one of those stages still moves on from it.
     public var next: OnboardingStage? {
         switch self {
         case .launching: .welcomeDisclosures
-        case .welcomeDisclosures: .whoopHandover
+        case .welcomeDisclosures: .prepareBand
         case .whoopHandover: .prepareBand
         case .prepareBand: .pairing
         case .pairing: .profileSetup
         case .profileSetup: .appleHealth
-        case .appleHealth: .notifications
-        case .notifications: .sleepGoal
+        case .appleHealth: .finish
+        case .notifications: .finish
         case .sleepGoal: .finish
         case .finish: .mainShell
         case .mainShell: nil
@@ -41,22 +44,33 @@ public enum OnboardingStage: String, Codable, CaseIterable, Sendable {
         switch self {
         case .launching, .welcomeDisclosures, .mainShell: nil
         case .whoopHandover: .welcomeDisclosures
-        case .prepareBand: .whoopHandover
+        case .prepareBand: .welcomeDisclosures
         case .pairing: .prepareBand
         case .profileSetup: .pairing
         case .appleHealth: .profileSetup
         case .notifications: .appleHealth
-        case .sleepGoal: .notifications
-        case .finish: .sleepGoal
+        case .sleepGoal: .appleHealth
+        case .finish: .appleHealth
         }
     }
 
-    /// The steps a person sees, in order. `launching` and `mainShell` are
-    /// gate states, not steps.
-    public static let visibleSteps: [OnboardingStage] = [
-        .welcomeDisclosures, .whoopHandover, .prepareBand, .pairing, .profileSetup,
-        .appleHealth, .notifications, .sleepGoal, .finish
-    ]
+    /// Where Next leads on a path. Without a band, Welcome goes straight to
+    /// About you; every other step leads where it does on the band path.
+    public func next(on path: OnboardingPath) -> OnboardingStage? {
+        if path == .noBand, self == .welcomeDisclosures { return .profileSetup }
+        return next
+    }
+
+    /// Where Back leads on a path. Without a band, About you goes back to
+    /// Welcome, past the band steps the person never saw.
+    public func previous(on path: OnboardingPath) -> OnboardingStage? {
+        if path == .noBand, self == .profileSetup { return .welcomeDisclosures }
+        return previous
+    }
+
+    /// The steps a person with a band sees, in order. `launching` and
+    /// `mainShell` are gate states, not steps.
+    public static let visibleSteps: [OnboardingStage] = OnboardingPath.band.steps
 
     /// The band steps. From any of them the person may set the band up later.
     public static let bandSteps: Set<OnboardingStage> = [.whoopHandover, .prepareBand, .pairing]
@@ -70,8 +84,12 @@ public enum OnboardingStage: String, Codable, CaseIterable, Sendable {
     }
 
     /// One-based position in `visibleSteps`, or nil for gate states.
-    public var stepNumber: Int? {
-        Self.visibleSteps.firstIndex(of: self).map { $0 + 1 }
+    public var stepNumber: Int? { stepNumber(on: .band) }
+
+    /// One-based position on the path's steps, or nil for gate states and
+    /// for steps the path skips.
+    public func stepNumber(on path: OnboardingPath) -> Int? {
+        path.steps.firstIndex(of: self).map { $0 + 1 }
     }
 
     public static var stepCount: Int { visibleSteps.count }
@@ -84,6 +102,33 @@ public enum OnboardingStage: String, Codable, CaseIterable, Sendable {
         default: nil
         }
     }
+}
+
+/// What the person answered on Welcome: whether they have a WHOOP band to
+/// pair. Nil in a snapshot means the band path, as every build before the
+/// choice existed behaved.
+public enum OnboardingBandChoice: String, Codable, CaseIterable, Sendable {
+    case hasBand
+    case noBand
+}
+
+/// The sequence of visible steps for one band choice.
+public enum OnboardingPath: Equatable, Sendable {
+    /// Welcome, Get your band ready, Connect, About you, Apple Health, Ready: six steps.
+    case band
+    /// Welcome, About you, Apple Health, Ready: four steps, none of them about a band.
+    case noBand
+
+    public var steps: [OnboardingStage] {
+        switch self {
+        case .band:
+            [.welcomeDisclosures, .prepareBand, .pairing, .profileSetup, .appleHealth, .finish]
+        case .noBand:
+            [.welcomeDisclosures, .profileSetup, .appleHealth, .finish]
+        }
+    }
+
+    public var stepCount: Int { steps.count }
 }
 
 /// The system permissions onboarding explains before asking for them.
@@ -204,6 +249,9 @@ public struct OnboardingSnapshot: Codable, Equatable, Sendable {
     public let appleHealthOutcome: OnboardingPermissionOutcome?
     public let notificationsOutcome: OnboardingPermissionOutcome?
     public let sleepGoalHours: Double?
+    /// Added with the no-band path. Nil in snapshots from earlier builds,
+    /// which read as the band path.
+    public let bandChoice: OnboardingBandChoice?
 
     public init(
         stage: OnboardingStage,
@@ -214,7 +262,8 @@ public struct OnboardingSnapshot: Codable, Equatable, Sendable {
         lastUpdatedAt: Date,
         appleHealthOutcome: OnboardingPermissionOutcome? = nil,
         notificationsOutcome: OnboardingPermissionOutcome? = nil,
-        sleepGoalHours: Double? = nil
+        sleepGoalHours: Double? = nil,
+        bandChoice: OnboardingBandChoice? = nil
     ) {
         self.stage = stage
         self.profileDraft = profileDraft
@@ -225,6 +274,19 @@ public struct OnboardingSnapshot: Codable, Equatable, Sendable {
         self.appleHealthOutcome = appleHealthOutcome
         self.notificationsOutcome = notificationsOutcome
         self.sleepGoalHours = sleepGoalHours
+        self.bandChoice = bandChoice
+    }
+
+    /// The steps this person walks: without a band, the band steps drop out.
+    public var path: OnboardingPath { bandChoice == .noBand ? .noBand : .band }
+
+    /// One-based position of the current stage on this person's path.
+    public var stepNumber: Int? { stage.stepNumber(on: path) }
+
+    /// The step the header shows. Nil on Welcome before the band choice, since the path's length is not known yet:
+    /// it read "Step 1 of 9", then "Step 2 of 6" after "Continue without a band" (R3-NEW-16).
+    public var shownStepNumber: Int? {
+        stage == .welcomeDisclosures && bandChoice == nil ? nil : stepNumber
     }
 
     public func outcome(for permission: OnboardingPermission) -> OnboardingPermissionOutcome? {
@@ -246,7 +308,8 @@ public struct OnboardingSnapshot: Codable, Equatable, Sendable {
         lastUpdatedAt: Date,
         appleHealthOutcome: OnboardingPermissionOutcome?? = nil,
         notificationsOutcome: OnboardingPermissionOutcome?? = nil,
-        sleepGoalHours: Double?? = nil
+        sleepGoalHours: Double?? = nil,
+        bandChoice: OnboardingBandChoice?? = nil
     ) -> OnboardingSnapshot {
         OnboardingSnapshot(
             stage: stage ?? self.stage,
@@ -257,7 +320,8 @@ public struct OnboardingSnapshot: Codable, Equatable, Sendable {
             lastUpdatedAt: lastUpdatedAt,
             appleHealthOutcome: appleHealthOutcome ?? self.appleHealthOutcome,
             notificationsOutcome: notificationsOutcome ?? self.notificationsOutcome,
-            sleepGoalHours: sleepGoalHours ?? self.sleepGoalHours
+            sleepGoalHours: sleepGoalHours ?? self.sleepGoalHours,
+            bandChoice: bandChoice ?? self.bandChoice
         )
     }
 }
@@ -431,9 +495,18 @@ public actor OnboardingFlowController {
     /// Moves to the next stage. Steps that need a decision refuse to be
     /// skipped this way: pairing needs a pairing request (or the named
     /// `deferPairing()`), and the profile step needs a saved profile.
+    /// Next from Welcome is "I have a WHOOP band": it records the band path,
+    /// even for someone who chose no band, came back, and changed their mind.
     @discardableResult
     public func advance() async throws -> OnboardingSnapshot {
-        guard let next = state.stage.next else { return state }
+        if state.stage == .welcomeDisclosures {
+            return try await commit(state.with(
+                stage: OnboardingStage.welcomeDisclosures.next,
+                lastUpdatedAt: dateProvider.now(),
+                bandChoice: .some(.hasBand)
+            ))
+        }
+        guard let next = state.stage.next(on: state.path) else { return state }
         if state.stage == .pairing && !state.pairingRequested {
             throw OnboardingTransitionError.pairingRequired
         }
@@ -443,12 +516,29 @@ public actor OnboardingFlowController {
         return try await commit(state.with(stage: next, lastUpdatedAt: dateProvider.now()))
     }
 
+    /// "Continue without a band" on Welcome: skips the three band steps and
+    /// goes to About you. Nothing is paired, so `pairingRequested` stays
+    /// false and later screens know there is no band to talk to.
+    @discardableResult
+    public func continueWithoutBand() async throws -> OnboardingSnapshot {
+        guard state.stage == .welcomeDisclosures else {
+            throw OnboardingTransitionError.invalidStage(expected: .welcomeDisclosures, received: state.stage)
+        }
+        return try await commit(state.with(
+            stage: OnboardingStage.welcomeDisclosures.next(on: .noBand),
+            pairingRequested: false,
+            lastUpdatedAt: dateProvider.now(),
+            bandChoice: .some(.noBand)
+        ))
+    }
+
     /// Back is always available on a visible step after the first. Going
     /// back keeps everything already recorded: a pairing request, a saved
-    /// profile, a permission answer. It only moves the pointer.
+    /// profile, a permission answer. It only moves the pointer, along the
+    /// person's own path.
     @discardableResult
     public func goBack() async throws -> OnboardingSnapshot {
-        guard let previous = state.stage.previous else { return state }
+        guard let previous = state.stage.previous(on: state.path) else { return state }
         return try await commit(state.with(stage: previous, lastUpdatedAt: dateProvider.now()))
     }
 
@@ -456,7 +546,7 @@ public actor OnboardingFlowController {
     /// out of range, or not yet delivered.  `advance()` deliberately refuses
     /// this transition, so the skip has to be its own named call rather than a
     /// relaxation of that guard.  `pairingRequested` stays false, which is what
-    /// later screens read to decide they have no strap to talk to.
+    /// later screens read to decide they have no band to talk to.
     @discardableResult
     public func deferPairing() async throws -> OnboardingSnapshot {
         guard OnboardingStage.bandSteps.contains(state.stage) else {
@@ -640,14 +730,14 @@ public enum OnboardingStateFixtures {
     public static let all: [OnboardingStateFixture] = OnboardingUniversalState.allCases.map { state in
         switch state {
         case .loading: OnboardingStateFixture(state: state, title: "Loading", detail: "Preparing Loopr.", isActionable: false)
-        case .noRecordsYet: OnboardingStateFixture(state: state, title: "No records yet", detail: "Pair a strap to begin.", isActionable: true)
+        case .noRecordsYet: OnboardingStateFixture(state: state, title: "No records yet", detail: "Pair a band to begin.", isActionable: true)
         case .absentMetric: OnboardingStateFixture(state: state, title: "Not available", detail: "This value is not present.", isActionable: false)
         case .measuredZero: OnboardingStateFixture(state: state, title: "Measured zero", detail: "The measured value is 0.", isActionable: false)
         case .partialData: OnboardingStateFixture(state: state, title: "Partial data", detail: "Some data is still arriving.", isActionable: true)
         case .lowConfidence: OnboardingStateFixture(state: state, title: "Low confidence", detail: "More data is needed.", isActionable: true)
         case .settlingOrRecomputing: OnboardingStateFixture(state: state, title: "Updating", detail: "Loopr is recomputing safely.", isActionable: false)
         case .stale: OnboardingStateFixture(state: state, title: "Update needed", detail: "The last sync is stale.", isActionable: true)
-        case .disconnected: OnboardingStateFixture(state: state, title: "Disconnected", detail: "The strap is not connected.", isActionable: true)
+        case .disconnected: OnboardingStateFixture(state: state, title: "Disconnected", detail: "The band is not connected.", isActionable: true)
         case .bluetoothOff: OnboardingStateFixture(state: state, title: "Bluetooth is off", detail: "Turn on Bluetooth to pair.", isActionable: true)
         case .permissionDenied: OnboardingStateFixture(state: state, title: "Permission needed", detail: "Allow Bluetooth from the pairing action.", isActionable: true)
         case .unsupportedHardware: OnboardingStateFixture(state: state, title: "Unsupported hardware", detail: "This device is not supported.", isActionable: false)

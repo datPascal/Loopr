@@ -161,18 +161,6 @@ final class CommandFamilyTests: XCTestCase {
             richPadded
         )
 
-        // `setup` is the ergonomic entry point and must produce the rich form
-        // byte for byte, including the index and waveform it is handed.
-        let firingCommand = AlarmCommand.setup(
-            sequence: try requiredUInt8(rich, key: "sequence"),
-            index: 0,
-            epochSeconds: 0x1234_5678,
-            subsecondTicks: 0x4000,
-            pattern: richPattern
-        )
-        XCTAssertEqual(try firingCommand.makeInner(), try richCommand.makeInner())
-        XCTAssertEqual(try writer.encode(.alarm(firingCommand)), richFrame)
-
         let simple = try requiredDictionary(subfamilies, key: "set_simple")
         let simplePadded = try data(simple, key: "padded_inner_hex")
         let simpleSequence = simplePadded[1]
@@ -186,7 +174,8 @@ final class CommandFamilyTests: XCTestCase {
             epochSeconds: simpleEpoch,
             subsecondTicks: simpleTicks
         )
-        XCTAssertEqual(try simpleCommand.makeInner(), Data(simplePadded.dropLast(2)))
+        XCTAssertEqual(try simpleCommand.makeInner(), simplePadded)
+        XCTAssertEqual(try AlarmCommand.setup(sequence: simpleSequence, epochSeconds: simpleEpoch, subsecondTicks: simpleTicks).makeInner(), simplePadded)
         let simpleFrame = try writer.encode(.alarm(simpleCommand))
         XCTAssertEqual(simpleFrame, try data(simple, key: "full_frame_hex"))
         XCTAssertEqual(try FrameDecoder().decode(simpleFrame).paddedInner, simplePadded)
@@ -268,11 +257,10 @@ final class CommandFamilyTests: XCTestCase {
     }
 
     /// The reference's own alarm vector, `edge/test/alarm_test.dart`: epoch
-    /// 0x01020304, 16384 subsecond ticks, and the stock wake buzz. `setup` is
-    /// what `setBandAlarm` calls, so this is the exact 20 byte payload that
-    /// reaches the band.
+    /// 0x01020304, 16384 subsecond ticks, and the stock wake buzz. The rich form is
+    /// retained only as an explicit reference command.
     func testAlarmSetupEmitsTheReferenceRichPayloadByteForByte() throws {
-        let command = AlarmCommand.setup(
+        let command = AlarmCommand.setupRichReference(
             sequence: 0x11,
             index: 0,
             epochSeconds: 0x0102_0304,
@@ -303,7 +291,7 @@ final class CommandFamilyTests: XCTestCase {
         XCTAssertEqual(frame.count, 32)
 
         let custom = try AlarmHapticPattern(bytes: Array(1...12).map(UInt8.init))
-        let customInner = try AlarmCommand.setup(
+        let customInner = try AlarmCommand.setupRichReference(
             sequence: 0x11,
             index: 3,
             epochSeconds: 0x0102_0304,
@@ -312,6 +300,31 @@ final class CommandFamilyTests: XCTestCase {
         ).makeInner()
         XCTAssertEqual(customInner[4], 3)
         XCTAssertEqual(Data(customInner.suffix(12)), custom.bytes)
+    }
+
+    func testWhoop4AlarmMatchesNoopCapturedRevisionOnePayload() throws {
+        // NOOP issue 34, comment 5019187255: payload used for reported
+        // successful morning wakes on a WHOOP 4.
+        let inner = try AlarmCommand.setup(
+            sequence: 0x62, epochSeconds: 0x6A5DA574, subsecondTicks: 0
+        ).makeInner()
+        XCTAssertEqual(inner, Data([0x23, 0x62, 0x42, 0x01, 0x74, 0xA5, 0x5D, 0x6A, 0, 0, 0, 0]))
+        XCTAssertEqual(try ProductionCommandWriter(capabilities: .confirmed(.alarm)).encode(.alarm(
+            .setup(sequence: 0x62, epochSeconds: 0x6A5DA574, subsecondTicks: 0)
+        )).count, 20)
+    }
+
+    func testWhoop4ReadbackUsesTheCapturedLegacyEpochOffsetAndClearedShape() throws {
+        let header = Data([0x24, 0xE2, 0x43, 0x66, 0x01])
+        let armed = header + Data([0x01, 0x01, 0xD0, 0x72, 0x8E, 0x6A, 0, 0, 4, 0, 0x20])
+        let result = try AlarmCommand.decodeReadbackResponse(armed, layout: .whoop4Revision1)
+        XCTAssertEqual(result.epochSeconds, 1_787_720_400)
+        XCTAssertTrue(result.isArmed)
+        let cleared = header + Data([1, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0x20])
+        XCTAssertFalse(try AlarmCommand.decodeReadbackResponse(cleared, layout: .whoop4Revision1).isArmed)
+        var rejected = armed
+        rejected[4] = 0
+        XCTAssertThrowsError(try AlarmCommand.decodeReadbackResponse(rejected, layout: .whoop4Revision1))
     }
 
     func testBandEventDecoderReadsAUInt16IdAndBoundsChecksEveryField() throws {

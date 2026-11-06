@@ -44,13 +44,21 @@ public struct SleepTarget: Equatable, Sendable {
     /// "7 h 50 m"
     public var durationText: String { LooprUnitFormatter.duration(minutes: minutes) ?? "" }
 
-    /// The hero line, such as "7 h 12 m of 8 h needed".
+    /// The hero line: "7 h 12 m of 8 h needed" for a learned need, "7 h 12 m of your 8 h sleep need" for the one set in
+    /// Settings, and "of the default 8 h sleep need" before the person sets one, since they never chose it (Data ICP
+    /// R4-SW-02). That is not Loopr's estimated need, which All metrics compares with (Data ICP R3-SW-01).
     public func line(asleepMinutes: Double) -> String {
         let asleep = LooprUnitFormatter.duration(minutes: asleepMinutes) ?? ""
         switch source {
         case .need: return "\(asleep) of \(durationText) needed"
-        case .goal, .recommended: return "\(asleep) of \(durationText) needed"
+        case .goal: return "\(asleep) of your \(durationText) sleep need"
+        case .recommended: return "\(asleep) of the default \(durationText) sleep need"
         }
+    }
+
+    /// The header over the sleep debt card.
+    public var sectionTitle: String {
+        source == .recommended ? "Against the default sleep need" : "Against your sleep need"
     }
 
     /// The quiet line under a provisional target, or nil for a learned need.
@@ -64,7 +72,8 @@ public struct SleepTarget: Equatable, Sendable {
         let target = LooprUnitFormatter.spokenDuration(minutes: minutes) ?? ""
         switch source {
         case .need: return "\(asleep) of the \(target) you need"
-        case .goal, .recommended: return "\(asleep) of the \(target) you need"
+        case .goal: return "\(asleep) of your \(target) sleep need"
+        case .recommended: return "\(asleep) of the default \(target) sleep need"
         }
     }
 }

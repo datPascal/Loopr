@@ -49,6 +49,7 @@ public struct HabitDefinition: Codable, Equatable, Identifiable, Sendable {
     public let source: HabitDefinitionSource
     public var name: String
     public var question: String
+    public var questionPeriod: HabitQuestionPeriod?
     public let responseKind: HabitResponseKind
     public var sortOrder: Int
     public var archivedAt: Date?
@@ -66,12 +67,14 @@ public struct HabitDefinition: Codable, Equatable, Identifiable, Sendable {
         archivedAt: Date? = nil,
         createdAt: Date,
         updatedAt: Date? = nil,
-        schemaVersion: Int = 1
+        schemaVersion: Int = 1,
+        questionPeriod: HabitQuestionPeriod? = nil
     ) {
         self.id = id
         self.source = source
         self.name = name
         self.question = question
+        self.questionPeriod = questionPeriod
         self.responseKind = responseKind
         self.sortOrder = sortOrder
         self.archivedAt = archivedAt
@@ -94,6 +97,7 @@ public enum HabitResponseSource: String, Codable, Sendable {
     case morningCheckIn
     case historyEdit
     case legacyPresence
+    case autoFill
 }
 
 public struct HabitResponse: Codable, Equatable, Sendable {
@@ -105,6 +109,7 @@ public struct HabitResponse: Codable, Equatable, Sendable {
     public var updatedAt: Date
     public let firstAnswerSource: HabitResponseSource
     public var lastUpdateSource: HabitResponseSource
+    public var autoFillProvenance: JournalAutoFillProvenance?
 
     public init(
         habitID: HabitID,
@@ -114,7 +119,8 @@ public struct HabitResponse: Codable, Equatable, Sendable {
         firstAnsweredAt: Date,
         updatedAt: Date? = nil,
         firstAnswerSource: HabitResponseSource,
-        lastUpdateSource: HabitResponseSource? = nil
+        lastUpdateSource: HabitResponseSource? = nil,
+        autoFillProvenance: JournalAutoFillProvenance? = nil
     ) {
         self.habitID = habitID
         self.behaviorDay = behaviorDay
@@ -124,6 +130,7 @@ public struct HabitResponse: Codable, Equatable, Sendable {
         self.updatedAt = updatedAt ?? firstAnsweredAt
         self.firstAnswerSource = firstAnswerSource
         self.lastUpdateSource = lastUpdateSource ?? firstAnswerSource
+        self.autoFillProvenance = autoFillProvenance
     }
 }
 
@@ -132,6 +139,9 @@ public struct HabitDayRecord: Codable, Equatable, Identifiable, Sendable {
     public let behaviorDay: DayIdentity
     public let behaviorTimeZoneID: String
     public var responses: [HabitResponse]
+    public var wellbeing: JournalWellbeing?
+    /// Includes explicit clearing, which has no response row to carry its source.
+    public var userOverrideHabitIDs: Set<HabitID>?
     public var completedAt: Date?
     public let createdAt: Date
     public var updatedAt: Date
@@ -144,11 +154,15 @@ public struct HabitDayRecord: Codable, Equatable, Identifiable, Sendable {
         completedAt: Date? = nil,
         createdAt: Date,
         updatedAt: Date? = nil,
-        schemaVersion: Int = 1
+        schemaVersion: Int = 1,
+        wellbeing: JournalWellbeing? = nil,
+        userOverrideHabitIDs: Set<HabitID>? = nil
     ) {
         self.behaviorDay = behaviorDay
         self.behaviorTimeZoneID = behaviorTimeZoneID
         self.responses = responses
+        self.wellbeing = wellbeing
+        self.userOverrideHabitIDs = userOverrideHabitIDs
         self.completedAt = completedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt ?? createdAt
@@ -157,6 +171,11 @@ public struct HabitDayRecord: Codable, Equatable, Identifiable, Sendable {
 
     public func response(for habitID: HabitID) -> HabitResponse? {
         responses.first { $0.habitID == habitID }
+    }
+
+    public func hasUserOverride(for habitID: HabitID) -> Bool {
+        userOverrideHabitIDs?.contains(habitID) == true
+            || response(for: habitID).map { $0.lastUpdateSource != .autoFill } == true
     }
 }
 
@@ -168,6 +187,8 @@ public enum HabitOutcomeMetricID: String, Codable, CaseIterable, Hashable, Senda
     case sleepDuration
     case sleepEfficiency
     case sleepConsistency
+    case deepSleepMinutes
+    case mood
 
     public var title: String {
         switch self {
@@ -178,15 +199,17 @@ public enum HabitOutcomeMetricID: String, Codable, CaseIterable, Hashable, Senda
         case .sleepDuration: "Sleep duration"
         case .sleepEfficiency: "Sleep efficiency"
         case .sleepConsistency: "Sleep consistency"
+        case .deepSleepMinutes: "Deep sleep"
+        case .mood: "Mood"
         }
     }
 
     public var unit: HabitMetricUnitID {
         switch self {
-        case .recoveryScore, .sleepScore, .sleepConsistency: .scorePoints
+        case .recoveryScore, .sleepScore, .sleepConsistency, .mood: .scorePoints
         case .hrvRMSSD: .milliseconds
         case .restingHeartRate: .beatsPerMinute
-        case .sleepDuration: .minutes
+        case .sleepDuration, .deepSleepMinutes: .minutes
         case .sleepEfficiency: .percentagePoints
         }
     }
@@ -203,9 +226,9 @@ public enum HabitMetricUnitID: String, Codable, Sendable {
 public struct HabitOutcomeSnapshot: Codable, Equatable, Sendable {
     public let behaviorDay: DayIdentity
     public let behaviorTimeZoneID: String
-    public let sleepSessionID: String
-    public let sleepStartedAt: Date
-    public let sleepEndedAt: Date
+    public let sleepSessionID: String?
+    public let sleepStartedAt: Date?
+    public let sleepEndedAt: Date?
     public let outcomeDay: DayIdentity
     public let metrics: [HabitOutcomeMetricID: Double]
     public let priorDayStrain: Double?
@@ -215,9 +238,9 @@ public struct HabitOutcomeSnapshot: Codable, Equatable, Sendable {
     public init(
         behaviorDay: DayIdentity,
         behaviorTimeZoneID: String,
-        sleepSessionID: String,
-        sleepStartedAt: Date,
-        sleepEndedAt: Date,
+        sleepSessionID: String? = nil,
+        sleepStartedAt: Date? = nil,
+        sleepEndedAt: Date? = nil,
         outcomeDay: DayIdentity,
         metrics: [HabitOutcomeMetricID: Double],
         priorDayStrain: Double?,
@@ -298,6 +321,9 @@ public struct HabitMetricEstimate: Codable, Equatable, Sendable {
     public let adjustedPValue: Double?
     public let adjustedRowCount: Int
     public let isClear: Bool
+    // Optional so caches from the previous algorithm still decode. Recalculate
+    // before presenting a target whose sample has not been recorded.
+    public let sample: HabitMetricSample?
 
     public init(
         metricID: HabitOutcomeMetricID,
@@ -310,7 +336,8 @@ public struct HabitMetricEstimate: Codable, Equatable, Sendable {
         bootstrapPValue: Double? = nil,
         adjustedPValue: Double? = nil,
         adjustedRowCount: Int = 0,
-        isClear: Bool = false
+        isClear: Bool = false,
+        sample: HabitMetricSample? = nil
     ) {
         self.metricID = metricID
         self.yesMean = yesMean
@@ -323,6 +350,23 @@ public struct HabitMetricEstimate: Codable, Equatable, Sendable {
         self.adjustedPValue = adjustedPValue
         self.adjustedRowCount = adjustedRowCount
         self.isClear = isClear
+        self.sample = sample
+    }
+}
+
+public struct HabitMetricSample: Codable, Equatable, Sendable {
+    public let yesCount: Int
+    public let noCount: Int
+    public let excludedDayCount: Int
+    public let status: HabitInsightStatus
+    public let overlappingHabitID: HabitID?
+    public let validThrough: DayIdentity
+
+    public init(yesCount: Int, noCount: Int, status: HabitInsightStatus,
+                overlappingHabitID: HabitID? = nil, validThrough: DayIdentity, excludedDayCount: Int = 0) {
+        self.yesCount = yesCount; self.noCount = noCount; self.status = status
+        self.excludedDayCount = excludedDayCount
+        self.overlappingHabitID = overlappingHabitID; self.validThrough = validThrough
     }
 }
 
@@ -407,7 +451,7 @@ public struct HabitImpactPolicy: Codable, Equatable, Sendable {
     public let practicalThresholds: [HabitOutcomeMetricID: Double]
 
     public static let `default` = HabitImpactPolicy(
-        algorithmVersion: "journal.habit-impact.v1",
+        algorithmVersion: "journal.habit-impact.v2",
         windowDays: 90,
         earlyPerGroup: 5,
         maturePerGroup: 10,
@@ -427,7 +471,9 @@ public struct HabitImpactPolicy: Codable, Equatable, Sendable {
             .restingHeartRate: 1,
             .sleepDuration: 15,
             .sleepEfficiency: 2,
-            .sleepConsistency: 3
+            .sleepConsistency: 3,
+            .deepSleepMinutes: 15,
+            .mood: 0.5
         ]
     )
 

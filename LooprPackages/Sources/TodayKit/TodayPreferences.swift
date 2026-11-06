@@ -1,80 +1,28 @@
 import Foundation
-import DomainKit
 
-/// What the person chose on Today: the pinned "Your numbers" and the day the
-/// heads-up card was put away. Stored on the phone only.
-public struct TodayPreferences: Codable, Equatable, Sendable {
-    public static let maximumPinned = 6
-    public static let defaultPinned: [TodayTrackedMetric] = [.hrv, .restingHeartRate, .steps, .activeEnergy]
+/// The pins an older version kept for Today's "Your numbers". Nothing writes them any more. Health's pins
+/// are the only ones, and `HealthMetricPins` reads this once to carry an older choice over.
+public struct TodayPreferences: Decodable, Equatable, Sendable {
+    public let pinned: [TodayTrackedMetric]
 
-    public private(set) var pinned: [TodayTrackedMetric]
-    /// The day the heads-up card was dismissed; it stays away for that day only.
-    public private(set) var headsUpDismissedDay: DayIdentity?
-
-    public init(pinned: [TodayTrackedMetric] = TodayPreferences.defaultPinned, headsUpDismissedDay: DayIdentity? = nil) {
-        self.pinned = Self.sanitised(pinned)
-        self.headsUpDismissedDay = headsUpDismissedDay
-    }
-
-    /// Keeps order, drops repeats, caps at six. An empty list is allowed: the
-    /// person may want no tiles.
-    public static func sanitised(_ metrics: [TodayTrackedMetric]) -> [TodayTrackedMetric] {
-        var seen = Set<TodayTrackedMetric>()
-        return Array(metrics.filter { seen.insert($0).inserted }.prefix(maximumPinned))
-    }
-
-    public mutating func setPinned(_ metrics: [TodayTrackedMetric]) {
-        pinned = Self.sanitised(metrics)
-    }
-
-    public mutating func dismissHeadsUp(for day: DayIdentity) {
-        headsUpDismissedDay = day
-    }
-
-    public func isHeadsUpDismissed(on day: DayIdentity) -> Bool {
-        headsUpDismissedDay == day
-    }
-
-    private enum CodingKeys: String, CodingKey { case pinned, headsUpDismissedDay }
+    private enum CodingKeys: String, CodingKey { case pinned }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         // A metric a later version removed must not throw away the rest.
-        let raw = try container.decodeIfPresent([String].self, forKey: .pinned)
-        pinned = raw.map { Self.sanitised($0.compactMap(TodayTrackedMetric.init(rawValue:))) } ?? Self.defaultPinned
-        headsUpDismissedDay = try container.decodeIfPresent(DayIdentity.self, forKey: .headsUpDismissedDay)
-    }
-
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(pinned.map(\.rawValue), forKey: .pinned)
-        try container.encodeIfPresent(headsUpDismissedDay, forKey: .headsUpDismissedDay)
+        let raw = try container.decode([String].self, forKey: .pinned)
+        var seen = Set<TodayTrackedMetric>()
+        pinned = raw.compactMap(TodayTrackedMetric.init(rawValue:)).filter { seen.insert($0).inserted }
     }
 }
 
-/// Reads and writes `TodayPreferences` in a defaults domain.
-public struct TodayPreferencesStore: Sendable {
+/// Where the old pins were saved. The key stays so the migration can find them and Delete all data can remove them.
+public enum TodayPreferencesStore {
     public static let key = "loopr.today.preferences.v1"
+}
 
-    private let suiteName: String?
-
-    /// - Parameter suiteName: nil for the standard domain. Tests pass their own.
-    public init(suiteName: String? = nil) {
-        self.suiteName = suiteName
-    }
-
-    private var defaults: UserDefaults {
-        suiteName.flatMap(UserDefaults.init(suiteName:)) ?? .standard
-    }
-
-    public func load() -> TodayPreferences {
-        guard let data = defaults.data(forKey: Self.key),
-              let value = try? JSONDecoder().decode(TodayPreferences.self, from: data) else { return TodayPreferences() }
-        return value
-    }
-
-    public func save(_ preferences: TodayPreferences) {
-        guard let data = try? JSONEncoder().encode(preferences) else { return }
-        defaults.set(data, forKey: Self.key)
-    }
+/// "Hide" on Today's "No band connected" line, for a person who has no band (ICP R3-NEW-7). Settings still offers the
+/// band. Delete all data removes the key.
+public enum TodayBandBannerPreference {
+    public static let hiddenKey = "loopr.today.no-band-banner-hidden.v1"
 }

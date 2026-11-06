@@ -312,22 +312,27 @@ public struct LooprImpactBar: View {
 public struct LooprContributorList: View {
     @Environment(\.colorScheme) private var colorScheme
     private let rows: [LooprContributorRow]
+    private let footer: AnyView?
 
-    public init(_ rows: [LooprContributorRow]) {
+    /// - Parameter footer: A last row inside the card, such as a link to the full list. It gets the same
+    ///   hairline as the rows above it.
+    public init(_ rows: [LooprContributorRow], footer: AnyView? = nil) {
         self.rows = rows
+        self.footer = footer
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                 row
-                if index < rows.count - 1 {
+                if index < rows.count - 1 || footer != nil {
                     Rectangle()
                         .fill(Color.loopr(.divider))
                         .frame(height: 1)
                         .accessibilityHidden(true)
                 }
             }
+            if let footer { footer }
         }
         .padding(.horizontal, isDark ? 17 : 18)
         .background(

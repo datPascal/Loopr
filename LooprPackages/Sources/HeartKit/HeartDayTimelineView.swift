@@ -216,7 +216,7 @@ private struct HeartDayTimelineContent: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
         return layout {
-            LooprText(title.uppercased(), style: .sectionLabel, color: .inkSecondary)
+            LooprText(title.looprLabelCased, style: .sectionLabel, color: .inkSecondary)
             if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: LooprSpacing.xs) }
             LooprValueText(String(Int(value.rounded())), unit: "bpm")
         }
@@ -224,7 +224,7 @@ private struct HeartDayTimelineContent: View {
 
     private func stat(_ title: String, _ value: Double) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            LooprText(title.uppercased(), style: .sectionLabel, color: .inkSecondary)
+            LooprText(title.looprLabelCased, style: .sectionLabel, color: .inkSecondary)
             LooprValueText(String(Int(value.rounded())), unit: "bpm")
                 .fixedSize()
         }
@@ -239,7 +239,7 @@ private struct HeartDayTimelineContent: View {
             ?? HeartDayTimelineChart.time(date, includesSeconds: includesSeconds)
         if let span { title += " · " + (span.kind == .sleep ? "Asleep" : (span.title ?? "Workout")) }
         return VStack(alignment: .leading, spacing: 2) {
-            LooprText(title.uppercased(), style: .sectionLabel, color: .inkSecondary)
+            LooprText(title.looprLabelCased, style: .sectionLabel, color: .inkSecondary)
             if let bucket {
                 HStack(alignment: .firstTextBaseline, spacing: LooprSpacing.xs) {
                     LooprValueText(String(Int(bucket.average.rounded())), unit: "bpm",

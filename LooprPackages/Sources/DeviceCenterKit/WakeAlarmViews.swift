@@ -151,7 +151,7 @@ public struct WakeAlarmScreen: View {
             LooprSurface(emphasis: .hero(model.isOn ? .sleep : .inkSecondary)) {
                 VStack(alignment: .leading, spacing: LooprSpacing.xs) {
                     HStack(alignment: .center, spacing: LooprSpacing.sm) {
-                        LooprText(heroEyebrow.uppercased(), style: .sectionLabel, color: .inkSecondary)
+                        LooprText(heroEyebrow.looprLabelCased, style: .sectionLabel, color: .inkSecondary)
                             .accessibilityHidden(true)
                         Spacer(minLength: LooprSpacing.sm)
                         heroChip
@@ -633,27 +633,36 @@ public struct WakeAlarmCard: View {
     private let formatter: WakeAlarmFormatter
     private let accessibilityIdentifier: String
     private let action: () -> Void
+    private let compact: Bool
 
     public init(
         state: WakeAlarmCardState,
         formatter: WakeAlarmFormatter = WakeAlarmFormatter(),
         accessibilityIdentifier: String,
+        compact: Bool = false,
         action: @escaping () -> Void
     ) {
         self.state = state
         self.formatter = formatter
         self.accessibilityIdentifier = accessibilityIdentifier
         self.action = action
+        self.compact = compact
     }
 
     public var body: some View {
         Button(action: action) {
-            LooprSurface {
-                HStack(alignment: .center, spacing: LooprSpacing.md) {
-                    icon
-                    content
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    LooprChevron()
+            Group {
+                if compact {
+                    compactRow
+                } else {
+                    LooprSurface {
+                        HStack(alignment: .center, spacing: LooprSpacing.md) {
+                            icon
+                            content
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            LooprChevron()
+                        }
+                    }
                 }
             }
             .contentShape(Rectangle())
@@ -664,6 +673,27 @@ public struct WakeAlarmCard: View {
         .accessibilityHint("Opens the wake alarm.")
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier(accessibilityIdentifier)
+    }
+
+    @ViewBuilder private var compactRow: some View {
+        switch state {
+        case .loading:
+            LooprRow(title: "Smart alarm", subtitle: "Loading", symbol: nil)
+        case .notSet(let lastWakeMinute, let suggestion):
+            LooprRow(title: "Smart alarm", subtitle: notSetDetail(lastWakeMinute: lastWakeMinute, suggestion: suggestion), symbol: nil) {
+                HStack(spacing: LooprSpacing.sm) {
+                    LooprText("Off", style: .metricValue, color: .inkSecondary)
+                    LooprChevron()
+                }
+            }
+        case .scheduled(let summary):
+            LooprRow(title: "Smart alarm", subtitle: summary.warning ?? summary.smartWindow ?? summary.when, symbol: nil) {
+                HStack(spacing: LooprSpacing.sm) {
+                    LooprValueText(summary.wakeTime)
+                    LooprChevron()
+                }
+            }
+        }
     }
 
     private var isOn: Bool {
@@ -697,7 +727,7 @@ public struct WakeAlarmCard: View {
             }
         case .scheduled(let summary):
             VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
-                LooprText("WAKE ALARM · \(summary.repeatSummary.uppercased())", style: .sectionLabel, color: .inkSecondary)
+                LooprText("WAKE ALARM · \(summary.repeatSummary.looprLabelCased)", style: .sectionLabel, color: .inkSecondary)
                 Text(summary.wakeTime)
                     .looprTypography(.metricCompact)
                     .monospacedDigit()

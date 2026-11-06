@@ -1,0 +1,189 @@
+{
+  "createdAt": "2026-10-25T00:00:00Z",
+  "format": "loopr-protocol",
+  "name": "Everything at once",
+  "rules": [
+    {
+      "evening": true,
+      "evidence": "The American Academy of Sleep Medicine and the Sleep Research Society say adults need 7 to 9 hours of sleep a night, in a 2015 consensus. No study sets a bedtime. The template's 22:30 leaves room for that before a 06:30 to 07:30 wake-up.",
+      "group": "sleep",
+      "key": "in-bed",
+      "source": "band",
+      "target": {
+        "kind": "atMost",
+        "metric": "in_bed_time",
+        "unit": "min",
+        "value": 1350
+      },
+      "timeOfDay": "21:45",
+      "title": "In bed by 22:30",
+      "why": "A steady bedtime leaves room for the 7 to 9 hours of sleep adults need."
+    },
+    {
+      "evidence": "In a 2013 study in the Journal of Clinical Sleep Medicine, 400 mg of caffeine taken 6 hours before bed still cut sleep by more than an hour. The template's 14:00 is 8.5 hours before 22:30.",
+      "group": "food",
+      "key": "no-late-caffeine",
+      "source": "food",
+      "target": {
+        "kind": "atMost",
+        "metric": "last_caffeine_time",
+        "unit": "min",
+        "value": 840
+      },
+      "timeOfDay": "13:30",
+      "title": "No caffeine after 14:00",
+      "why": "Caffeine stays in your body for hours and can still cut into your sleep."
+    },
+    {
+      "evening": true,
+      "evidence": "No trial sets how long to leave between dinner and bed. The advice comes from common guidance and from studies that watch what people do. The template starts at 19:00, three and a half hours before 22:30.",
+      "group": "food",
+      "key": "kitchen-closes",
+      "source": "food",
+      "target": {
+        "kind": "atMost",
+        "metric": "last_meal_time",
+        "unit": "min",
+        "value": 1140
+      },
+      "timeOfDay": "18:30",
+      "title": "Kitchen closes at 19:00",
+      "why": "Finishing dinner a few hours before bed gives your body time to settle."
+    },
+    {
+      "evidence": "Light during the day helps set the body clock that times your sleep. No guideline sets a number of minutes, so the template starts at 30.",
+      "group": "sleep",
+      "key": "daylight",
+      "source": "appleHealth",
+      "target": {
+        "kind": "atLeast",
+        "metric": "daylight_minutes",
+        "unit": "min",
+        "value": 30
+      },
+      "title": "30 minutes in daylight",
+      "why": "Daylight during the day helps set your body clock for the night."
+    },
+    {
+      "evidence": "A 2013 expert group, PROT-AGE, suggested 1.0 to 1.2 g of protein per kg of body weight a day for adults over 65, and more for people who exercise. The template's 80 g fits someone near 70 kg, so change it to suit your weight.",
+      "group": "food",
+      "key": "protein",
+      "source": "food",
+      "target": {
+        "kind": "atLeast",
+        "metric": "protein_g",
+        "unit": "g",
+        "value": 80
+      },
+      "title": "Protein, 80 grams",
+      "why": "Enough protein helps you keep your muscle as you get older."
+    },
+    {
+      "evidence": "The European Food Safety Authority set 25 g of fibre a day as enough for normal digestion in adults, in 2010.",
+      "group": "food",
+      "key": "fibre",
+      "source": "food",
+      "target": {
+        "kind": "atLeast",
+        "metric": "fibre_g",
+        "unit": "g",
+        "value": 25
+      },
+      "title": "Fibre, 25 grams",
+      "why": "Enough fibre keeps your digestion regular."
+    },
+    {
+      "evidence": "A 2013 review in Alcoholism: Clinical and Experimental Research found that alcohol before bed breaks up sleep in the second half of the night. US dietary guidelines for 2020 to 2025 set a limit of 1 drink a day for women and 2 for men. The WHO says no amount of alcohol is free of risk.",
+      "group": "food",
+      "key": "alcohol",
+      "source": "food",
+      "target": {
+        "kind": "atMost",
+        "metric": "alcohol_drinks",
+        "unit": "drinks",
+        "value": 1
+      },
+      "title": "One drink at most",
+      "why": "Fewer drinks usually means better sleep."
+    },
+    {
+      "cadence": {
+        "every": 1,
+        "unit": "week"
+      },
+      "evidence": "WHO guidelines from 2020 ask adults for 150 to 300 minutes of moderate activity a week. Zone 2 is a steady effort where you can still talk. The template starts at 150.",
+      "group": "fitness",
+      "key": "zone-2",
+      "source": "band",
+      "target": {
+        "kind": "atLeast",
+        "metric": "zone2_minutes",
+        "unit": "min",
+        "value": 150
+      },
+      "title": "Zone 2, 150 minutes a week",
+      "why": "Steady exercise where you can still talk keeps your heart and lungs fit."
+    },
+    {
+      "cadence": {
+        "every": 1,
+        "unit": "week"
+      },
+      "evidence": "WHO guidelines from 2020 ask adults to do muscle-strengthening activity on 2 or more days a week.",
+      "group": "fitness",
+      "key": "strength",
+      "source": "fitness",
+      "target": {
+        "kind": "atLeast",
+        "metric": "strength_sessions",
+        "unit": "sessions",
+        "value": 2
+      },
+      "title": "Two strength sessions a week",
+      "why": "Strength work keeps your muscles and bones strong as you get older."
+    },
+    {
+      "evidence": "In a 2022 analysis of 15 studies in Lancet Public Health, more daily steps went with a lower risk of dying early. The benefit levelled off at about 6,000 to 8,000 steps a day for adults 60 and over. For adults under 60 it levelled off later, at about 8,000 to 10,000.",
+      "group": "fitness",
+      "key": "steps",
+      "source": "appleHealth",
+      "target": {
+        "kind": "atLeast",
+        "metric": "steps",
+        "unit": "steps",
+        "value": 7000
+      },
+      "title": "7,000 steps",
+      "why": "People who walk more each day tend to live longer."
+    },
+    {
+      "evidence": "Loopr does not suggest a dose or a product. The tick covers what you set up in Food.",
+      "group": "supplements",
+      "key": "supplements",
+      "source": "manual",
+      "target": {
+        "kind": "done"
+      },
+      "timeOfDay": "08:00",
+      "title": "Take your supplements",
+      "why": "A daily tick for the supplements you set up in Food."
+    },
+    {
+      "cadence": {
+        "every": 6,
+        "unit": "month"
+      },
+      "evidence": "Every 6 months is a common interval, not a rule from a study. Ask your doctor what suits you.",
+      "group": "tests",
+      "key": "blood-test",
+      "source": "manual",
+      "target": {
+        "kind": "done"
+      },
+      "title": "Blood test every 6 months",
+      "why": "Regular blood tests help you and your doctor spot changes early."
+    }
+  ],
+  "schemaVersion": 1,
+  "version": 1
+}

@@ -156,12 +156,12 @@ struct BodyLoadTrendChart: View {
         HStack(spacing: LooprSpacing.md) {
             HStack(spacing: LooprSpacing.xxs + 2) {
                 Capsule().fill(Color.loopr(.strain)).frame(width: 12, height: 3)
-                Text("RECENT LOAD").looprTypography(.sectionLabel).foregroundStyle(Color.loopr(.inkSecondary))
+                Text("Recent load").looprTypography(.sectionLabel).foregroundStyle(Color.loopr(.inkSecondary))
             }
             if points.contains(where: { $0.usualLow != nil && $0.usualHigh != nil }) {
                 HStack(spacing: LooprSpacing.xxs + 2) {
                     RoundedRectangle(cornerRadius: 2).fill(Color.loopr(.strain).opacity(bandOpacity * 1.6)).frame(width: 12, height: 10)
-                    Text("YOUR USUAL").looprTypography(.sectionLabel).foregroundStyle(Color.loopr(.inkSecondary))
+                    Text("Your usual").looprTypography(.sectionLabel).foregroundStyle(Color.loopr(.inkSecondary))
                 }
             }
             Spacer(minLength: 0)
@@ -238,7 +238,7 @@ struct BodyLoadTrendChart: View {
             ZStack(alignment: .topLeading) {
                 ForEach(Array(points.enumerated()), id: \.element.id) { index, point in
                     if (points.count - 1 - index) % 7 == 0 {
-                        Text(point.date.formatted(.dateTime.day().month(.abbreviated)).uppercased())
+                        Text(point.date.formatted(.dateTime.day().month(.abbreviated)).looprLabelCased)
                             .looprTypography(.confidence)
                             .foregroundStyle(Color.loopr(index == points.count - 1 ? .ink : .inkSecondary))
                             .fixedSize()

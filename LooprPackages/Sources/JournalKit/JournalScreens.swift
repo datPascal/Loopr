@@ -70,19 +70,103 @@ public enum JournalFixtures {
 }
 
 public struct JournalScreen: View {
+    @Environment(\.looprDayNavigation) private var dayNavigation
     @ObservedObject private var viewModel: JournalViewModel
     @ObservedObject private var habitViewModel: HabitViewModel
     private let route: (JournalRoute) -> Void
+    private let editNote: (JournalEntry?, DayIdentity, Bool) -> Void
+    @State private var segment = "Check-in"
 
-    public init(viewModel: JournalViewModel, habitViewModel: HabitViewModel, route: @escaping (JournalRoute) -> Void = { _ in }) {
+    public init(viewModel: JournalViewModel, habitViewModel: HabitViewModel, route: @escaping (JournalRoute) -> Void = { _ in },
+                editNote: ((JournalEntry?, DayIdentity, Bool) -> Void)? = nil) {
         self.viewModel = viewModel
         self.habitViewModel = habitViewModel
         self.route = route
+        self.editNote = editNote ?? { _, _, _ in route(.compose) }
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: LooprSpacing.lg) {
+        LooprTabScaffold(header: LooprTabHeaderContent(
+            title: "Protocol", accent: .cyclePlum,
+            dayPhrase: checkInHeader,
+            control: segment == "Insights" ? .none : dayNavigation.map(LooprHeaderControl.day) ?? .none,
+            // The Ask button keeps the identifier it had when this tab was called Journal.
+            secondaryAction: LooprHeaderAction(symbol: "sparkles", label: "Ask", identifier: "journal-header-ask", run: {})
+        ), glow: .cyclePlum, identifier: "journal-screen") {
+            JournalHomeSections(viewModel: viewModel, habitViewModel: habitViewModel, segment: $segment, day: selectedDay,
+                                route: route, editNote: { entry, dictate in editNote(entry, selectedDay, dictate) })
+            .padding(.horizontal, LooprSpacing.screenGutter)
+            .padding(.top, LooprSpacing.md)
+            .padding(.bottom, LooprSpacing.tabBarClearance)
+        }
+        .scrollIndicators(.hidden)
+        .background(Color.loopr(.background).ignoresSafeArea())
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .tint(Color.loopr(.cyclePlum))
+        .task(id: selectedDay) { await habitViewModel.refreshAutoFill(on: selectedDay) }
+    }
+
+    private var selectedDay: DayIdentity {
+        guard let day = dayNavigation?.day else { return habitViewModel.currentDay }
+        return DayIdentity(year: day.year, month: day.month, day: day.day)
+    }
+
+    private var checkInHeader: String {
+        let phrase = dayNavigation.map(LooprHeaderMeta.dayPhrase) ?? selectedDay.habitKey
+        if segment == "Insights" {
+            let checkInDays = habitViewModel.records.filter {
+                !$0.responses.isEmpty || $0.wellbeing?.mood != nil || $0.wellbeing?.energy != nil
+                    || $0.wellbeing?.stress != nil || $0.wellbeing?.soreness != nil
+            }.map { $0.behaviorDay.habitKey }
+            let days = Set(checkInDays + viewModel.snapshot.entries.map(\.day)).filter { $0 <= selectedDay.habitKey }
+            return "\(days.count) days logged".looprLabelCased
+        }
+        guard segment == "Check-in" else { return phrase }
+        let progress = habitViewModel.checkInProgress(on: selectedDay)
+        return "\(phrase) · \(progress.answered) of \(progress.total) done".looprLabelCased
+    }
+}
+
+/// The Journal's own sections under one choice control: the check-in, entries and insights. `JournalScreen` shows
+/// them alone and the Protocol tab shows them under its rules, so every Journal identifier stays where tests find it.
+struct JournalHomeSections: View {
+    @ObservedObject var viewModel: JournalViewModel
+    @ObservedObject var habitViewModel: HabitViewModel
+    @Binding var segment: String
+    let day: DayIdentity
+    let route: (JournalRoute) -> Void
+    let editNote: (JournalEntry?, Bool) -> Void
+    /// Titles shown for the segment ids. The ids, and so the identifiers, never change.
+    var titles: [String: String] = [:]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LooprSpacing.lg) {
+            LooprChoiceControl("Journal", choices: segments.map { LooprChoice($0, title: titles[$0]) },
+                selection: segment, accent: .cyclePlum, identifier: "journal-segment") { value in
+                if let value { segment = value }
+            }
+            switch segment {
+            case "Check-in":
+                JournalCheckInSection(model: habitViewModel, day: day, entries: viewModel.snapshot.entries,
+                    route: route, editNote: editNote)
+            case "Insights":
+                if habitViewModel.settings.featureStage.exposesEntryPoints {
+                    JournalInsightsSection(model: habitViewModel, day: day)
+                }
+            default:
+                entriesContent
+            }
+        }
+    }
+
+    private var segments: [String] {
+        ["Check-in", "Entries"] + (habitViewModel.settings.featureStage.exposesEntryPoints ? ["Insights"] : [])
+    }
+
+    private var entriesContent: some View {
+        VStack(alignment: .leading, spacing: LooprSpacing.lg) {
                 HabitHomeSection(viewModel: habitViewModel, route: route)
 
                 LooprSectionGroup(title: "Entries") {
@@ -125,18 +209,7 @@ public struct JournalScreen: View {
                 }
 
                 reviewMenu
-            }
-            .padding(.horizontal, LooprSpacing.screenGutter)
-            .padding(.top, LooprSpacing.md)
-            .padding(.bottom, LooprSpacing.tabBarClearance)
         }
-        .scrollIndicators(.hidden)
-        .accessibilityIdentifier("journal-screen")
-        .background(Color.loopr(.background).ignoresSafeArea())
-        .navigationTitle("Journal")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .tint(Color.loopr(.brand))
     }
 
     @ViewBuilder
@@ -219,12 +292,11 @@ public struct JournalScreen: View {
         switch viewModel.snapshot.state {
         case .populated:
             let count = viewModel.snapshot.entries.count
-            return "\(count) \(count == 1 ? "ENTRY" : "ENTRIES") · ON DEVICE"
+            return "\(count) \(count == 1 ? "entry" : "entries") · On device"
         default:
-            return "PRIVATE · ON DEVICE"
+            return "Private · On device"
         }
     }
-
 }
 
 public struct JournalComposeScreen: View {
@@ -342,13 +414,13 @@ public struct JournalHistoryScreen: View {
 
     public var body: some View {
         LooprDetailScaffold {
-            LooprSectionGroup(title: "Entries") {
+            LooprSectionGroup(title: "Notes") {
                 if entries.isEmpty {
                     LooprFormCard {
                         VStack(alignment: .leading, spacing: LooprSpacing.sm) {
                             StateMessage(.noRecords, compact: true)
                             LooprText(
-                                "No journal entries yet. Add an entry to start.",
+                                "No notes yet. Write one under Note in the check-in.",
                                 style: .prose,
                                 color: .inkSecondary
                             )
@@ -371,13 +443,13 @@ public struct JournalHistoryScreen: View {
             }
         }
         .scrollIndicators(.hidden)
-        .navigationTitle("Journal history")
+        .navigationTitle("Notes")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .tint(Color.loopr(.brand))
         .accessibilityIdentifier("journal-history-screen")
         .confirmationDialog(
-            "Delete this journal entry?",
+            "Delete this note?",
             isPresented: Binding(
                 get: { entryPendingDeletion != nil },
                 set: { isPresented in
@@ -386,7 +458,7 @@ public struct JournalHistoryScreen: View {
             ),
             titleVisibility: .visible
         ) {
-            Button("Delete entry", role: .destructive) {
+            Button("Delete note", role: .destructive) {
                 if let entryPendingDeletion {
                     onDelete(entryPendingDeletion)
                 }
@@ -396,7 +468,7 @@ public struct JournalHistoryScreen: View {
                 entryPendingDeletion = nil
             }
         } message: {
-            Text("This removes the entry from your local journal.")
+            Text("This removes the note from this iPhone.")
         }
     }
 
@@ -512,7 +584,7 @@ public struct JournalEntryScreen: View {
             }
             Button("Cancel", role: .cancel) { confirmingDeletion = false }
         } message: {
-            Text("This removes the entry from your local journal.")
+            Text("This removes the note from this iPhone.")
         }
     }
 }

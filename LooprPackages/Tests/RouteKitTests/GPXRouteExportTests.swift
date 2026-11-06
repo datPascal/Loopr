@@ -15,6 +15,7 @@ final class GPXRouteExportTests: XCTestCase {
         <gpx version="1.1" creator="Loopr" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
           <trk>
             <name>Run &amp; &lt;walk&gt; &quot;today&quot; &apos;test&apos;</name>
+            <type>running</type>
             <trkseg>
               <trkpt lat="-8.5" lon="115.25">
                 <ele>12.0</ele>

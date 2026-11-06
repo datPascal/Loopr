@@ -98,9 +98,8 @@ enum TodayTestDays {
         )
     }
 
-    static func dashboard(_ summary: TodaySummary, _ context: TodayDayContext?, isToday: Bool = true,
-                          pinned: [TodayTrackedMetric] = TodayPreferences.defaultPinned, dismissed: Bool = false) -> TodayDashboard {
-        TodayDashboard(summary: summary, context: context, pinned: pinned, isToday: isToday, headsUpDismissed: dismissed,
+    static func dashboard(_ summary: TodaySummary, _ context: TodayDayContext?, isToday: Bool = true) -> TodayDashboard {
+        TodayDashboard(summary: summary, context: context, isToday: isToday,
                        dayLabel: TodayDashboard.shortDayLabel, calendar: calendar)
     }
 }
@@ -242,49 +241,13 @@ struct TodayHeroTests {
     }
 }
 
-struct TodayContributorAndRingTests {
+struct TodayHeroSplitTests {
     @Test func theHeroSplitsDriverAndGuidance() {
         let context = TodayTestDays.context(recovery: TodayTestDays.breakdown(score: 74))
         let reading = TodayTestDays.dashboard(TodayTestDays.summary(), context).hero.reading
         #expect(reading?.driver == "Higher HRV and a lower resting heart rate supported this score.")
         #expect(reading?.guidance == "Keep strain between 14 and 18 today.")
         #expect(TodayTestDays.dashboard(TodayTestDays.summary(), context, isToday: false).hero.reading?.guidance == nil)
-    }
-
-    @Test func threeSecondaryRingsWithSleepAgainstNeed() {
-        let dashboard = TodayTestDays.dashboard(TodayTestDays.summary(), TodayTestDays.context())
-        #expect(dashboard.rings.map(\.id) == [.sleep, .strain, .stress])
-        #expect(dashboard.rings.map(\.text) == ["7:42", "8.6", "21"])
-        #expect(dashboard.rings[0].reading.scale == LooprRingScale(fullValue: 480))
-        #expect(dashboard.rings[0].delta?.text == "\u{2212}18 min vs need")
-        #expect(dashboard.rings[1].delta?.compactText != nil)
-        // Strain has no good direction: never coloured.
-        #expect(dashboard.rings[1].delta?.tone == .neutral)
-    }
-
-    @Test func theStrainRingDrawsTheSuggestedRangeOnlyWhenOneIsGiven() {
-        let without = TodayTestDays.dashboard(TodayTestDays.summary(), TodayTestDays.context())
-        #expect(without.rings[1].suggestedRange == nil)
-        let context = TodayDayContext(day: TodayTestDays.day, dayStart: TodayTestDays.dayStart,
-                                      history: TodayTestDays.standardHistory(), suggestedStrainRange: 10...14)
-        let with = TodayTestDays.dashboard(TodayTestDays.summary(), context)
-        #expect(with.rings[1].suggestedRange == 10...14)
-        #expect(with.rings[0].suggestedRange == nil)
-    }
-
-    @Test func missingRingsShowADashNotAZero() {
-        let dashboard = TodayTestDays.dashboard(TodayTestDays.summary(stress: nil), TodayTestDays.context())
-        #expect(dashboard.rings[2].text == "—")
-        #expect(dashboard.rings[2].delta == nil)
-    }
-
-    @Test func absentStrainNamesTheMissingProfileField() {
-        let summary = TodayTestDays.summary(strain: nil,
-                                            strainConfidence: "Add your age or set a maximum heart rate to see strain")
-        let dashboard = TodayTestDays.dashboard(summary, TodayTestDays.context())
-        #expect(dashboard.rings[1].needsAge)
-        #expect(dashboard.rings[1].reading.value == nil)
-        #expect(!dashboard.rings[0].needsAge)
     }
 }
 
@@ -312,7 +275,7 @@ struct TodayHeadsUpTests {
     @Test func firstFlaggedNightUsesSharedSignalValuesAndDirection() throws {
         let summary = TodayTestDays.summary(recovery: 30)
         let card = try #require(TodayTestDays.dashboard(summary, context(values: [.restingHeartRate: 60, .heartRateVariability: 40])).headsUp)
-        #expect(card.title == "Two signals outside your usual range")
+        #expect(card.title == "Resting heart rate above and HRV below your usual range")
         #expect(card.signals.map(\.metric) == [.restingHeartRate, .heartRateVariability])
         #expect(card.signals.map(\.text) == ["Resting heart rate +6 bpm", "HRV \u{2212}11 ms"])
     }
@@ -328,13 +291,8 @@ struct TodayHeadsUpTests {
         let summary = TodayTestDays.summary()
         #expect(TodayTestDays.dashboard(summary, context(values: [.restingHeartRate: 60, .heartRateVariability: 40], baseline: 5)).headsUp == nil)
         let card = try #require(TodayTestDays.dashboard(summary, context(values: [.restingHeartRate: 60, .heartRateVariability: 40, .respiratoryRate: 16], journal: ["alcohol", "late meal"])).headsUp)
-        #expect(card.title == "Three signals outside your usual range")
+        #expect(card.title == "Resting heart rate above, HRV below and breathing rate above your usual range")
         #expect(card.factors == ["Alcohol", "Late meal"])
-    }
-
-    @Test func dismissingHidesItForTheDay() {
-        let summary = TodayTestDays.summary()
-        #expect(TodayTestDays.dashboard(summary, context(values: [.restingHeartRate: 60, .heartRateVariability: 40]), dismissed: true).headsUp == nil)
     }
 
     @Test func copyNamesOrdinaryCausesBeforeIllnessWithoutDiagnosis() throws {
@@ -346,23 +304,7 @@ struct TodayHeadsUpTests {
     }
 }
 
-struct TodayTilesTonightCoachTests {
-    @Test func pinnedTilesFollowTheChosenOrderWithDeltas() {
-        let dashboard = TodayTestDays.dashboard(TodayTestDays.summary(), TodayTestDays.context(),
-                                                pinned: [.steps, .hrv, .activeEnergy, .respiratoryRate])
-        #expect(dashboard.tiles.map(\.metric) == [.steps, .hrv, .activeEnergy, .respiratoryRate])
-        #expect(dashboard.tiles.map(\.value) == ["8,240", "58", "612", "14.6"])
-        #expect(dashboard.tiles[1].delta?.compactText == "+7 ms")
-    }
-
-    @Test func aTileWithoutAReadingStaysEmptyNotZero() {
-        var history = TodayTestDays.standardHistory()
-        history[.activeEnergy] = TodayTestDays.series(usual: 640, spread: 140)
-        let dashboard = TodayTestDays.dashboard(TodayTestDays.summary(), TodayTestDays.context(history: history), pinned: [.activeEnergy])
-        #expect(dashboard.tiles[0].value == nil)
-        #expect(dashboard.tiles[0].delta == nil)
-    }
-
+struct TodayTonightTests {
     @Test func tonightCountsBackFromTheAlarm() {
         let plan = TodayTonightRules.plan(TodayTonightInputs(needMinutes: 470, alarmMinute: 7 * 60, suggestedWakeMinute: 7 * 60 + 30))
         #expect(plan?.title == "Asleep by 23:10")
@@ -384,16 +326,5 @@ struct TodayTilesTonightCoachTests {
         let context = TodayTestDays.context(tonight: TodayTonightInputs(needMinutes: 450, alarmMinute: 420, suggestedWakeMinute: nil))
         #expect(TodayTestDays.dashboard(TodayTestDays.summary(), context).tonight != nil)
         #expect(TodayTestDays.dashboard(TodayTestDays.summary(), context, isToday: false).tonight == nil)
-    }
-
-    @Test func theBriefingPlanReplacesTheBottomCoachLine() {
-        let none = TodayTestDays.dashboard(TodayTestDays.summary(), nil)
-        #expect(none.coach == nil)
-        let empty = TodayCoachPlanSummary(title: "No plan yet", detail: "Waiting", recommendationCount: 0, evidenceSummary: "", state: .absent)
-        #expect(TodayTestDays.dashboard(TodayTestDays.summary(coach: .plan(empty)), nil).coach == nil)
-        let real = TodayCoachPlanSummary(title: "An easy walk suits today", detail: "Recovery is steady.", recommendationCount: 1,
-                                         evidenceSummary: "readiness", state: .partial)
-        #expect(TodayTestDays.dashboard(TodayTestDays.summary(coach: .plan(real)), nil).coach
-                == nil)
     }
 }

@@ -52,8 +52,9 @@ final class SleepNightDetailsTests: XCTestCase {
         func now() -> Date { value }
     }
 
+    #if LOOPR_PRIVATE_DATABASE_AUDITS
     func testTheRealNightCarriesTimesStagesAndAHeartLine() async throws {
-        guard let source = Self.databasePath else { throw XCTSkip("No real night database") }
+        let source = try XCTUnwrap(Self.databasePath, "Private audit requires a readable night database")
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -103,4 +104,5 @@ final class SleepNightDetailsTests: XCTestCase {
         XCTAssertEqual(insights.consistency.measured.count, 2)
         XCTAssertFalse(insights.rows.contains { $0.id == "latency" || $0.id == "remLatency" })
     }
+    #endif
 }

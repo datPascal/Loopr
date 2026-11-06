@@ -77,6 +77,35 @@ final class MetricHistoryTests: XCTestCase {
         let base = BandMetricSeriesMapping.values(projection: projection, today: nil)
         XCTAssertFalse(base.keys.contains(.recovery))
         XCTAssertFalse(base.keys.contains(.sleepConsistency))
+        XCTAssertFalse(base.keys.contains(.sleepPerformance))
+        XCTAssertFalse(base.keys.contains(.sleepDebt))
+        XCTAssertTrue(values.keys.contains(.sleepPerformance))
+        XCTAssertTrue(values.keys.contains(.sleepDebt))
+        XCTAssertNil(values[.sleepPerformance] ?? nil, "One night cannot invent estimated sleep need")
+        XCTAssertNil(values[.sleepDebt] ?? nil, "One night cannot invent sleep debt")
+    }
+
+    func testSleepNeedAndDebtAreConvertedToCanonicalUnitsAndMissingStaysMissing() async throws {
+        let (history, products) = try databases()
+        try seedNight(history, start: start, seconds: 14_401)
+        let engine = try makeEngine(history: history, products: products)
+        let read = try await engine.read(day: DayIdentity(year: 2026, month: 9, day: 7))
+        let projection = try XCTUnwrap(read)
+        for (need, debt, expectedPerformance, expectedDebt): (Double?, Double?, Double?, Double?) in [
+            (8, 0.5, 87.5, 30), (8, 0, 87.5, 0), (0, nil, nil, nil),
+            (nil, nil, nil, nil), (.nan, .infinity, nil, nil), (-8, -1, nil, nil),
+            (.greatestFiniteMagnitude, .greatestFiniteMagnitude, nil, nil), (.leastNonzeroMagnitude, nil, nil, nil)
+        ] {
+            let sleep = SleepDaySnapshot(day: projection.sleep.day, state: .partial,
+                mainSleep: projection.sleep.mainSleep,
+                metrics: [.init(id: "duration", title: "Duration", value: "7h", unit: "min", state: .partial, source: "test", numericValue: 420)],
+                needHours: need, debtHours: debt, source: "test")
+            let values = BandMetricSeriesMapping.values(projection: projection.replacingSleep(sleep), today: projection.today)
+            XCTAssertTrue(values.keys.contains(.sleepPerformance))
+            XCTAssertTrue(values.keys.contains(.sleepDebt))
+            XCTAssertEqual(values[.sleepPerformance] ?? nil, expectedPerformance)
+            XCTAssertEqual(values[.sleepDebt] ?? nil, expectedDebt)
+        }
     }
 
     func testDaytimeHeartReadingsWithoutANightStayOutOfHistory() async throws {
@@ -169,7 +198,7 @@ final class MetricHistoryTests: XCTestCase {
         let backfill = MetricHistoryBackfill(history: history, analytics: engine, recorder: recorder,
             timeZoneProvider: SystemTimeZoneProvider(timeZone: utc),
             dates: HistoryTestDate(value: Date(timeIntervalSince1970: Double(start + 86_400 + 36_000))),
-            budget: LooprDerivationBudget(foreground: LooprFixedForegroundState(true)), pause: .zero)
+            budget: LooprDerivationBudget(foreground: LooprFixedForegroundState(true)), pause: .zero, defaults: freshDefaults())
 
         let pending = try await backfill.pendingDays()
         XCTAssertEqual(pending, [DayIdentity(year: 2026, month: 9, day: 8), DayIdentity(year: 2026, month: 9, day: 7)])
@@ -181,6 +210,35 @@ final class MetricHistoryTests: XCTestCase {
         XCTAssertTrue(remaining.isEmpty)
         let again = await backfill.run()
         XCTAssertEqual(again, 0)
+    }
+
+    /// A build whose mapping gained a metric revisits days that already have a band series, once,
+    /// so history recorded before the update gets the new metric.
+    func testBackfillRevisitsStoredDaysOnceAfterTheMappingChanges() async throws {
+        let (history, products) = try databases()
+        try seedNight(history, start: start, seconds: 14_401)
+        let clock = HistoryTestDate(value: Date(timeIntervalSince1970: Double(start + 36_000)))
+        let engine = try makeEngine(history: history, products: products, now: clock.value)
+        // An earlier build stored one series for the day and finished its refresh at version 1.
+        try history.upsertMetricSeries([.init(localDay: "2026-09-07", metricKey: "resting_heart_rate", source: .band, value: 60)], updatedAt: 1)
+        let defaults = freshDefaults()
+        defaults.set(BandMetricSeriesMapping.version - 1, forKey: MetricHistoryBackfill.mappingVersionKey)
+        func backfill() -> MetricHistoryBackfill {
+            MetricHistoryBackfill(history: history, analytics: engine,
+                recorder: MetricSeriesRecorder(history: history, dates: HistoryTestDate(value: now)),
+                timeZoneProvider: SystemTimeZoneProvider(timeZone: utc), dates: clock,
+                budget: LooprDerivationBudget(foreground: LooprFixedForegroundState(true)), pause: .zero, defaults: defaults)
+        }
+
+        let upgraded = backfill()
+        let pending = try await upgraded.pendingDays()
+        XCTAssertEqual(pending, [DayIdentity(year: 2026, month: 9, day: 7)], "The stored day is revisited after the mapping changed")
+        let written = await upgraded.run()
+        XCTAssertEqual(written, 1)
+        XCTAssertEqual(defaults.integer(forKey: MetricHistoryBackfill.mappingVersionKey), BandMetricSeriesMapping.version)
+
+        let nextLaunch = try await backfill().pendingDays()
+        XCTAssertTrue(nextLaunch.isEmpty, "Once the refresh finished, stored days are skipped again")
     }
 
     func testBackfillDoesNothingOffScreen() async throws {
@@ -200,11 +258,12 @@ final class MetricHistoryTests: XCTestCase {
     /// A copy of the phone's history database, when one is on this Mac,
     /// produces band series through the production backfill. The original is
     /// never opened; the copy lives in a temporary directory.
+    #if LOOPR_PRIVATE_DATABASE_AUDITS
     func testRealDatabaseCopyProducesSeries() async throws {
         let candidates = [ProcessInfo.processInfo.environment["LOOPR_REAL_DB"],
                           "/tmp/loopr-night/device-snapshot/loopr.sqlite"].compactMap { $0 }
         let found = candidates.first { FileManager.default.isReadableFile(atPath: $0) }
-        try XCTSkipIf(found == nil, "No real strap database available")
+        _ = try XCTUnwrap(found, "Private audit requires a readable device database")
         let source = try XCTUnwrap(found)
         let root = try makeRoot()
         let copy = root.appendingPathComponent("history.sqlite")
@@ -240,6 +299,7 @@ final class MetricHistoryTests: XCTestCase {
         }
         XCTAssertTrue(rows.contains { ($0["metric_key"] as String) == "strain" || ($0["metric_key"] as String) == "resting_heart_rate" })
     }
+    #endif
 
     // MARK: Apple Health store
 
@@ -265,6 +325,14 @@ final class MetricHistoryTests: XCTestCase {
     }
 
     // MARK: Helpers
+
+    /// A defaults store of its own, so the mapping version never leaks between tests or from the host app.
+    private func freshDefaults() -> UserDefaults {
+        let name = "MetricHistoryTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: name) }
+        return defaults
+    }
 
     private var now: Date { Date(timeIntervalSince1970: Double(start + 36_000)) }
 

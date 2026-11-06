@@ -10,13 +10,15 @@ final class LooprUITests: XCTestCase {
         let app = launch(mode: "populated")
         XCTAssertTrue(element(app, "main-tab-shell").waitForExistence(timeout: 5))
         XCTAssertEqual(app.tabBars.buttons.count, 5)
-        XCTAssertEqual(app.tabBars.buttons.allElementsBoundByIndex.map(\.label), ["Today", "Sleep", "Heart", "Body", "Workouts"])
+        XCTAssertEqual(app.tabBars.buttons.allElementsBoundByIndex.map(\.label), ["Today", "Food", "Fitness", "Protocol", "Data"])
         XCTAssertTrue(element(app, "today-screen").waitForExistence(timeout: 5))
-        XCTAssertTrue(element(app, "today-goals").waitForExistence(timeout: 5))
-        // Recovery sits directly above the Sleep, Strain and Stress rings.
+        // UX simplification: recovery, then Up next, then one "More from today" row. Ask lives in the header only.
         XCTAssertTrue(element(app, "today-metric-recovery").waitForExistence(timeout: 5))
-        XCTAssertTrue(element(app, "today-metric-sleep").waitForExistence(timeout: 5))
-        XCTAssertTrue(element(app, "today-metric-strain").waitForExistence(timeout: 5))
+        XCTAssertTrue(element(app, "today-rail").waitForExistence(timeout: 5))
+        XCTAssertTrue(element(app, "today-more").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["today-header-coach"].exists)
+        XCTAssertFalse(element(app, "today-ask-composer").exists)
+        XCTAssertFalse(element(app, "today-your-day").exists)
     }
 
     @MainActor
@@ -27,8 +29,11 @@ final class LooprUITests: XCTestCase {
         XCTAssertTrue(connect.waitForExistence(timeout: 5))
         connect.tapWhenHittable(in: app)
 
-        XCTAssertTrue(app.alerts["Connect your band?"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.alerts["Connect a WHOOP 4.0 band?"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["today-connect-continue"].exists)
+        // Someone without a band has a way out, and is told what works without one (R3-NEW-7).
+        app.buttons["today-connect-no-band"].tapWhenHittable(in: app)
+        XCTAssertTrue(app.alerts["Band"].waitForExistence(timeout: 5))
     }
 
     @MainActor
@@ -55,7 +60,7 @@ final class LooprUITests: XCTestCase {
         let prompt = app.buttons["heart-profile-age-prompt"]
         XCTAssertTrue(prompt.waitForExistence(timeout: 5))
         prompt.tapWhenHittable(in: app)
-        XCTAssertTrue(element(app, "settings-profile-age").waitForExistence(timeout: 5))
+        XCTAssertTrue(element(app, "settings-profile-birth-year").waitForExistence(timeout: 5))
     }
 
     @MainActor
@@ -67,7 +72,7 @@ final class LooprUITests: XCTestCase {
         element(app, "heart-zone-settings-route").tapWhenHittable(in: app)
         XCTAssertTrue(element(app, "heart-zone-settings-screen").waitForExistence(timeout: 5))
         app.buttons["heart-zone-settings-age-action"].tapWhenHittable(in: app)
-        XCTAssertTrue(element(app, "settings-profile-age").waitForExistence(timeout: 10))
+        XCTAssertTrue(element(app, "settings-profile-birth-year").waitForExistence(timeout: 10))
     }
 
     @MainActor
@@ -173,7 +178,7 @@ final class LooprUITests: XCTestCase {
     @MainActor
     func testTodaySettingsRouteIsReachableAndReturnsToToday() {
         let app = launch(mode: "populated")
-        app.buttons["open-settings"].firstMatch.tapWhenHittable(in: app)
+        XCTAssertTrue(app.openLooprSettings())
         XCTAssertTrue(element(app, "settings-modal").waitForExistence(timeout: 5))
         XCTAssertTrue(element(app, "settings-screen").exists)
         XCTAssertTrue(app.navigationBars.staticTexts["Settings"].firstMatch.exists)
@@ -184,7 +189,7 @@ final class LooprUITests: XCTestCase {
     @MainActor
     func testAppleHealthSettingsShowsDefaultOnAndExplainsPermission() {
         let app = launch(mode: "populated")
-        app.buttons["open-settings"].firstMatch.tapWhenHittable(in: app)
+        XCTAssertTrue(app.openLooprSettings())
         XCTAssertTrue(element(app, "settings-modal").waitForExistence(timeout: 5))
         tapSettingsEntry(app, "settings-apple-health")
         let toggle = app.switches["settings-health-sync-enabled"].firstMatch
@@ -202,7 +207,7 @@ final class LooprUITests: XCTestCase {
     @MainActor
     func testSettingsRoutesReachDeviceCenterCycleAndDataScreens() {
         let app = launch(mode: "populated")
-        app.buttons["open-settings"].firstMatch.tapWhenHittable(in: app)
+        XCTAssertTrue(app.openLooprSettings())
         XCTAssertTrue(element(app, "settings-modal").waitForExistence(timeout: 5))
 
         let destinations = [
@@ -224,15 +229,19 @@ final class LooprUITests: XCTestCase {
     func testTodayJournalAndRecordsRoutesAreReachable() {
         let app = launch(mode: "populated")
 
-        assertReachableLabel("Journal", in: app)
-        button(containing: "Journal", in: app).tapWhenHittable(in: app)
+        // Journal is a tab. Records sits in Health's Explore list (DEC-08).
+        app.tabBars.buttons["Protocol"].tapWhenHittable(in: app)
         XCTAssertTrue(element(app, "journal-screen").waitForExistence(timeout: 5))
-        XCTAssertTrue(element(app, "journal-compose").waitForExistence(timeout: 5))
+        // The note and Privacy sit in "How was your day?" (ICP R1-DES-01).
+        XCTAssertTrue(element(app, "protocol-evening-open").waitForExistence(timeout: 5))
+        element(app, "protocol-evening-open").tapWhenHittable(in: app)
+        XCTAssertTrue(element(app, "journal-check-in-note").waitForExistence(timeout: 5))
         XCTAssertTrue(element(app, "journal-privacy").waitForExistence(timeout: 5))
-        navigateBack(app, to: "today-screen")
+        element(app, "protocol-evening-done").tap()
 
-        assertReachableLabel("Records", in: app)
-        button(containing: "Records", in: app).tapWhenHittable(in: app)
+        app.tabBars.buttons["Data"].tapWhenHittable(in: app)
+        XCTAssertTrue(element(app, "health-screen").waitForExistence(timeout: 5))
+        element(app, "health-explore-records").tapWhenHittable(in: app)
         XCTAssertTrue(element(app, "records-screen").waitForExistence(timeout: 5))
         XCTAssertTrue(element(app, "loopr-navigation-header").waitForExistence(timeout: 5))
         XCTAssertTrue(element(app, "records-timeline").waitForExistence(timeout: 5))
@@ -242,7 +251,7 @@ final class LooprUITests: XCTestCase {
     @MainActor
     func testWorkoutsRoutesExposeStartLogAndCompletedDetail() {
         let app = launch(mode: "populated")
-        app.tabBars.buttons["Workouts"].tapWhenHittable(in: app)
+        app.tabBars.buttons["Fitness"].tapWhenHittable(in: app)
         XCTAssertTrue(element(app, "workouts-screen").waitForExistence(timeout: 5))
 
         element(app, "workouts-start").tapWhenHittable(in: app)
@@ -262,7 +271,7 @@ final class LooprUITests: XCTestCase {
     @MainActor
     func testWorkoutsRecoveryRouteOffersExplicitResumeAndDiscard() {
         let app = launch(mode: "populated")
-        app.tabBars.buttons["Workouts"].tapWhenHittable(in: app)
+        app.tabBars.buttons["Fitness"].tapWhenHittable(in: app)
         XCTAssertTrue(element(app, "workouts-screen").waitForExistence(timeout: 5))
 
         let recoveryRow = element(app, "workout-row-00000000-0000-0000-0000-000000000702")
@@ -296,7 +305,7 @@ final class LooprUITests: XCTestCase {
     @MainActor
     func testActiveWorkoutAccessoryAppearsOnEveryTabAndOpensSession() {
         let app = launch(mode: "activeWorkout")
-        for tab in ["Today", "Sleep", "Heart", "Body", "Workouts"] {
+        for tab in ["Today", "Food", "Fitness", "Protocol", "Data"] {
             app.tabBars.buttons[tab].tapWhenHittable(in: app)
             XCTAssertTrue(app.buttons["active-workout-mini-player"].waitForExistence(timeout: 5), "Missing mini-player on \(tab)")
         }
@@ -314,10 +323,10 @@ final class LooprUITests: XCTestCase {
     @MainActor
     func testPhase06DeepLinksSelectCanonicalTabsAndRoutes() {
         let cases: [(link: String, identifiers: [String], tab: String)] = [
-            ("sleep/detail", ["sleep-screen"], "Sleep"),
-            ("heart/detail", ["heart-detail-screen"], "Heart"),
-            ("body/detail", ["body-screen"], "Body"),
-            ("workouts/detail", ["workout-detail-screen"], "Workouts")
+            ("sleep/detail", ["sleep-screen"], "Data"),
+            ("heart/detail", ["heart-detail-screen"], "Data"),
+            ("body/detail", ["body-screen"], "Data"),
+            ("workouts/detail", ["workout-detail-screen"], "Fitness")
         ]
         for (link, identifiers, tab) in cases {
             let app = launch(mode: "populated", additionalArguments: ["--loopr-deep-link=\(link)"])
@@ -334,12 +343,12 @@ final class LooprUITests: XCTestCase {
         // gone, an empty day says so in its own card, and stale or
         // disconnected states keep their chip.
         let cases: [(String, String?, String?)] = [
-            ("empty", "Nothing for today yet", nil),
-            ("populated", nil, "today-goals"),
+            ("empty", "Start with a meal or a workout", nil),
+            ("populated", nil, "today-more"),
             ("stale", "Out of date", nil),
-            ("disconnected", "Strap disconnected", nil),
-            ("connectedMixedCapabilities", nil, "today-goals"),
-            ("activeWorkout", nil, "today-goals")
+            ("disconnected", "Band disconnected", nil),
+            ("connectedMixedCapabilities", nil, "today-more"),
+            ("activeWorkout", nil, "today-more")
         ]
         for (mode, stateTitle, identifier) in cases {
             let app = launch(mode: mode)
@@ -359,71 +368,53 @@ final class LooprUITests: XCTestCase {
     func testTodayRoutesToCanonicalSleepHeartBodyAndCoachScreens() {
         let app = launch(mode: "populated")
 
-        element(app, "today-metric-sleep").tapWhenHittable(in: app)
-        XCTAssertTrue(element(app, "sleep-screen").waitForExistence(timeout: 5))
-        XCTAssertTrue(element(app, "loopr-navigation-header").waitForExistence(timeout: 5))
-        navigateBack(app, to: "today-screen")
-
-        // Today redesign (2026-09-24): the recovery hero opens its
-        // breakdown, the strain ring opens the strain breakdown (which links
-        // on to Body), and the coach sits in the More grid. The old heart
-        // lens is gone; heart numbers open their metric pages.
+        // The recovery readout opens its breakdown, and the header's Ask opens Ask. The Your day card with its Sleep
+        // and Strain rows left Today in the UX simplification (2026-11-01); Sleep and Strain live under Data.
         element(app, "today-metric-recovery").tapWhenHittable(in: app)
         XCTAssertTrue(element(app, "today-recovery-breakdown-screen").waitForExistence(timeout: 5))
         navigateBack(app, to: "today-screen")
 
-        element(app, "today-metric-strain").tapWhenHittable(in: app)
-        XCTAssertTrue(element(app, "today-strain-breakdown-screen").waitForExistence(timeout: 5))
-        element(app, "today-breakdown-body").tapWhenHittable(in: app)
-        XCTAssertTrue(element(app, "body-screen").waitForExistence(timeout: 5))
-        XCTAssertTrue(element(app, "loopr-navigation-header").waitForExistence(timeout: 5))
-        navigateBack(app, to: "today-strain-breakdown-screen")
-        navigateBack(app, to: "today-screen")
-
-        // More sits below the first viewport. Scroll it into the accessibility
-        // tree before asking the shared tap helper to find it.
-        let coach = element(app, "today-coach")
-        for _ in 0..<8 where !coach.exists { app.swipeUp() }
-        coach.tapWhenHittable(in: app)
-        XCTAssertTrue(element(app, "coach-screen").waitForExistence(timeout: 5))
+        // iOS 27 reports the glass header's own buttons as not hittable, so tap it directly.
+        let coach = app.buttons["today-header-coach"].firstMatch
+        XCTAssertTrue(coach.waitForExistence(timeout: 5))
+        coach.tap()
+        XCTAssertTrue(element(app, "ask-sheet").waitForExistence(timeout: 5))
     }
 
     @MainActor
-    func testTodayGoalOpensGoalSettings() {
-        let app = launch(mode: "populated")
+    func testGoalsRouteOpensGoalSettings() {
+        // Today no longer has a Goals card (FT-05.5). The goals route still opens the editor.
+        let app = launch(mode: "populated", additionalArguments: ["--loopr-deep-link=today/goals"])
 
-        element(app, "today-goal-movement").tapWhenHittable(in: app)
-
-        XCTAssertTrue(element(app, "goal-settings-screen").waitForExistence(timeout: 5))
+        XCTAssertTrue(element(app, "goal-settings-screen").waitForExistence(timeout: 10))
     }
 
     @MainActor
     func testSleepDetailRoutesExposeHypnogramTrendsCorrectionsAndCoach() {
         let app = launch(mode: "populated")
-        app.tabBars.buttons["Sleep"].tapWhenHittable(in: app)
+        app.openLooprArea("Sleep")
         XCTAssertTrue(element(app, "sleep-screen").waitForExistence(timeout: 5))
 
-        button(containing: "Sleep stages", in: app).tapWhenHittable(in: app)
-        XCTAssertTrue(element(app, "sleep-hypnogram-screen").waitForExistence(timeout: 5))
-        navigateBack(app, to: "sleep-screen")
+        // Sleep opens on the whole night: stage changes and corrections are rows on it, trends are its range picker.
+        XCTAssertTrue(element(app, "sleep-hypnogram-route").waitForExistence(timeout: 5))
 
-        button(containing: "Sleep trends", in: app).tapWhenHittable(in: app)
-        XCTAssertTrue(element(app, "sleep-trends-screen").waitForExistence(timeout: 5))
-        navigateBack(app, to: "sleep-screen")
+        element(app, "sleep-hypnogram-route").tapWhenHittable(in: app)
+        XCTAssertTrue(element(app, "sleep-hypnogram-screen").waitForExistence(timeout: 5))
+        navigateBack(app, to: "sleep-hypnogram-route")
 
         button(containing: "Corrections", in: app).tapWhenHittable(in: app)
         XCTAssertTrue(element(app, "sleep-corrections-screen").waitForExistence(timeout: 5))
-        navigateBack(app, to: "sleep-screen")
+        navigateBack(app, to: "sleep-hypnogram-route")
 
-        button(containing: "Sleep coach", in: app).tapWhenHittable(in: app)
-        XCTAssertTrue(element(app, "coach-screen").waitForExistence(timeout: 5))
+        element(app, "sleep-scope-month").tapWhenHittable(in: app)
+        XCTAssertTrue(element(app, "sleep-trends-screen").waitForExistence(timeout: 5))
     }
 
     @MainActor
     func testHeartAndBodyDetailRoutesExposeQualityAndAgeDestinations() {
         let app = launch(mode: "populated")
 
-        app.tabBars.buttons["Heart"].tapWhenHittable(in: app)
+        app.openLooprArea("Heart")
         XCTAssertTrue(element(app, "heart-screen").waitForExistence(timeout: 5))
         element(app, "heart-live-card").tapWhenHittable(in: app)
         XCTAssertTrue(element(app, "heart-live-screen").waitForExistence(timeout: 5))
@@ -435,16 +426,11 @@ final class LooprUITests: XCTestCase {
         XCTAssertTrue(element(app, "heart-spot-check-screen").waitForExistence(timeout: 5))
         navigateBack(app, to: "heart-screen")
 
-        app.tabBars.buttons["Body"].tapWhenHittable(in: app)
+        app.openLooprArea("Body")
         XCTAssertTrue(element(app, "body-screen").waitForExistence(timeout: 5))
         element(app, "body-training-load").tapWhenHittable(in: app)
         XCTAssertTrue(element(app, "body-load-screen").waitForExistence(timeout: 5))
-        navigateBack(app, to: "body-screen")
-        button(containing: "Cardio Age", in: app).tapWhenHittable(in: app)
-        XCTAssertTrue(element(app, "cardio-age-screen").waitForExistence(timeout: 5))
-        navigateBack(app, to: "body-screen")
-        button(containing: "Loopr Age", in: app).tapWhenHittable(in: app)
-        XCTAssertTrue(element(app, "loopr-age-screen").waitForExistence(timeout: 5))
+        // Cardio Age and Loopr Age live on Data's age ruler, not on the Strain page (Data ICP R1).
     }
 
     @MainActor
@@ -452,17 +438,17 @@ final class LooprUITests: XCTestCase {
         let app = launch(mode: "populated")
         let tabRoots = [
             ("Today", "today-screen"),
-            ("Sleep", "sleep-screen"),
-            ("Heart", "heart-screen"),
-            ("Body", "body-screen"),
-            ("Workouts", "workouts-screen")
+            ("Food", "food-screen"),
+            ("Fitness", "workouts-screen"),
+            ("Protocol", "journal-screen"),
+            ("Data", "health-screen")
         ]
         for (tab, identifier) in tabRoots {
             selectTab(app, tab, root: identifier)
             let root = element(app, identifier)
             XCTAssertTrue(root.isEnabled, "\(identifier) is not enabled")
             XCTAssertGreaterThan(app.staticTexts.count, 0, "\(identifier) has no accessible text")
-            XCTAssertTrue(app.tabBars.buttons[tab].isSelected)
+            XCTAssertTrue(app.tabBars.buttons[tab].firstMatch.isSelected)
         }
     }
 
@@ -588,6 +574,8 @@ final class LooprUITests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
+        if ["Sleep", "Heart", "Body", "Workouts"].contains(tab) { _ = app.openLooprArea(tab); return }
+
         for _ in 0..<3 {
             let tabBar = app.tabBars.firstMatch
             let tabButton = tabBar.buttons[tab].firstMatch
@@ -673,12 +661,9 @@ private extension XCUIElement {
         XCTAssertTrue(waitForExistence(timeout: 5), "Element \(identifier) did not appear", file: file, line: line)
         for _ in 0..<5 {
             // SwiftUI scroll content can be technically hittable while its
-            // center is underneath the native tab bar. XCTest then dispatches
-            // the tap to the tab bar instead of the requested row. Keep the
-            // target's center in the content viewport before tapping.
-            let tabBarTop = app.tabBars.firstMatch.exists
-                ? app.tabBars.firstMatch.frame.minY
-                : app.frame.maxY
+            // center is underneath the native tab bar or the tab header. XCTest
+            // then dispatches the tap to the bar instead of the requested row.
+            // Keep the target's center in the content viewport before tapping.
             // Tab-bar buttons necessarily live inside the tab bar; the
             // content-viewport guard applies only to scrollable content
             // controls whose center can be covered by that bar.
@@ -686,11 +671,13 @@ private extension XCUIElement {
                 .matching(NSPredicate(format: "label == %@", label))
                 .firstMatch
                 .exists
-            if isHittable, (isTabBarButton || frame.midY < tabBarTop - 8) {
+            if isTabBarButton ? isHittable : app.showsInContent(self) {
                 tap()
                 return
             }
-            app.swipeUp()
+            // A tab keeps its scroll position, so the target can sit above or
+            // under the header after a round trip. Scroll towards it.
+            if exists, frame.midY <= app.tabHeaderBottom + 8 { app.swipeDown() } else { app.swipeUp() }
         }
         XCTFail("Element \(identifier) is not hittable", file: file, line: line)
     }

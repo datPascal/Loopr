@@ -1,0 +1,6 @@
+{
+  "source": "BinaryExposureAnalyzer at local commit 11e7697, before matrix-storage optimization",
+  "generation": "Swift 6, -Onone, six deterministic 90-row cases, 2000 replicates, block length 3, baseline window 28, minimum baseline 3, ridge lambda 1",
+  "file": "binary-exposure-reference.json",
+  "sha256": "0427c7c1bad36d39b5cd670917a877acda950fbcf68a4bcf229c6e21e2135a49"
+}

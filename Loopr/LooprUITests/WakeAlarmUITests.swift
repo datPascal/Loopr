@@ -9,12 +9,18 @@ final class WakeAlarmUITests: XCTestCase {
     }
 
     @MainActor
-    func testSettingAWakeAlarmFromTodayTakesAtMostThreeTaps() {
+    func testSettingAWakeAlarmFromTodayTakesAtMostFourTaps() {
+        // The card left Today in FT-05.5, and Your day left in the UX simplification (2026-11-01). The shortest real
+        // path from Today is "More from today" (1), the Bedtime row on the timeline (2), the Smart alarm row on Sleep (3)
+        // and Save (4). An alarm that is on has its own timeline row, one tap from the open fold.
         let app = launch(fixture: "empty")
         var taps = 0
 
         XCTAssertTrue(element(app, "today-screen").waitForExistence(timeout: 10))
-        tap(element(app, "today-wake-alarm-card"), in: app, counting: &taps)
+        tap(element(app, "today-more"), in: app, counting: &taps)
+        tap(element(app, "today-timeline-bedtime"), in: app, counting: &taps)
+        XCTAssertTrue(element(app, "sleep-screen").waitForExistence(timeout: 10))
+        tap(element(app, "sleep-wake-alarm-card"), in: app, counting: &taps)
         XCTAssertTrue(element(app, "wake-alarm-hero").waitForExistence(timeout: 5))
 
         // The save button is pinned above the tab bar, so no scrolling.
@@ -23,7 +29,7 @@ final class WakeAlarmUITests: XCTestCase {
         save.tap()
         taps += 1
 
-        XCTAssertLessThanOrEqual(taps, 3, "Setting an alarm from Today took \(taps) taps")
+        XCTAssertLessThanOrEqual(taps, 4, "Setting an alarm from Today took \(taps) taps")
         let toggle = app.switches["wake-alarm-toggle"].firstMatch
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         expectation(for: NSPredicate(format: "value == %@", "1"), evaluatedWith: toggle)
@@ -34,9 +40,9 @@ final class WakeAlarmUITests: XCTestCase {
         expectation(for: confirmed, evaluatedWith: band)
         waitForExpectations(timeout: 10)
 
-        // Back on Today the card shows the alarm instead of the prompt.
+        // Back on Sleep the card shows the alarm instead of the prompt.
         app.navigationBars.buttons.firstMatch.tap()
-        let card = element(app, "today-wake-alarm-card")
+        let card = element(app, "sleep-wake-alarm-card")
         XCTAssertTrue(card.waitForExistence(timeout: 5))
         let showsTime = NSPredicate(format: "label CONTAINS[c] %@", "Wake alarm")
         expectation(for: showsTime, evaluatedWith: card)
@@ -47,15 +53,46 @@ final class WakeAlarmUITests: XCTestCase {
     @MainActor
     func testSleepCardOpensTheWakeAlarm() {
         let app = launch(fixture: "set")
-        let sleepTab = app.tabBars.buttons["Sleep"].firstMatch
-        XCTAssertTrue(sleepTab.waitForExistence(timeout: 10))
-        sleepTab.tap()
+        XCTAssertTrue(app.openLooprArea("Sleep"))
         XCTAssertTrue(element(app, "sleep-screen").waitForExistence(timeout: 5))
 
         var taps = 0
         tap(element(app, "sleep-wake-alarm-card"), in: app, counting: &taps)
         XCTAssertTrue(element(app, "wake-alarm-hero").waitForExistence(timeout: 5))
         XCTAssertEqual(taps, 1)
+    }
+
+    @MainActor
+    func testTheAlarmRowOnTodaysTimelineOpensTheWakeAlarmInOneTap() {
+        let app = launch(fixture: "set")
+        XCTAssertTrue(element(app, "today-screen").waitForExistence(timeout: 10))
+        let row = element(app, "today-timeline-alarm")
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "an alarm that is on shows on Today's timeline")
+        XCTAssertTrue(row.label.contains("Smart alarm"), row.label)
+
+        var taps = 0
+        tap(row, in: app, counting: &taps)
+        XCTAssertTrue(element(app, "wake-alarm-hero").waitForExistence(timeout: 5))
+        XCTAssertEqual(taps, 1, "Today to the alarm is one tap")
+        XCTAssertFalse(element(app, "sleep-screen").exists, "the row skips Sleep")
+    }
+
+    @MainActor
+    func testNoAlarmRowWhenTheAlarmIsOffOrTheDayIsPast() {
+        let off = launch(fixture: "empty")
+        XCTAssertTrue(element(off, "today-timeline-header").waitForExistence(timeout: 10))
+        XCTAssertFalse(element(off, "today-timeline-alarm").exists, "no alarm, no row")
+        off.terminate()
+
+        let app = launch(fixture: "set")
+        let navigator = element(app, "day-navigator")
+        XCTAssertTrue(navigator.waitForExistence(timeout: 10))
+        XCTAssertTrue(element(app, "today-timeline-alarm").waitForExistence(timeout: 10))
+        navigator.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)).tap()
+        XCTAssertTrue(element(app, "day-navigator-today").waitForExistence(timeout: 5), "now on a past day")
+        XCTAssertTrue(element(app, "today-more").waitForExistence(timeout: 10))
+        XCTAssertTrue(element(app, "today-timeline-end").waitForExistence(timeout: 10))
+        XCTAssertFalse(element(app, "today-timeline-alarm").exists, "a past day shows no alarm row")
     }
 
     @MainActor
@@ -74,9 +111,9 @@ final class WakeAlarmUITests: XCTestCase {
 
     @MainActor
     func testSettingsReachesTheWakeAlarmAndTheAdvancedRows() {
-        let app = launch(fixture: "set")
-        app.buttons["open-settings"].firstMatch.tap()
-        XCTAssertTrue(element(app, "settings-modal").waitForExistence(timeout: 5))
+        // The avatar opens Your data since FT-01, so the Settings home opens through its route.
+        let app = launch(fixture: "set", deepLink: "settings")
+        XCTAssertTrue(element(app, "settings-modal").waitForExistence(timeout: 15))
 
         var taps = 0
         tap(element(app, "settings-wake-alarm"), in: app, counting: &taps)
@@ -90,11 +127,10 @@ final class WakeAlarmUITests: XCTestCase {
     }
 
     @MainActor
-    func testTodayGoalCardAndSettingsOpenTheSameGoalsEditor() {
-        let app = launch(fixture: "empty")
-        var taps = 0
-        tap(element(app, "today-goal-movement"), in: app, counting: &taps)
-        XCTAssertTrue(element(app, "goal-settings-screen").waitForExistence(timeout: 5))
+    func testTheGoalsRouteOpensTheGoalsEditorWithAllFiveGoals() {
+        // Today no longer has a Goals card (FT-05.5). A goals notification and this route still open the editor.
+        let app = launch(fixture: "empty", deepLink: "today/goals")
+        XCTAssertTrue(element(app, "goal-settings-screen").waitForExistence(timeout: 10))
         // The one editor carries all five goals, not just steps and strain.
         XCTAssertTrue(element(app, "settings-goal-sleep-target").waitForExistence(timeout: 5))
         XCTAssertTrue(element(app, "settings-goal-steps-target").exists)
@@ -102,13 +138,14 @@ final class WakeAlarmUITests: XCTestCase {
 
     // MARK: Screenshots
 
-    /// Writes the review screenshots when `LOOPR_CAPTURE_DIR` is set. Skipped
-    /// otherwise, so the normal lane does not spend time on it.
+    /// Writes the review screenshots to `LOOPR_CAPTURE_DIR`, or to a temporary folder in other lanes, which still check
+    /// that every screen opens. The full lane allows no skipped tests.
     @MainActor
     func testCaptureWakeAlarmAndSettingsScreens() throws {
-        guard let directory = ProcessInfo.processInfo.environment["LOOPR_CAPTURE_DIR"], !directory.isEmpty else {
-            throw XCTSkip("Set LOOPR_CAPTURE_DIR to capture screenshots.")
-        }
+        let configured = ProcessInfo.processInfo.environment["LOOPR_CAPTURE_DIR"] ?? ""
+        let directory = configured.isEmpty
+            ? FileManager.default.temporaryDirectory.appendingPathComponent("loopr-wake-alarm-capture", isDirectory: true).path
+            : configured
         let appearance = ProcessInfo.processInfo.environment["LOOPR_CAPTURE_APPEARANCE"] ?? "dark"
 
         for state in ["empty", "set", "confirmed", "unconfirmed", "disconnected"] {
@@ -123,12 +160,13 @@ final class WakeAlarmUITests: XCTestCase {
             app.terminate()
         }
 
-        let today = launch(fixture: "confirmed", visualCapture: true)
-        let card = element(today, "today-wake-alarm-card")
-        scrollUntilHittable(card, in: today)
+        let sleep = launch(fixture: "confirmed", visualCapture: true)
+        XCTAssertTrue(sleep.openLooprArea("Sleep"))
+        let card = element(sleep, "sleep-wake-alarm-card")
+        scrollUntilHittable(card, in: sleep)
         settle()
-        save(today, "today-wake-card-\(appearance)", to: directory)
-        today.terminate()
+        save(sleep, "sleep-wake-card-\(appearance)", to: directory)
+        sleep.terminate()
 
         let settings = launch(fixture: "confirmed", deepLink: "settings", visualCapture: true)
         XCTAssertTrue(element(settings, "settings-modal").waitForExistence(timeout: 10))
@@ -150,6 +188,8 @@ final class WakeAlarmUITests: XCTestCase {
     private func launch(fixture: String, deepLink: String? = nil, visualCapture: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         var arguments = ["--loopr-launch-mode=populated", "--loopr-wake-alarm-fixture=\(fixture)"]
+        // The timeline sits in "More from today"; only the four-tap test opens it by hand.
+        if name.contains("FourTaps") == false { arguments += ["-loopr-open-folds", "YES"] }
         if let deepLink { arguments.append("--loopr-deep-link=\(deepLink)") }
         if visualCapture {
             // Follows the simulator appearance instead of the dark fixture

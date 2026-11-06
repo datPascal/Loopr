@@ -15,6 +15,8 @@ public enum BodyMetricID: String, Codable, CaseIterable, Hashable, Sendable {
     case effort
 }
 
+public enum BodyMetricUnitID: String, Codable, Sendable { case kilocalories, strainScore }
+
 public struct BodyMetricValue: Codable, Equatable, Sendable, Identifiable {
     public let id: BodyMetricID
     public let title: String
@@ -24,8 +26,14 @@ public struct BodyMetricValue: Codable, Equatable, Sendable, Identifiable {
     public let confidence: String?
     public let source: String
     public let algorithmVersion: String?
+    public let numericValue: Double?
+    public let numericUnit: BodyMetricUnitID?
+    /// Nil for older generations. True only when the derivation's profile,
+    /// wear and heart-rate anchors meet its requirements for this reading.
+    public let qualityQualified: Bool?
 
-    public init(id: BodyMetricID, title: String, value: String?, unit: String, state: MetricState, confidence: String? = nil, source: String, algorithmVersion: String? = nil) {
+    public init(id: BodyMetricID, title: String, value: String?, unit: String, state: MetricState, confidence: String? = nil, source: String, algorithmVersion: String? = nil,
+                numericValue: Double? = nil, numericUnit: BodyMetricUnitID? = nil, qualityQualified: Bool? = nil) {
         self.id = id
         self.title = title
         self.value = value
@@ -34,6 +42,8 @@ public struct BodyMetricValue: Codable, Equatable, Sendable, Identifiable {
         self.confidence = confidence
         self.source = source
         self.algorithmVersion = algorithmVersion
+        self.numericValue = numericValue?.isFinite == true ? numericValue : nil
+        self.numericUnit = numericUnit; self.qualityQualified = qualityQualified
     }
 
     public var accessibilitySummary: String {

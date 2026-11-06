@@ -21,14 +21,14 @@ struct LooprTabHeaderTests {
     }
 
     @Test func dayPhraseIsTheDateOnTodayAndNamesOtherDays() {
-        #expect(LooprHeaderMeta.dayPhrase(navigation(today)) == "THU 24 SEP")
-        #expect(LooprHeaderMeta.dayPhrase(navigation(LooprDay(year: 2026, month: 9, day: 23))) == "YESTERDAY · WED 23 SEP")
-        #expect(LooprHeaderMeta.dayPhrase(navigation(LooprDay(year: 2026, month: 9, day: 21))) == "MON 21 SEP")
+        #expect(LooprHeaderMeta.dayPhrase(navigation(today)) == "Thu 24 Sep")
+        #expect(LooprHeaderMeta.dayPhrase(navigation(LooprDay(year: 2026, month: 9, day: 23))) == "Yesterday · Wed 23 Sep")
+        #expect(LooprHeaderMeta.dayPhrase(navigation(LooprDay(year: 2026, month: 9, day: 21))) == "Mon 21 Sep")
     }
 
     @Test func nightPhraseIsLastNightOnTodayAndTheRangeOtherwise() {
-        #expect(LooprHeaderMeta.nightPhrase(navigation(today)) == "LAST NIGHT")
-        #expect(LooprHeaderMeta.nightPhrase(navigation(LooprDay(year: 2026, month: 9, day: 23))) == "TUE 22 → WED 23 SEP")
+        #expect(LooprHeaderMeta.nightPhrase(navigation(today)) == "Last night")
+        #expect(LooprHeaderMeta.nightPhrase(navigation(LooprDay(year: 2026, month: 9, day: 23))) == "Tue 22 → Wed 23 Sep")
     }
 
     @Test func freshnessFollowsTheBandIndicator() {
@@ -36,18 +36,18 @@ struct LooprTabHeaderTests {
         let sync = LooprHeaderFreshness.sync(lastSync: lastSync)
 
         #expect(LooprHeaderMeta.freshness(sync, indicator: nil, now: now)
-                == .init(text: "SYNCED 5 MIN AGO", isActive: false))
+                == .init(text: "Synced 5 min ago", isActive: false))
         #expect(LooprHeaderMeta.freshness(sync, indicator: .init(link: .syncing), now: now)
-                == .init(text: "SYNCING", isActive: true))
+                == .init(text: "Syncing", isActive: true))
         #expect(LooprHeaderMeta.freshness(sync, indicator: .init(link: .notPaired), now: now) == nil)
         // A reconnect or a disconnect leaves the age alone; the badge carries it.
         #expect(LooprHeaderMeta.freshness(sync, indicator: .init(link: .disconnected), now: now)?.text
-                == "SYNCED 5 MIN AGO")
+                == "Synced 5 min ago")
         // The newer of the two sync times wins.
         let newer = LooprBandIndicator(link: .connected, lastSyncedAt: now.addingTimeInterval(-60))
-        #expect(LooprHeaderMeta.freshness(sync, indicator: newer, now: now)?.text == "SYNCED 1 MIN AGO")
+        #expect(LooprHeaderMeta.freshness(sync, indicator: newer, now: now)?.text == "Synced 1 min ago")
         #expect(LooprHeaderMeta.freshness(.live, indicator: .init(link: .syncing), now: now)
-                == .init(text: "LIVE", isActive: true))
+                == .init(text: "Live", isActive: true))
         #expect(LooprHeaderMeta.freshness(.hidden, indicator: nil, now: now) == nil)
         #expect(LooprHeaderMeta.freshness(.sync(lastSync: nil), indicator: nil, now: now) == nil)
     }
@@ -56,7 +56,7 @@ struct LooprTabHeaderTests {
         let pinned = lastSync.addingTimeInterval(2 * 60)
         let freshness = LooprHeaderMeta.freshness(.sync(lastSync: lastSync, now: pinned), indicator: nil,
                                                   now: lastSync.addingTimeInterval(9_000))
-        #expect(freshness?.text == "SYNCED 2 MIN AGO")
+        #expect(freshness?.text == "Synced 2 min ago")
     }
 
     @Test func metaLineJoinsWithOneSeparator() {
@@ -140,9 +140,85 @@ struct LooprTabHeaderTests {
         #expect(LooprCardDensity.regular.insets.leading == LooprSpacing.cardHorizontal)
         #expect(LooprCardDensity.compact.insets.leading == LooprSpacing.compactCardHorizontal)
         #expect(LooprCardDensity.flush.insets == EdgeInsets())
-        #expect(LooprRadius.surface(isDark: true) == LooprRadius.compactCard)
+        #expect(LooprRadius.surface(isDark: true) == LooprRadius.card)
         #expect(LooprRadius.surface(isDark: false) == LooprRadius.card)
         // The header text lines up with the text inside a card.
         #expect(LooprSpacing.headerHorizontal == LooprSpacing.screenGutter + 4)
+    }
+
+    @MainActor
+    @Test func secondaryActionDefaultsToNilAndSurvivesAlongsideADayControl() {
+        let plain = LooprTabHeaderContent(title: "Today", accent: .brand)
+        #expect(plain.secondaryAction == nil)
+        let action = LooprHeaderAction(symbol: "sparkles", label: "Ask your coach", identifier: "x") {}
+        let content = LooprTabHeaderContent(
+            title: "Today", accent: .brand, control: .day(navigation(today)), secondaryAction: action)
+        #expect(content.secondaryAction?.identifier == "x")
+        if case .day = content.control {} else { Issue.record("the day control was replaced") }
+    }
+
+    // MARK: Top row
+
+    @Test func theTopRowStaysOneRowWhileTheTitleFitsAtEightyFivePercent() {
+        // 354 pt is a 402 pt iPhone less the header's two 24 pt insets.
+        #expect(LooprHeaderTopRow.arrangement(width: 354, title: 70, cluster: 177, band: 56) == .oneRow)
+        // Room for 85 % of the title keeps one row; a title a point wider than that moves the controls down.
+        let room: CGFloat = 354 - 177 - 56 - LooprSpacing.headerClusterSpacing - LooprSpacing.sm
+        #expect(LooprHeaderTopRow.arrangement(width: 354, title: (room - 0.5) / 0.85, cluster: 177, band: 56) == .oneRow)
+        #expect(LooprHeaderTopRow.arrangement(width: 354, title: room / 0.85 + 1, cluster: 177, band: 56) == .twoRows)
+        #expect(LooprHeaderTopRow.arrangement(width: .infinity, title: 900, cluster: 177, band: 56) == .oneRow)
+        // The last resort lets the title go to 72 % before the controls move down.
+        let wide = room / 0.85 + 1
+        #expect(LooprHeaderTopRow.arrangement(width: 354, title: wide, cluster: 177, band: 56,
+                                              titleScale: LooprHeaderTopRow.lastResortTitleScale) == .oneRow)
+        #expect(LooprHeaderTopRow.arrangement(width: 354, title: room / 0.72 + 1, cluster: 177, band: 56,
+                                              titleScale: LooprHeaderTopRow.lastResortTitleScale) == .twoRows)
+    }
+
+    #if canImport(UIKit)
+    /// The height of the header for `content`, laid out 402 pt wide at the default text size.
+    @MainActor private func height(_ content: LooprTabHeaderContent) -> CGFloat {
+        let host = UIHostingController(rootView: LooprTabHeader(content).environment(\.dynamicTypeSize, .large))
+        return host.sizeThatFits(in: CGSize(width: 402, height: 1_000)).height
+    }
+
+    @MainActor private func ask(_ id: String) -> LooprHeaderAction {
+        LooprHeaderAction(symbol: "sparkles", label: "Ask", identifier: id) {}
+    }
+
+    /// Each tab with the controls it has keeps one row at the default size; a past day's Today pill moves Today's
+    /// shortcut and day control under the title instead of cutting "Today".
+    @MainActor @Test func eachTabKeepsOneRowAtTheDefaultSizeAndOnAPastDay() {
+        let past = navigation(LooprDay(year: 2026, month: 9, day: 22))
+        let plus = LooprHeaderAction(symbol: "plus", label: "Start a workout", identifier: "start") {}
+        let tabs: [(LooprTabHeaderContent, String)] = [
+            (LooprTabHeaderContent(title: "Today", accent: .brand, control: .day(navigation(today)), secondaryAction: ask("today")), "Today"),
+            (LooprTabHeaderContent(title: "Food", accent: .energy, control: .day(navigation(today))), "Food"),
+            (LooprTabHeaderContent(title: "Fitness", accent: .strain, control: .action(plus), secondaryAction: ask("fitness")), "Fitness"),
+            (LooprTabHeaderContent(title: "Protocol", accent: .protocol, secondaryAction: ask("protocol")), "Protocol"),
+            (LooprTabHeaderContent(title: "Data", accent: .brand, control: .day(navigation(today)), secondaryAction: ask("data")), "Data")
+        ]
+        // One row may grow to the 56 pt controls' height; a wrapped second row adds a whole control row on top.
+        for (content, title) in tabs {
+            let bare = height(LooprTabHeaderContent(title: title, accent: content.accent))
+            #expect(height(content) < bare + 30, "\(title) wrapped its controls")
+        }
+        // A past day adds the Today pill. The controls stay on the title's row (the shortcut drops its word, then the
+        // title shrinks to 80 %): a second row under the title read as a broken header (Pascal, 2026-11-03).
+        for title in ["Today", "Data"] {
+            let pastDay = LooprTabHeaderContent(title: title, accent: .brand, control: .day(past), secondaryAction: ask(title))
+            let bare = height(LooprTabHeaderContent(title: title, accent: .brand))
+            #expect(height(pastDay) < bare + 30, "\(title) wrapped its controls on a past day")
+        }
+    }
+    #endif
+
+    /// The tab bar's backing hides scrolled text under the labels, and turns solid with Reduce Transparency
+    /// (R1-NEW-13).
+    @MainActor @Test func tabBarScrimIsStrongUnderTheLabelsAndSolidWithReduceTransparency() {
+        #expect(LooprTabBarScrim.strength(isDark: false, reduceTransparency: false) >= 0.85)
+        #expect(LooprTabBarScrim.strength(isDark: true, reduceTransparency: false) >= 0.85)
+        #expect(LooprTabBarScrim.strength(isDark: false, reduceTransparency: true) == 1)
+        #expect(LooprTabBarScrim.strength(isDark: true, reduceTransparency: true) == 1)
     }
 }

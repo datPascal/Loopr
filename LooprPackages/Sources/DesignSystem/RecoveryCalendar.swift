@@ -83,7 +83,7 @@ public struct LooprRecoveryCalendarModel: Sendable {
                 }
                 days.append(day)
             }
-            let title = LooprChartDateText.string(cursor, "MMM", calendar: calendar).uppercased()
+            let title = LooprChartDateText.string(cursor, "MMM", calendar: calendar).looprLabelCased
             months.append(Month(start: cursor, title: title, days: days))
             guard let next = calendar.date(byAdding: .month, value: 1, to: cursor) else { break }
             cursor = next
@@ -108,11 +108,11 @@ public struct LooprRecoveryCalendarModel: Sendable {
         return allDays.first { $0.date == key }
     }
 
-    /// "TUE 22 SEP · 74% · READY", or "TUE 22 SEP · NO SCORE".
+    /// "Tue 22 Sep · 74% · Ready", or "Tue 22 Sep · No score".
     public func readout(for day: Day) -> String {
         let date = LooprChartDateText.day(day.date, calendar: calendar)
-        guard let score = day.score, let band = day.band else { return "\(date) · NO SCORE" }
-        return "\(date) · \(Int(score.rounded()))% · \(band.verdict.uppercased())"
+        guard let score = day.score, let band = day.band else { return "\(date) · No score" }
+        return "\(date) · \(Int(score.rounded()))% · \(band.verdict.looprLabelCased)"
     }
 
     public func spokenReadout(for day: Day) -> String {

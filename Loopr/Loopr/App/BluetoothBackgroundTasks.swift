@@ -281,6 +281,7 @@ final class LooprApplicationDelegate: NSObject, UIApplicationDelegate, UNUserNot
         }
         #endif
         backgroundTasks.registerHandlers()
+        CoachBriefingRuntime.shared.register()
         UNUserNotificationCenter.current().delegate = self
         // Until permission is read, the notification policy only queues.
         // Reading it on every launch, the Bluetooth relaunch included, is what
@@ -325,6 +326,7 @@ final class LooprApplicationDelegate: NSObject, UIApplicationDelegate, UNUserNot
         transition(.sceneActive)
         // Permission can change in iOS Settings while Loopr is away.
         Task {
+            await LooprHeadlessBandActions.stop()
             _ = await LooprNotificationRuntime.shared.refreshAuthorization()
             await LooprHeartAlertsRuntime.shared.appBecameActive()
         }
@@ -344,20 +346,20 @@ final class LooprApplicationDelegate: NSObject, UIApplicationDelegate, UNUserNot
     }
 
     func backgroundTaskStarted() async {
+        let headless = lifecycle.mode == .awaitingScene
         transition(.backgroundTask)
         await lifecycleTask?.value
+        if headless, let model = backgroundTasks.modelForLifecycle {
+            LooprHeadlessBandActions.start(model: model)
+        }
     }
 
     private func bluetoothRestorationDetected() {
-        #if DEBUG
         let headless = lifecycle.mode == .awaitingScene
-        #endif
         transition(.bluetoothRestoration)
-        #if DEBUG
         if headless, let model = backgroundTasks.modelForLifecycle {
-            Task { @MainActor in await DebugLaunchAlarm.runHeadless(model: model) }
+            LooprHeadlessBandActions.start(model: model)
         }
-        #endif
     }
 
     private func transition(_ event: LooprLifecycleStateMachine.Event) {
@@ -371,6 +373,10 @@ final class LooprApplicationDelegate: NSObject, UIApplicationDelegate, UNUserNot
             return
         }
         LooprForegroundState.shared.set(foreground: action == .enterForeground)
+        if action == .enterForeground {
+            // A week met or a test's off night ahead changes which days the rule reminders fire (ICP round 4, Q1b, Q5).
+            Task { await ProtocolRuleReminderPlanning.shared.replan() }
+        }
         backgroundTasks.schedule(reason: action == .enterForeground ? "scene/active" : "scene/background")
         let predecessor = lifecycleTask
         lifecycleTask = Task { @MainActor [weak self] in
@@ -403,6 +409,18 @@ final class LooprApplicationDelegate: NSObject, UIApplicationDelegate, UNUserNot
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let userInfo = response.notification.request.content.userInfo
+        if ProtocolRuleReminder.isAnswerAction(response.actionIdentifier) {
+            // "Done" or "Skip today" on a rule reminder: write the day's check without opening Loopr (ICP R3-HAB-02).
+            // The answered reminder leaves the lock screen and Notification Center (ICP round 4, HAB).
+            center.removeDeliveredNotifications(withIdentifiers: [response.notification.request.identifier])
+            let answer = ProtocolRuleReminder.answer(actionIdentifier: response.actionIdentifier, userInfo: userInfo)
+            let deliveredAt = response.notification.date
+            Task {
+                if let answer { await ProtocolRuleReminderResponder.handle(answer, deliveredAt: deliveredAt) }
+                completionHandler()
+            }
+            return
+        }
         if response.actionIdentifier == NotificationCategoryCatalog.pauseForTodayAction {
             // A background action: silence that kind for the rest of the day
             // without opening Loopr.

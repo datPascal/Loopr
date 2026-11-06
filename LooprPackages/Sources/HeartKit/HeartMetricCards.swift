@@ -130,7 +130,7 @@ struct HeartDetailMetricCard: View {
                     .foregroundStyle(Color.loopr(.ink))
                 Spacer(minLength: LooprSpacing.xs)
                 if let confidence = metric.confidence, hasValue {
-                    Text(confidence.uppercased())
+                    Text(confidence.looprLabelCased)
                         .looprTypography(.confidence)
                         .foregroundStyle(Color.loopr(.inkSecondary))
                         .lineLimit(1)
@@ -298,7 +298,7 @@ struct HeartTrendCharts: View {
     private func card(title: String, id: String, points: [LooprChartPoint], unit: String, identifier: String) -> some View {
         VStack(alignment: .leading, spacing: LooprSpacing.xs) {
             HStack {
-                Text(title.uppercased())
+                Text(title.looprLabelCased)
                     .looprTypography(.sectionLabel)
                     .foregroundStyle(Color.loopr(.inkSecondary))
                 Spacer()

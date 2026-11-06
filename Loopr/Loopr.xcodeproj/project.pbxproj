@@ -52,7 +52,10 @@
 		7A0260030000000000000016 /* HeartKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000016 /* HeartKit */; };
 		7A0260030000000000000017 /* BodyKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000017 /* BodyKit */; };
 		7A0260030000000000000018 /* RouteKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000018 /* RouteKit */; };
+		7A0260030000000000000020 /* FoodKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000020 /* FoodKit */; };
+		7A0260030000000000000021 /* TrainKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000021 /* TrainKit */; };
 		7A0260030000000000000019 /* JournalKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000019 /* JournalKit */; };
+		7A0260030000000000000030 /* RoutineKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A0260020000000000000030 /* RoutineKit */; };
 		7A026003000000000000001A /* CycleKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000001A /* CycleKit */; };
 		7A026003000000000000001B /* RecordsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000001B /* RecordsKit */; };
 		7A026003000000000000001C /* StressKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A026002000000000000001C /* StressKit */; };
@@ -247,7 +250,10 @@
 				7A0260030000000000000016 /* HeartKit in Frameworks */,
 				7A0260030000000000000017 /* BodyKit in Frameworks */,
 				7A0260030000000000000018 /* RouteKit in Frameworks */,
+				7A0260030000000000000020 /* FoodKit in Frameworks */,
+				7A0260030000000000000021 /* TrainKit in Frameworks */,
 				7A0260030000000000000019 /* JournalKit in Frameworks */,
+				7A0260030000000000000030 /* RoutineKit in Frameworks */,
 				7A026003000000000000001A /* CycleKit in Frameworks */,
 				7A026003000000000000001B /* RecordsKit in Frameworks */,
 				7A026003000000000000001C /* StressKit in Frameworks */,
@@ -452,7 +458,10 @@
 				7A0260020000000000000016 /* HeartKit */,
 				7A0260020000000000000017 /* BodyKit */,
 				7A0260020000000000000018 /* RouteKit */,
+				7A0260020000000000000020 /* FoodKit */,
+				7A0260020000000000000021 /* TrainKit */,
 				7A0260020000000000000019 /* JournalKit */,
+				7A0260020000000000000030 /* RoutineKit */,
 				7A026002000000000000001A /* CycleKit */,
 				7A026002000000000000001B /* RecordsKit */,
 				7A026002000000000000001C /* StressKit */,
@@ -737,7 +746,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = ../LooprWatchWidgets/LooprWatchWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = K3M4SYVWJZ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ../LooprWatchWidgets/Info.plist;
@@ -764,7 +773,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = Widgets/LooprWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = K3M4SYVWJZ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Widgets/Info.plist;
@@ -790,7 +799,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Loopr/Loopr.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = K3M4SYVWJZ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -823,7 +832,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Loopr/Loopr.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = K3M4SYVWJZ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -975,7 +984,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = K3M4SYVWJZ;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -997,7 +1006,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = K3M4SYVWJZ;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -1018,7 +1027,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = K3M4SYVWJZ;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
@@ -1038,7 +1047,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = K3M4SYVWJZ;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
@@ -1060,7 +1069,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = ../LooprWatch/LooprWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = K3M4SYVWJZ;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Loopr;
@@ -1092,7 +1101,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = Widgets/LooprWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = K3M4SYVWJZ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Widgets/Info.plist;
@@ -1116,7 +1125,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = ../LooprWatchWidgets/LooprWatchWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = K3M4SYVWJZ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ../LooprWatchWidgets/Info.plist;
@@ -1141,7 +1150,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = ../LooprWatch/LooprWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 34;
 				DEVELOPMENT_TEAM = K3M4SYVWJZ;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Loopr;
@@ -1366,6 +1375,11 @@
 			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
 			productName = JournalKit;
 		};
+		7A0260020000000000000030 /* RoutineKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = RoutineKit;
+		};
 		7A026002000000000000001A /* CycleKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
@@ -1390,6 +1404,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
 			productName = DataKit;
+		};
+		7A0260020000000000000020 /* FoodKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = FoodKit;
+		};
+		7A0260020000000000000021 /* TrainKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7A0260010000000000000001 /* XCLocalSwiftPackageReference "../LooprPackages" */;
+			productName = TrainKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

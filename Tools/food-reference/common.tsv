@@ -1,0 +1,133 @@
+# alias<TAB>exact USDA SR Legacy description<TAB>default portion. The alias is what a person types; the food is the usual one they mean.
+# Plurals fold on their own ("eggs" finds "egg"). Checked against the table by build.py: an unknown description fails the build.
+# The portion is the start of one of the food's USDA household measures ("1 cup" picks "1 cup (8 fl oz)"), or label=grams where USDA has
+# no sensible one; those labels say "(Loopr)" or how they were derived, and the row shows the label.
+egg	Egg, whole, cooked, hard-boiled	1 large
+boiled egg	Egg, whole, cooked, hard-boiled	1 large
+scrambled egg	Egg, whole, cooked, scrambled	1 large
+fried egg	Egg, whole, cooked, fried	1 large
+raw egg	Egg, whole, raw, fresh	1 large
+chicken	Chicken, broilers or fryers, breast, meat only, cooked, roasted	0.5 breast
+chicken breast	Chicken, broilers or fryers, breast, meat only, cooked, roasted	0.5 breast
+rice	Rice, white, long-grain, regular, enriched, cooked	1 cup
+white rice	Rice, white, long-grain, regular, enriched, cooked	1 cup
+brown rice	Rice, brown, long-grain, cooked	1 cup
+salmon	Fish, salmon, Atlantic, farmed, cooked, dry heat	0.5 fillet
+milk	Milk, reduced fat, fluid, 2% milkfat, with added vitamin A and vitamin D	1 cup
+whole milk	Milk, whole, 3.25% milkfat, with added vitamin D	1 cup
+skim milk	Milk, nonfat, fluid, with added vitamin A and vitamin D (fat free or skim)	1 cup
+coffee	Beverages, coffee, brewed, prepared with tap water	1 cup (8 fl oz)
+tea	Beverages, tea, black, brewed, prepared with tap water	1 cup (8 fl oz)
+bread	Bread, white, commercially prepared (includes soft bread crumbs)	1 slice
+white bread	Bread, white, commercially prepared (includes soft bread crumbs)	1 slice
+toast	Bread, white, commercially prepared, toasted	1 slice, large
+rye bread	Bread, rye	1 slice, regular
+multigrain bread	Bread, multi-grain (includes whole-grain)	1 slice regular
+sourdough	Bread, french or vienna (includes sourdough)	1 slice (Loopr)=50
+butter	Butter, salted	1 pat
+red wine	Alcoholic beverage, wine, table, red	1 serving (5 fl oz)
+wine	Alcoholic beverage, wine, table, red	1 serving (5 fl oz)
+white wine	Alcoholic beverage, wine, table, white	1 serving (5 fl oz)
+beer	Alcoholic beverage, beer, regular, all	1 can
+spirit	Alcoholic beverage, distilled, all (gin, rum, vodka, whiskey) 80 proof	1 jigger
+vodka	Alcoholic beverage, distilled, all (gin, rum, vodka, whiskey) 80 proof	1 jigger
+gin	Alcoholic beverage, distilled, all (gin, rum, vodka, whiskey) 80 proof	1 jigger
+whisky	Alcoholic beverage, distilled, all (gin, rum, vodka, whiskey) 80 proof	1 jigger
+cheese	Cheese, cheddar	1 slice (1 oz)
+cheddar	Cheese, cheddar	1 slice (1 oz)
+mozzarella	Cheese, mozzarella, whole milk	1 oz
+parmesan	Cheese, parmesan, grated	1 tbsp
+feta	Cheese, feta	1 oz
+cottage cheese	Cheese, cottage, lowfat, 2% milkfat	4 oz
+cream cheese	Cheese, cream	1 tbsp
+beef mince	Beef, ground, 85% lean meat / 15% fat, patty, cooked, broiled	3 oz
+ground beef	Beef, ground, 85% lean meat / 15% fat, patty, cooked, broiled	3 oz
+mince	Beef, ground, 85% lean meat / 15% fat, patty, cooked, broiled	3 oz
+lean mince	Beef, ground, 90% lean meat / 10% fat, crumbles, cooked, pan-browned	3 oz
+oats	Cereals, oats, regular and quick, not fortified, dry	1 bowl, 40 g dry (Loopr)=40
+porridge	Cereals, oats, regular and quick, unenriched, cooked with water (includes boiling and microwaving), without salt	1 cup
+oatmeal	Cereals, oats, regular and quick, unenriched, cooked with water (includes boiling and microwaving), without salt	1 cup
+pasta	Pasta, cooked, enriched, without added salt	1 cup spaghetti not packed
+spaghetti	Pasta, cooked, enriched, without added salt	1 cup spaghetti not packed
+whole wheat pasta	Pasta, whole-wheat, cooked	1 cup spaghetti not packed
+potato	Potatoes, boiled, cooked in skin, flesh, without salt	1 potato
+boiled potato	Potatoes, boiled, cooked in skin, flesh, without salt	1 potato
+baked potato	Potatoes, baked, flesh and skin, without salt	1 potato medium
+sweet potato	Sweet potato, cooked, baked in skin, flesh, without salt	1 medium
+tomato	Tomatoes, red, ripe, raw, year round average	1 medium
+granola	Cereals ready-to-eat, granola, homemade	1 serving, 45 g (Loopr)=45
+yogurt	Yogurt, plain, whole milk	1 container (6 oz)
+yoghurt	Yogurt, plain, whole milk	1 container (6 oz)
+greek yogurt	Yogurt, Greek, plain, nonfat	1 container
+greek yoghurt	Yogurt, Greek, plain, nonfat	1 container
+orange	Oranges, raw, all commercial varieties	1 fruit
+strawberry	Strawberries, raw	1 cup, whole
+raspberry	Raspberries, raw	1 cup
+blueberry	Blueberries, raw	1 cup
+grape	Grapes, red or green (European type, such as Thompson seedless), raw	1 cup
+carrot	Carrots, raw	1 medium
+cucumber	Cucumber, with peel, raw	0.5 cup slices
+onion	Onions, raw	1 medium
+garlic	Garlic, raw	1 clove
+red pepper	Peppers, sweet, red, raw	1 medium
+pepper	Peppers, sweet, red, raw	1 medium
+lettuce	Lettuce, cos or romaine, raw	1 cup shredded
+salad	Lettuce, cos or romaine, raw	1 NLEA serving
+kale	Kale, raw	1 cup
+spinach	Spinach, raw	1 cup
+broccoli	Broccoli, raw	1 cup chopped
+chickpea	Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked, boiled, without salt	1 cup
+black bean	Beans, black, mature seeds, cooked, boiled, without salt	1 cup
+lentil	Lentils, mature seeds, cooked, boiled, without salt	1 cup
+quinoa	Quinoa, cooked	1 cup
+walnut	Nuts, walnuts, english	1 oz
+almond	Nuts, almonds	1 oz
+cashew	Nuts, cashew nuts, raw	1 oz
+chia	Seeds, chia seeds, dried	1 oz
+chia seed	Seeds, chia seeds, dried	1 oz
+tuna	Fish, tuna, light, canned in water, drained solids	1 can
+cod	Fish, cod, Atlantic, cooked, dry heat	1 fillet
+shrimp	Crustaceans, shrimp, cooked	3 oz
+prawn	Crustaceans, shrimp, cooked	3 oz
+pork	Pork, fresh, loin, tenderloin, separable lean only, cooked, roasted	3 oz
+turkey	Turkey, whole, breast, meat only, cooked, roasted	3 oz
+cream	Cream, fluid, heavy whipping	1 tbsp
+sugar	Sugars, granulated	1 tsp
+honey	Honey	1 tbsp
+olive oil	Oil, olive, salad or cooking	1 tablespoon
+mushroom	Mushrooms, white, raw	1 cup, pieces or slices
+zucchini	Squash, summer, zucchini, includes skin, raw	1 medium
+courgette	Squash, summer, zucchini, includes skin, raw	1 medium
+peas	Peas, green, frozen, cooked, boiled, drained, without salt	0.5 cup
+pea	Peas, green, frozen, cooked, boiled, drained, without salt	0.5 cup
+corn	Corn, sweet, yellow, cooked, boiled, drained, without salt	1 ear medium
+pear	Pears, raw	1 medium
+peach	Peaches, yellow, raw	1 medium
+mango	Mangos, raw	1 cup pieces
+pineapple	Pineapple, raw, all varieties	1 cup, chunks
+kiwi	Kiwifruit, green, raw	1 fruit
+watermelon	Watermelon, raw	1 cup, diced
+bagel	Bagels, plain, enriched, with calcium propionate (includes onion, poppy, sesame)	1 medium bagel
+croissant	Croissants, butter	1 croissant, medium
+tortilla	Tortillas, ready-to-bake or -fry, flour, refrigerated	1 tortilla (approx 10
+wrap	Tortillas, ready-to-bake or -fry, flour, refrigerated	1 tortilla (approx 10
+pizza	Pizza, cheese topping, regular crust, frozen, cooked	1 serving 3 servings
+burger	Fast foods, hamburger; single, regular patty; plain	1 sandwich
+ice cream	Ice creams, vanilla	1 serving 1/2 cup
+cookie	Cookies, chocolate chip, commercially prepared, regular, higher fat, enriched	1 cookie
+cola	Beverages, carbonated, cola, regular	1 can or bottle (12 fl oz)
+coke	Beverages, carbonated, cola, regular	1 can or bottle (12 fl oz)
+orange juice	Orange juice, raw	1 cup
+whey	Beverages, Whey protein powder isolate	1 scoop (a third of USDA's 3 scoops)=28.7
+protein powder	Beverages, Whey protein powder isolate	1 scoop (a third of USDA's 3 scoops)=28.7
+protein shake	Beverages, Whey protein powder isolate	1 scoop (a third of USDA's 3 scoops)=28.7
+soy milk	Soymilk, original and vanilla, unfortified	1 cup
+almond milk	Beverages, almond milk, unsweetened, shelf stable	1 cup
+hummus	Hummus, commercial	2 tbsp (Loopr)=30
+avocado	Avocados, raw, all commercial varieties	0.5 avocado (Loopr)=100
+banana	Bananas, raw	1 medium
+apple	Apples, raw, with skin	1 medium
+peanut butter	Peanut butter, smooth style, with salt	2 tbsp
+tofu	Tofu, raw, firm, prepared with calcium sulfate	0.25 block
+dark chocolate	Chocolate, dark, 70-85% cacao solids	1 oz
+chocolate	Chocolate, dark, 70-85% cacao solids	1 oz

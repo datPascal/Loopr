@@ -69,15 +69,6 @@ struct MorningBriefingTests {
         #expect(LooprLearningText.stale(days: 3) == "No new nights from your band for 3 days.")
     }
 
-    @Test func allEmptyRingsGiveAReasonAndPreserveWearCaptions() {
-        for id in [TodayMetricID.sleep, .stress, .strain] {
-            #expect(!TodayDashboard.missingRingCaption(id, metric: nil).isEmpty)
-        }
-        #expect(TodayDashboard.missingRingCaption(.stress, metric: nil) == "No clean heart data today")
-        let metric = TodayTestDays.metric(.stress, nil, .scorePoints, confidence: "23 of 60 min worn")
-        #expect(TodayDashboard.missingRingCaption(.stress, metric: metric) == "23 of 60 min worn")
-    }
-
     @Test func earlyEstimateUsesTheLeastLearnedContributingInput() {
         let inputs = TodayTestDays.breakdown(score: 74).inputs.map { input in
             TodayRecoveryBreakdown.Input(signal: input.signal, status: input.status, value: input.value,
@@ -87,12 +78,6 @@ struct MorningBriefingTests {
         let split = TodayRecoveryBreakdown(score: 74, isSaturated: false, isMeaningful: true, inputs: inputs, nightsNeeded: 3)
         let dashboard = TodayTestDays.dashboard(TodayTestDays.summary(), TodayTestDays.context(recovery: split))
         #expect(dashboard.hero.reading?.earlyEstimate == "Early estimate · 5 of 14 nights")
-        #expect(dashboard.contributors.count == 5)
-        #expect(dashboard.contributors.filter(\.contextOnly).map(\.title) == ["Sleep"])
-        let temperature = dashboard.contributors.first { $0.title == "Skin temperature" }
-        #expect(temperature?.value == nil)
-        #expect(temperature?.contextOnly == false)
-        #expect(temperature?.statusText.contains("Not scored") == false)
     }
 
     @Test func staleNightsNeverBecomeTodaysScore() {
@@ -100,92 +85,6 @@ struct MorningBriefingTests {
         let dashboard = TodayTestDays.dashboard(TodayTestDays.summary(recovery: nil, hrv: nil, rhr: nil, sleep: nil), TodayTestDays.context(history: history))
         guard case .unavailable(_, let reason) = dashboard.hero else { Issue.record("Expected stale reason"); return }
         #expect(reason.hasPrefix("No new nights from your band for 16 days."))
-        #expect(dashboard.morningSignals == .hidden)
-    }
-
-    @Test func temperatureAlwaysDisplaysAChangeWithASign() {
-        for (change, expected) in [(0.2, "+0.2"), (-0.3, "−0.3"), (0.0, "0.0"),
-                                   (-0.04, "0.0"), (0.04, "0.0"), (0.06, "+0.1"), (-0.06, "−0.1")] {
-            #expect(TodayMorningComparison.temperatureChange(change) == expected)
-        }
-        for invalid in [Double.nan, .infinity, -.infinity] {
-            #expect(TodayMorningComparison.temperatureChange(invalid) == nil)
-        }
-    }
-
-    @Test func roundedZeroComparisonsReadTheSameOnRowsRingsTilesAndVoiceOver() {
-        for format in [LooprDeltaFormat.duration, .percent, .number(digits: 0), .number(digits: 1)] {
-            let quantum = format == .number(digits: 1) ? 0.1 : 1.0
-            for change in [-0.49, 0, 0.49] {
-                let delta = LooprDelta(kind: .change(change * quantum), format: format)
-                #expect(TodayMorningComparison.text(delta) == "Same as usual")
-                #expect(TodayMorningComparison.spoken(delta) == "Same as usual")
-            }
-            for change in [-0.51, 0.51] {
-                let delta = LooprDelta(kind: .change(change * quantum), format: format)
-                #expect(TodayMorningComparison.text(delta) == delta.text)
-                #expect(TodayMorningComparison.spoken(delta) == delta.spokenText)
-            }
-        }
-        let history: [TodayTrackedMetric: [LooprChartPoint]] = [.sleep: TodayTestDays.series(usual: 462, spread: 0, today: 462)]
-        let dashboard = TodayTestDays.dashboard(TodayTestDays.summary(), TodayTestDays.context(history: history))
-        #expect(dashboard.contributors.first(where: { $0.title == "Sleep" })?.comparison == "Same as usual")
-    }
-
-    @Test func statusTagsHaveOneSeparatorBetweenEachTag() {
-        let cases: [(String?, String?, Bool, String)] = [
-            (nil, nil, false, ""), ("In range", nil, false, "In range"),
-            (nil, "3 of 14 nights", false, "3 of 14 nights"), (nil, nil, true, "Not scored"),
-            ("In range", "3 of 14 nights", false, "In range · 3 of 14 nights"),
-            ("In range", nil, true, "In range · Not scored"),
-            (nil, "3 of 14 nights", true, "3 of 14 nights · Not scored"),
-            ("Above range", "3 of 14 nights", true, "Above range · 3 of 14 nights · Not scored")
-        ]
-        for (range, learning, context, expected) in cases {
-            let row = TodayMorningContributor(id: "test", title: "Test", value: "1", unit: nil,
-                comparison: "Same as usual", rangeLabel: range, isOutside: false,
-                contextOnly: context, learning: learning, linkID: "test")
-            #expect(row.statusText == expected)
-        }
-    }
-
-    @Test func learningCaptionIsShortAndTheSubtitleMatchesTheRecoveryGate() {
-        #expect(TodayMorningComparison.text(.learning(1, of: 14, noun: "days")) == "1 of 14 days")
-        #expect(TodayMorningComparison.spoken(.learning(1, of: 14, noun: "days")) == "Learning your usual range, 1 of 14 days")
-        #expect(WellnessAnalytics.readinessCompositeMinBaseline + 1 == 4)
-        let early = TodayTestDays.dashboard(TodayTestDays.summary(recovery: nil), TodayTestDays.context(history: [:]))
-        #expect(early.hero.reading == nil)
-        #expect(early.morningSignalsSubtitle == "Recovery can start after 4 nights. These ranges need 14.")
-        let learned = early.contributors.map { row in
-            TodayMorningContributor(id: row.id, title: row.title, value: row.value, unit: row.unit,
-                comparison: row.comparison, rangeLabel: row.rangeLabel, isOutside: row.isOutside,
-                contextOnly: row.contextOnly, learning: nil, linkID: row.linkID)
-        }
-        #expect(TodayMorningSignals(rows: learned, stale: false).subtitle(hasRecovery: false) == nil)
-    }
-
-    @Test func emptySignalsCollapseAndPartialReadingsKeepTheirReasons() {
-        let empty = TodayTestDays.dashboard(TodayTestDays.summary(recovery: nil, hrv: nil, rhr: nil, sleep: nil), TodayTestDays.context(history: [:]))
-        #expect(empty.morningSignals == .empty)
-        #expect(empty.morningSignalsSubtitle == nil)
-        let partial = TodayTestDays.dashboard(TodayTestDays.summary(recovery: nil, hrv: 58, rhr: nil, sleep: nil), TodayTestDays.context(history: [:]))
-        #expect(partial.morningSignals == .readings(partial.contributors))
-        #expect(partial.contributors.first(where: { $0.title == "Resting heart rate" })?.comparison == "No resting heart rate last night. Sync after sleep.")
-        // A missing night does not hide a current reading from another signal.
-        #expect(TodayMorningSignals(rows: partial.contributors, stale: true) == .readings(partial.contributors))
-    }
-
-    @Test func learningRowsHaveOnlyTheSharedNightCount() {
-        let early = TodayTestDays.dashboard(TodayTestDays.summary(), TodayTestDays.context(history: [:]))
-        for row in early.contributors where row.value != nil && row.learning != nil {
-            #expect(row.comparison == nil)
-            #expect(row.learning?.hasSuffix("of 14 nights") == true)
-        }
-        for row in early.contributors {
-            if let comparison = row.comparison, comparison.contains("vs usual") {
-                #expect(comparison.contains { $0.isNumber })
-            }
-        }
     }
 
     @Test func scoredAndCarriedHeroesNeverSayRecoveryCannotStart() {
@@ -194,8 +93,6 @@ struct MorningBriefingTests {
                 let summary = TodayTestDays.summary(recovery: score, recoverySource: source)
                 let dashboard = TodayTestDays.dashboard(summary, TodayTestDays.context(history: [:]))
                 #expect(dashboard.hero.reading?.score == score)
-                #expect(dashboard.contributors.contains { $0.learning != nil })
-                #expect(dashboard.morningSignalsSubtitle == "Usual ranges need 14 nights with a reading.")
                 if source == "Account export" {
                     #expect(dashboard.hero.reading?.driver == "From your account export")
                     #expect(dashboard.hero.reading?.earlyEstimate == nil)
@@ -209,7 +106,6 @@ struct MorningBriefingTests {
         let carried = TodayTestDays.dashboard(TodayTestDays.summary(recovery: nil, sleep: nil),
             TodayTestDays.context(history: history))
         if case .carried = carried.hero {} else { Issue.record("Expected the previous night's score") }
-        #expect(carried.morningSignalsSubtitle == "Usual ranges need 14 nights with a reading.")
     }
 
     @Test func summaryAndContextUseTheSameTotalNightCount() {
@@ -217,17 +113,5 @@ struct MorningBriefingTests {
         let learning = TodayHeroRules.learningState(summary: summary, breakdown: nil)
         #expect(learning?.have == 1)
         #expect(learning?.need == 4)
-    }
-
-    @Test func contributorsAndTilesUseTheSameOvernightReading() {
-        let assessment = OvernightVitalsCheck.assessment(nights: [
-            .init(night: "2026-09-23", values: [.heartRateVariability: 31])
-        ], calendar: TodayTestDays.calendar)
-        let context = TodayDayContext(day: TodayTestDays.day, dayStart: TodayTestDays.dayStart, history: [:],
-            overnightAssessment: assessment)
-        let dashboard = TodayTestDays.dashboard(TodayTestDays.summary(), context)
-        #expect(dashboard.contributors.first?.value == "31")
-        #expect(dashboard.tiles.first(where: { $0.metric == .hrv })?.value == "31")
-        #expect(dashboard.contributors.first(where: { $0.title == "Resting heart rate" })?.value == nil)
     }
 }

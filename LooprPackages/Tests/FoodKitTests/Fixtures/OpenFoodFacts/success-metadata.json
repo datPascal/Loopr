@@ -1,0 +1,98 @@
+{
+  "capture_started_utc": "2026-10-13T21:06:21.378798+00:00",
+  "capture_completed_utc": "2026-10-13T21:06:22.520387+00:00",
+  "request": {
+    "method": "GET",
+    "url": "https://world.openfoodfacts.org/api/v3.6/product/3017620422003.json?fields=code,product_name,brands,quantity,serving_size,nutrition,last_modified_t,schema_version",
+    "headers": {
+      "User-Agent": "Loopr/1.0 (pascallindenau@googlemail.com)",
+      "Accept": "application/json",
+      "Accept-Encoding": "identity"
+    },
+    "body": null,
+    "headers_note": "Application-supplied headers; urllib adds Host and Connection for HTTP transport."
+  },
+  "redirect_policy": "All redirects rejected; no redirect target requested.",
+  "response": {
+    "status": 200,
+    "reason": "OK",
+    "url": "https://world.openfoodfacts.org/api/v3.6/product/3017620422003.json?fields=code,product_name,brands,quantity,serving_size,nutrition,last_modified_t,schema_version",
+    "headers": [
+      [
+        "Server",
+        "nginx"
+      ],
+      [
+        "Date",
+        "Tue, 13 Oct 2026 21:06:22 GMT"
+      ],
+      [
+        "Content-Type",
+        "application/json; charset=utf-8"
+      ],
+      [
+        "Transfer-Encoding",
+        "chunked"
+      ],
+      [
+        "Connection",
+        "close"
+      ],
+      [
+        "X-Content-Type-Options",
+        "nosniff"
+      ],
+      [
+        "X-Download-Options",
+        "noopen"
+      ],
+      [
+        "X-XSS-Protection",
+        "1; mode=block"
+      ],
+      [
+        "X-Request-ID",
+        "cNBqTL1oy7APakLl"
+      ],
+      [
+        "Access-Control-Allow-Origin",
+        "*"
+      ],
+      [
+        "Access-Control-Allow-Methods",
+        "HEAD, GET, PATCH, POST, PUT, OPTIONS"
+      ],
+      [
+        "Access-Control-Allow-Headers",
+        "DNT,User-Agent,X-User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,If-None-Match,Authorization"
+      ],
+      [
+        "Access-Control-Expose-Headers",
+        "Content-Length,Content-Range"
+      ],
+      [
+        "Access-Control-Max-Age",
+        "1728000"
+      ],
+      [
+        "X-Cache-Status",
+        "MISS"
+      ],
+      [
+        "X-Cache-Status",
+        "MISS"
+      ]
+    ],
+    "body_sha256": "83081e7cba806147e4198a4de4fc21cd8d75d0d081a3880e78557a41c2dc7faa",
+    "body_bytes": 16320,
+    "body_file": "success-response.json"
+  },
+  "requested_api_version": "3.6",
+  "recording": "genuine public HTTP response; body bytes unchanged",
+  "attribution": {
+    "source": "Open Food Facts contributors",
+    "database_license": "https://opendatacommons.org/licenses/odbl/1-0/",
+    "contents_license": "https://opendatacommons.org/licenses/dbcl/1-0/",
+    "source_home": "https://world.openfoodfacts.org"
+  }
+}

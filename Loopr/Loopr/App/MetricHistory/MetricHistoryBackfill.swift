@@ -25,6 +25,9 @@ actor MetricHistoryBackfill {
     private let maximumDaysPerPass: Int
     private let pause: Duration
     private var attempted: Set<String> = []
+    /// The mapping version whose refresh pass has finished, kept across launches.
+    nonisolated(unsafe) private let defaults: UserDefaults
+    nonisolated static let mappingVersionKey = "loopr.metric-history.band-mapping-version"
     private var running = false
     private var stopped = false
 
@@ -32,7 +35,9 @@ actor MetricHistoryBackfill {
          timeZoneProvider: any TimeZoneProviding, dates: any DateProviding,
          budget: LooprDerivationBudget = .shared,
          maximumDaysPerPass: Int = MetricHistoryBackfill.maximumDaysPerPass,
-         pause: Duration = MetricHistoryBackfill.pauseBetweenDays) {
+         pause: Duration = MetricHistoryBackfill.pauseBetweenDays,
+         defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         self.history = history
         self.analytics = analytics
         self.recorder = recorder
@@ -68,9 +73,14 @@ actor MetricHistoryBackfill {
         }
     }
 
+    /// True until a pass has revisited every day for the current mapping version.
+    var refreshesStoredDays: Bool { defaults.integer(forKey: Self.mappingVersionKey) < BandMetricSeriesMapping.version }
+
     /// The days this pass would visit, newest first: every civil day in the
     /// lookback window with at least one recorded second and no band series.
+    /// After the mapping gains a metric, days with a series are visited once more.
     func pendingDays() throws -> [DayIdentity] {
+        let refresh = refreshesStoredDays
         let calendar = MetricHistoryDays.calendar(timeZoneProvider.timeZone)
         let bounds = try history.read { db -> (Int64?, Int64?) in
             (try Int64.fetchOne(db, sql: "SELECT MIN(absolute_timestamp) FROM decoded_second"),
@@ -89,7 +99,7 @@ actor MetricHistoryBackfill {
         var cursor = last
         while cursor >= first {
             let label = MetricHistoryDays.label(cursor, calendar: calendar)
-            if !stored.contains(label), !attempted.contains(label),
+            if refresh || !stored.contains(label), !attempted.contains(label),
                let end = calendar.date(byAdding: .day, value: 1, to: cursor) {
                 // The same window a day is derived from: the previous noon
                 // through the day's end. An indexed lookup, no scan.
@@ -111,9 +121,14 @@ actor MetricHistoryBackfill {
         guard !running, !stopped, budget.isForegroundNow else { return 0 }
         running = true
         defer { running = false }
+        let refresh = refreshesStoredDays
         guard let days = try? pendingDays() else { return 0 }
         var written = 0
         var visited = 0
+        defer {
+            // Every pending day was visited, so the refresh for this version is done.
+            if refresh, visited == days.count, !stopped { defaults.set(BandMetricSeriesMapping.version, forKey: Self.mappingVersionKey) }
+        }
         for day in days {
             guard !stopped, !Task.isCancelled, budget.isForegroundNow, visited < maximumDaysPerPass else { break }
             visited += 1

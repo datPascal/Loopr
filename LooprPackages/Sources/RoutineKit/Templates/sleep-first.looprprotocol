@@ -1,0 +1,95 @@
+{
+  "createdAt": "2026-10-25T00:00:00Z",
+  "format": "loopr-protocol",
+  "name": "Sleep first",
+  "rules": [
+    {
+      "evening": true,
+      "evidence": "The American Academy of Sleep Medicine and the Sleep Research Society say adults need 7 to 9 hours of sleep a night, in a 2015 consensus. No study sets a bedtime. The template's 22:30 leaves room for that before a 06:30 to 07:30 wake-up.",
+      "group": "sleep",
+      "key": "in-bed",
+      "source": "band",
+      "target": {
+        "kind": "atMost",
+        "metric": "in_bed_time",
+        "unit": "min",
+        "value": 1350
+      },
+      "timeOfDay": "21:45",
+      "title": "In bed by 22:30",
+      "why": "A steady bedtime leaves room for the 7 to 9 hours of sleep adults need."
+    },
+    {
+      "evening": true,
+      "evidence": "No study sets how long to stay off screens before bed. The template starts at an hour, a modest place to begin.",
+      "group": "sleep",
+      "key": "screens-off",
+      "source": "manual",
+      "target": {
+        "kind": "done"
+      },
+      "timeOfDay": "21:30",
+      "title": "Screens off an hour before bed",
+      "why": "Time away from screens before bed gives your mind a chance to wind down."
+    },
+    {
+      "evening": true,
+      "evidence": "No trial sets how long to leave between dinner and bed. The advice comes from common guidance and from studies that watch what people do. The template starts at 19:00, three and a half hours before 22:30.",
+      "group": "food",
+      "key": "kitchen-closes",
+      "source": "food",
+      "target": {
+        "kind": "atMost",
+        "metric": "last_meal_time",
+        "unit": "min",
+        "value": 1140
+      },
+      "timeOfDay": "18:30",
+      "title": "Kitchen closes at 19:00",
+      "why": "Finishing dinner a few hours before bed gives your body time to settle."
+    },
+    {
+      "evidence": "In a 2013 study in the Journal of Clinical Sleep Medicine, 400 mg of caffeine taken 6 hours before bed still cut sleep by more than an hour. The template's 14:00 is 8.5 hours before 22:30.",
+      "group": "food",
+      "key": "no-late-caffeine",
+      "source": "food",
+      "target": {
+        "kind": "atMost",
+        "metric": "last_caffeine_time",
+        "unit": "min",
+        "value": 840
+      },
+      "timeOfDay": "13:30",
+      "title": "No caffeine after 14:00",
+      "why": "Caffeine stays in your body for hours and can still cut into your sleep."
+    },
+    {
+      "evidence": "Light during the day helps set the body clock that times your sleep. No guideline sets a number of minutes, so the template starts at 30.",
+      "group": "sleep",
+      "key": "daylight",
+      "source": "appleHealth",
+      "target": {
+        "kind": "atLeast",
+        "metric": "daylight_minutes",
+        "unit": "min",
+        "value": 30
+      },
+      "title": "30 minutes in daylight",
+      "why": "Daylight during the day helps set your body clock for the night."
+    },
+    {
+      "evidence": "There is no target here. Your sleeping heart rate is one of the numbers Loopr compares with your other rules.",
+      "group": "sleep",
+      "key": "track-sleep-hr",
+      "source": "band",
+      "target": {
+        "kind": "done",
+        "metric": "sleep_hr"
+      },
+      "title": "Track your sleeping heart rate",
+      "why": "Wearing your band to bed lets Loopr track your sleeping heart rate."
+    }
+  ],
+  "schemaVersion": 1,
+  "version": 1
+}

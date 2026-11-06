@@ -186,17 +186,17 @@ struct MetricDetailRulesTests {
     @Test func heroEyebrowFollowsTheDayOnScreen() {
         let today = MetricDetailAnchor(day: pageToday, today: pageToday, calendar: berlin)
         #expect(today.isToday)
-        #expect(today.heroEyebrow(for: pageDay(0), key: .rmssd) == "LAST NIGHT")
-        #expect(today.heroEyebrow(for: pageDay(0), key: .steps) == "TODAY")
+        #expect(today.heroEyebrow(for: pageDay(0), key: .rmssd) == "Last night")
+        #expect(today.heroEyebrow(for: pageDay(0), key: .steps) == "Today")
 
         let yesterday = MetricDetailAnchor(day: pageDay(1), today: pageToday, calendar: berlin)
         #expect(!yesterday.isToday)
-        #expect(yesterday.heroEyebrow(for: pageDay(1), key: .steps) == "YESTERDAY · WED 23 SEP")
-        #expect(yesterday.heroEyebrow(for: pageDay(1), key: .rmssd) == "TUE 22 → WED 23 SEP")
+        #expect(yesterday.heroEyebrow(for: pageDay(1), key: .steps) == "Yesterday · Wed 23 Sep")
+        #expect(yesterday.heroEyebrow(for: pageDay(1), key: .rmssd) == "Tue 22 → Wed 23 Sep")
         #expect(yesterday.missingCaption(for: pageDay(1)) == nil)
 
         // An older reading is labelled as the latest, with why.
-        #expect(yesterday.heroEyebrow(for: pageDay(3), key: .rmssd) == "LATEST · MON 21 SEP")
+        #expect(yesterday.heroEyebrow(for: pageDay(3), key: .rmssd) == "Latest · Mon 21 Sep")
         #expect(yesterday.missingCaption(for: pageDay(3)) == "No reading on Wed 23 Sep.")
         #expect(today.missingCaption(for: pageDay(1)) == "No reading for today yet.")
     }

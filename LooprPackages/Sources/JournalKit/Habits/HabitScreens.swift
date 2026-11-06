@@ -17,7 +17,7 @@ public struct HabitHomeSection: View {
             LooprSectionGroup(title: "Habits") {
                 if viewModel.isLoading {
                     LooprFormCard { StateMessage(.loading, compact: true) }
-                } else if viewModel.activeDefinitions.isEmpty {
+                } else if viewModel.checkInDefinitions.isEmpty {
                     LooprFormCard {
                         VStack(alignment: .leading, spacing: LooprSpacing.md) {
                             LooprText("Track daily habits and compare them with your next sleep and Recovery.", style: .prose, color: .inkSecondary)
@@ -32,7 +32,7 @@ public struct HabitHomeSection: View {
                     LooprFormCard {
                         VStack(alignment: .leading, spacing: LooprSpacing.md) {
                             LooprText("YESTERDAY · \(completion.answered) OF \(completion.total) ANSWERED", style: .headerMeta, color: .inkSecondary)
-                            ForEach(viewModel.activeDefinitions) { definition in
+                            ForEach(viewModel.checkInDefinitions) { definition in
                                 let answer = viewModel.record(for: day)?.response(for: definition.id)?.answer
                                 HStack {
                                     LooprText(definition.name, style: .prose)
@@ -50,7 +50,7 @@ public struct HabitHomeSection: View {
                     LooprMenuGroup(title: "Review", rows: [
                         LooprMenuItem(title: "Habit insights", value: nil, accessibilityIdentifier: "habit-insights", action: { route(.habitInsights) }),
                         LooprMenuItem(title: "History", value: nil, accessibilityIdentifier: "habit-history", action: { route(.habitHistory) }),
-                        LooprMenuItem(title: "Manage habits", value: "\(viewModel.activeDefinitions.count) active", accessibilityIdentifier: "habit-manage", action: { route(.habits) })
+                        LooprMenuItem(title: "Manage habits", value: "\(viewModel.checkInDefinitions.count) active", accessibilityIdentifier: "habit-manage", action: { route(.habits) })
                     ])
                 }
             }
@@ -93,7 +93,7 @@ public struct HabitSetupScreen: View {
                     let items = HabitCatalog.search(search).filter { $0.category == category }
                     if !items.isEmpty {
                         VStack(alignment: .leading, spacing: LooprSpacing.xs) {
-                            LooprText(category.rawValue.uppercased(), style: .confidence, color: .inkSecondary)
+                            LooprText(category.rawValue.looprLabelCased, style: .confidence, color: .inkSecondary)
                                 .accessibilityLabel(category.rawValue)
                                 .accessibilityAddTraits(.isHeader)
                             LooprFormCard(padding: LooprSpacing.none) {
@@ -164,10 +164,10 @@ public struct HabitSetupScreen: View {
             }
 
             if !viewModel.migrationSuggestions.isEmpty {
-                LooprSectionGroup(title: "From your journal") {
+                LooprSectionGroup(title: "From your notes") {
                     LooprFormCard {
                         VStack(alignment: .leading, spacing: LooprSpacing.sm) {
-                            LooprText("Choose old tags to keep as history. Loopr will not treat missing tags as No answers.", style: .prose, color: .inkSecondary)
+                            LooprText("Your old notes use these words. Pick the ones to keep in your history as answers. A day whose note leaves the word out does not count as a No.", style: .prose, color: .inkSecondary)
                             ForEach(viewModel.migrationSuggestions) { suggestion in
                                 Toggle(suggestion.displayText, isOn: Binding(
                                     get: { approvedLegacyIDs.contains(suggestion.id) },
@@ -192,7 +192,7 @@ public struct HabitSetupScreen: View {
             if HabitCatalog.hasNearDuplicate(in: selectedCatalogIDs) {
                 LooprFormCard {
                     LooprInlineMessage(
-                        "These habits overlap. Log days when only one happens so Loopr can separate them.",
+                        overlapText,
                         tone: .warning
                     )
                 }
@@ -219,6 +219,13 @@ public struct HabitSetupScreen: View {
             Text("You can keep up to 10 habits active. Archived habits keep their history and insights.")
         }
         .accessibilityIdentifier("habit-setup-screen")
+    }
+
+    /// Names the two overlapping habits (ICP R3-UPG-5).
+    private var overlapText: String {
+        let names = ["short_video_before_bed", "screen_before_bed"].compactMap { HabitCatalog.byID[$0]?.name }
+        guard names.count == 2 else { return "Two of these habits overlap. Log days when only one happens so Loopr can separate them." }
+        return "\(names[0]) and \(names[1]) overlap. Log days when only one happens so Loopr can separate them."
     }
 
     private var selectedCatalogIDs: Set<String> {
@@ -263,12 +270,14 @@ public struct HabitSetupScreen: View {
 
 public struct HabitManagementScreen: View {
     @ObservedObject private var viewModel: HabitViewModel
+    private let onChoose: () -> Void
     @State private var pendingDelete: HabitDefinition?
     @State private var editing: HabitDefinition?
     @State private var editName = ""
     @State private var editQuestion = ""
+    @State private var editPeriod = HabitQuestionPeriod.evening
 
-    public init(viewModel: HabitViewModel) { self.viewModel = viewModel }
+    public init(viewModel: HabitViewModel, onChoose: @escaping () -> Void) { self.viewModel = viewModel; self.onChoose = onChoose }
 
     public var body: some View {
         LooprDetailScaffold {
@@ -294,10 +303,18 @@ public struct HabitManagementScreen: View {
                     }
                 }
             }
-            LooprSectionGroup(title: "Active") { definitionList(viewModel.activeDefinitions) }
-            if viewModel.definitions.contains(where: \.isArchived) {
-                LooprSectionGroup(title: "Archived") { definitionList(viewModel.definitions.filter(\.isArchived)) }
+            LooprSectionGroup(title: "Active") { definitionList(viewModel.checkInDefinitions) }
+            if !viewModel.ruleDefinitions.isEmpty {
+                LooprSectionGroup(title: "Rules now") { ruleList(viewModel.ruleDefinitions) }
             }
+            if viewModel.definitions.contains(where: { $0.isArchived && !viewModel.ruleHabitIDs.contains($0.id) }) {
+                LooprSectionGroup(title: "Archived") {
+                    definitionList(viewModel.definitions.filter { $0.isArchived && !viewModel.ruleHabitIDs.contains($0.id) })
+                }
+            }
+            Button("Add question", action: onChoose)
+                .buttonStyle(LooprButtonStyle(prominent: false))
+                .accessibilityIdentifier("habit-add-question")
             errorCard
         }
         .navigationTitle("Manage habits")
@@ -325,12 +342,14 @@ public struct HabitManagementScreen: View {
                                 TextField("Yes or No question", text: $editQuestion)
                                     .looprTypography(.prose)
                                     .accessibilityIdentifier("habit-edit-question")
+                                LooprPickerRow(title: "Ask about", selection: $editPeriod, options: HabitQuestionPeriod.allCases, label: { $0.rawValue })
+                                    .accessibilityIdentifier("habit-edit-period")
                             }
                         }
                     }
                     Button("Save changes") {
                         Task {
-                            await viewModel.rename(definition, name: editName, question: editQuestion)
+                            await viewModel.rename(definition, name: editName, question: editQuestion, period: editPeriod)
                             if viewModel.errorMessage == nil { editing = nil }
                         }
                     }
@@ -364,6 +383,7 @@ public struct HabitManagementScreen: View {
                             Button("Rename") {
                                 editName = definition.name
                                 editQuestion = definition.question
+                                editPeriod = definition.checkInPeriod
                                 editing = definition
                             }
                             Button(definition.isArchived ? "Reactivate" : "Archive") {
@@ -382,6 +402,26 @@ public struct HabitManagementScreen: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("habit-manage-\(definition.id.rawValue.uuidString)")
                     if index < definitions.count - 1 { LooprHairline() }
+                }
+            }
+        }
+    }
+
+    /// Habits that became protocol rules. They are answered and edited as rules, so this list only names them (ICP
+    /// R1-UPG-1). Editing them here would leave the rule saying something else.
+    private func ruleList(_ definitions: [HabitDefinition]) -> some View {
+        LooprFormCard(padding: LooprSpacing.none) {
+            VStack(alignment: .leading, spacing: LooprSpacing.none) {
+                LooprText("These questions are rules in your protocol now. Change them in Protocol, under Rules. Your earlier answers stay with them.",
+                          style: .caption, color: .inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(LooprSpacing.formCardPadding)
+                ForEach(definitions) { definition in
+                    LooprHairline()
+                    LooprText(definition.name, style: .prose)
+                        .padding(.horizontal, LooprSpacing.formCardPadding)
+                        .frame(maxWidth: .infinity, minHeight: LooprSpacing.interactiveRowHeight, alignment: .leading)
+                        .accessibilityIdentifier("habit-rule-\(definition.id.rawValue.uuidString)")
                 }
             }
         }
@@ -436,10 +476,10 @@ public struct HabitCheckInScreen: View {
                         )
                     }
                 }
-                if viewModel.activeDefinitions.isEmpty {
+                if viewModel.checkInDefinitions.isEmpty {
                     LooprFormCard { StateMessage(.noRecords) }
                 } else {
-                    ForEach(viewModel.activeDefinitions) { definition in
+                    ForEach(viewModel.checkInDefinitions) { definition in
                         LooprFormCard {
                             VStack(alignment: .leading, spacing: LooprSpacing.md) {
                                 LooprText(definition.question, style: .prose)
@@ -513,16 +553,18 @@ public struct HabitHistoryScreen: View {
                         HStack {
                             Button("Previous month", systemImage: "chevron.left") { monthOffset -= 1 }
                                 .labelStyle(.iconOnly)
-                                .frame(minWidth: LooprSpacing.formButtonHeight, minHeight: LooprSpacing.formButtonHeight)
-                                .foregroundStyle(Color.loopr(.brand))
+                                .frame(minWidth: LooprButtonStyle.minimumTargetHeight, minHeight: LooprButtonStyle.minimumTargetHeight)
+                                .contentShape(Rectangle())
+                                .foregroundStyle(LooprColorToken.brand.tintedLabelColor)
                                 .accessibilityIdentifier("habit-history-previous-month")
                             Spacer()
                             LooprText(monthTitle, style: .rowTitle)
                             Spacer()
                             Button("Next month", systemImage: "chevron.right") { monthOffset += 1 }
                                 .labelStyle(.iconOnly)
-                                .frame(minWidth: LooprSpacing.formButtonHeight, minHeight: LooprSpacing.formButtonHeight)
-                                .foregroundStyle(Color.loopr(.brand))
+                                .frame(minWidth: LooprButtonStyle.minimumTargetHeight, minHeight: LooprButtonStyle.minimumTargetHeight)
+                                .contentShape(Rectangle())
+                                .foregroundStyle(LooprColorToken.brand.tintedLabelColor)
                                 .disabled(monthOffset >= 0)
                                 .accessibilityIdentifier("habit-history-next-month")
                         }
@@ -755,7 +797,7 @@ public struct HabitInsightsScreen: View {
                             LooprText(presentation.detail, style: .prose, color: .inkSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                             HStack(alignment: .firstTextBaseline, spacing: LooprSpacing.sm) {
-                                LooprText(presentation.counts.uppercased(), style: .confidence, color: .inkSecondary)
+                                LooprText(presentation.counts.looprLabelCased, style: .confidence, color: .inkSecondary)
                                 Spacer(minLength: LooprSpacing.sm)
                                 Image(systemName: "chevron.right")
                                     .looprTypography(.metricUnit)
@@ -784,8 +826,11 @@ public struct HabitInsightsScreen: View {
 public struct HabitDetailScreen: View {
     @ObservedObject private var viewModel: HabitViewModel
     public let habitID: HabitID
+    public let target: JournalInsightTarget
 
-    public init(viewModel: HabitViewModel, habitID: HabitID) { self.viewModel = viewModel; self.habitID = habitID }
+    public init(viewModel: HabitViewModel, habitID: HabitID, target: JournalInsightTarget = .recovery) {
+        self.viewModel = viewModel; self.habitID = habitID; self.target = target
+    }
 
     public var body: some View {
         LooprDetailScaffold {
@@ -794,29 +839,32 @@ public struct HabitDetailScreen: View {
                     estimate: estimate,
                     overlappingHabitName: estimate.overlappingHabitID.flatMap { viewModel.definition(for: $0)?.name }
                 )
+                let targetRow = viewModel.definition(for: habitID).map {
+                    JournalInsightRow(definition: $0, target: target, estimate: estimate)
+                }
                 LooprSectionGroup(title: "Summary") {
                     LooprSurface(emphasis: presentation.emphasis) {
                         VStack(alignment: .leading, spacing: LooprSpacing.md) {
                             StatusChip(
-                                presentation.chipLabel,
+                                targetRow?.sample != nil ? (targetRow?.evidence.components(separatedBy: " · ").first ?? presentation.chipLabel) : presentation.chipLabel,
                                 symbol: presentation.symbol,
                                 tone: presentation.tone
                             )
-                            LooprText(detailHeadline(estimate, fallback: presentation.detail), style: .cardTitle)
+                            LooprText(targetRow?.sample != nil || target != .recovery ? targetRow?.detail ?? "No comparison yet." : detailHeadline(estimate, fallback: presentation.detail), style: .cardTitle)
                                 .fixedSize(horizontal: false, vertical: true)
-                            LooprText(presentation.counts.uppercased(), style: .confidence, color: .inkSecondary)
+                            LooprText(targetRow?.sample != nil ? targetRow!.evidence.looprLabelCased : presentation.counts.looprLabelCased, style: .confidence, color: .inkSecondary)
                             LooprHairline()
                             LooprText("This is an observed association. Other habits and changes in your routine may explain some or all of it.", style: .prose, color: .inkSecondary)
                         }
                     }
                 }
 
-                if let recovery = estimate.metric(.recoveryScore) {
+                if let recovery = estimate.metric(target.metric) {
                     metricDetails(recovery)
                 }
 
                 let secondaryMetrics = HabitOutcomeMetricID.allCases
-                    .filter { $0 != .recoveryScore }
+                    .filter { $0 != target.metric }
                     .compactMap { estimate.metric($0) }
                 if !secondaryMetrics.isEmpty {
                     LooprSectionGroup(title: "Other metrics") {
@@ -840,13 +888,13 @@ public struct HabitDetailScreen: View {
                     LooprFormCard {
                         VStack(alignment: .leading, spacing: LooprSpacing.xs) {
                             LooprText("Loopr adjusts for your recent baseline, weekday, prior-day Strain, and other tracked habits.", style: .prose, color: .inkSecondary)
-                            LooprText("CALCULATED \(estimate.calculatedAt.formatted(date: .abbreviated, time: .shortened).uppercased())", style: .confidence, color: .inkSecondary)
-                            LooprText(estimate.algorithmVersion.uppercased(), style: .confidence, color: .inkSecondary)
+                            LooprText("CALCULATED \(estimate.calculatedAt.formatted(date: .abbreviated, time: .shortened).looprLabelCased)", style: .confidence, color: .inkSecondary)
+                            LooprText(estimate.algorithmVersion.looprLabelCased, style: .confidence, color: .inkSecondary)
                         }
                     }
                 }
 
-                if !estimate.exclusions.isEmpty {
+                if target == .recovery && !estimate.exclusions.isEmpty {
                     LooprSectionGroup(title: "Excluded days") {
                         HairlineMetricList(rows: exclusionRows(estimate))
                     }
@@ -873,7 +921,7 @@ public struct HabitDetailScreen: View {
             }
         } else {
             VStack(alignment: .leading, spacing: LooprSpacing.xs) {
-                LooprText(metric.metricID.title.uppercased(), style: .confidence, color: .inkSecondary)
+                LooprText(metric.metricID.title.looprLabelCased, style: .confidence, color: .inkSecondary)
                     .accessibilityLabel(metric.metricID.title)
                     .accessibilityAddTraits(.isHeader)
                 HairlineMetricList(rows: rows)
@@ -892,15 +940,16 @@ public struct HabitDetailScreen: View {
     }
 
     private func calculationRows(_ estimate: HabitImpactEstimate) -> [HairlineMetricRow] {
-        [
-            HairlineMetricRow(
-                title: "Comparison period",
-                value: HabitCalendarText.range(estimate.windowStart, estimate.windowEnd)
-            ),
-            HairlineMetricRow(title: "Yes answers", value: "\(estimate.yesCount)", unit: "days"),
-            HairlineMetricRow(title: "No answers", value: "\(estimate.noCount)", unit: "days"),
-            HairlineMetricRow(title: "Eligible days", value: "\(estimate.eligibleDayCount)", unit: "days"),
-            HairlineMetricRow(title: "Excluded days", value: "\(estimate.excludedDayCount)", unit: "days")
+        let sample = estimate.metric(target.metric)?.sample
+        func row(_ title: String, count: Int?) -> HairlineMetricRow {
+            HairlineMetricRow(title: title, value: count.map { String($0) } ?? "Not measured", unit: count == nil ? "" : "days")
+        }
+        return [
+            HairlineMetricRow(title: "Comparison period", value: HabitCalendarText.range(estimate.windowStart, estimate.windowEnd)),
+            row("Yes answers", count: sample?.yesCount ?? (target == .recovery ? estimate.yesCount : nil)),
+            row("No answers", count: sample?.noCount ?? (target == .recovery ? estimate.noCount : nil)),
+            row("Eligible days", count: sample.map { $0.yesCount + $0.noCount } ?? (target == .recovery ? estimate.eligibleDayCount : nil)),
+            row("Excluded days", count: sample?.excludedDayCount ?? (target == .recovery ? estimate.excludedDayCount : nil))
         ]
     }
 
@@ -1056,7 +1105,7 @@ private enum HabitMetricText {
     }
 
     private static func signedNumber(_ value: Double) -> String {
-        "\(value > 0 ? "+" : "")\(number(value))"
+        LooprSignedNumber.text(value, fractionDigits: 1)
     }
 
     static func unit(_ unit: HabitMetricUnitID) -> String {

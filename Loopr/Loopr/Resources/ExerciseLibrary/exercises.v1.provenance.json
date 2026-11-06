@@ -1,0 +1,22 @@
+{
+  "commit": "f00c92c7dcf1216a928a52c3706c7ce8e2f71ed5",
+  "count": 876,
+  "generated": "2026-10-14",
+  "keptFields": [
+    "category",
+    "equipment",
+    "force",
+    "id",
+    "level",
+    "mechanic",
+    "name",
+    "primaryMuscles",
+    "secondaryMuscles"
+  ],
+  "licence": "The Unlicense",
+  "outputFile": "exercises.v1.json",
+  "outputSha256": "3b1eb3f3f6450e42c6fa62ee8c3cb196221e8921731077871b4a3499858ed771",
+  "script": "scripts/trim-exercise-library.py",
+  "sourceSha256": "5bb747e3fc658f095a60dcbf6d53c96627acdcc6ffb6fffde86f7e26995d40bf",
+  "sourceUrl": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/f00c92c7dcf1216a928a52c3706c7ce8e2f71ed5/dist/exercises.json"
+}

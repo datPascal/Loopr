@@ -182,9 +182,9 @@ public struct RouteScreen: View {
     }
 
     private var headerMeta: String {
-        guard let record = viewModel.route else { return "RECORDED ROUTE" }
-        let state = record.hasUsableGPS ? "RECORDED ROUTE" : "GPS ABSENT"
-        return "\(record.activity.rawValue.uppercased()) · \(state)"
+        guard let record = viewModel.route else { return "Recorded route" }
+        let state = record.hasUsableGPS ? "Recorded route" : "GPS absent"
+        return "\(record.activity.rawValue.looprLabelCased) · \(state)"
     }
 }
 
@@ -292,12 +292,6 @@ private struct RouteOverviewContent: View {
 
         if !zoneSamples(for: record).isEmpty {
             RouteZoneChartSection(zones: zoneSamples(for: record))
-        }
-
-        if !primitive.zoneSegments.isEmpty {
-            LooprSectionGroup(title: "Route segments") {
-                RouteSegmentMetricList(segments: primitive.zoneSegments)
-            }
         }
 
         LooprMenuGroup(
@@ -448,32 +442,6 @@ private struct RouteZoneChartSection: View {
     }
 }
 
-private struct RouteSegmentMetricList: View {
-    let segments: [RouteSegment]
-
-    var body: some View {
-        LooprFormCard(padding: LooprSpacing.none) {
-            VStack(spacing: LooprSpacing.none) {
-                ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
-                    HairlineMetricRow(
-                        id: "route-zone-segment-\(index)",
-                        title: segment.zone.map { "Zone \($0)" } ?? "Zone not assigned",
-                        confidence: segment.startsAfterGap ? "AFTER GPS GAP" : nil,
-                        value: String(segment.points.count),
-                        unit: "points"
-                    )
-                    .padding(.horizontal, LooprSpacing.formCardPadding)
-                    .accessibilityIdentifier("route-zone-segment-\(index)")
-
-                    if index < segments.count - 1 {
-                        LooprHairline()
-                    }
-                }
-            }
-        }
-    }
-}
-
 private struct RouteNoGPSSurface: View {
     var body: some View {
         LooprSurface(emphasis: .hero(.movement)) {
@@ -604,7 +572,7 @@ private func routeSummaryRows(
     system: LooprMeasurementSystem
 ) -> [HairlineMetricRow] {
     let distance = LooprUnitFormatter.distance(
-        meters: RouteMath.distanceMeters(route: record),
+        meters: RouteAnalysis.distanceMeters(route: record),
         system: system
     )
     return [
@@ -615,16 +583,14 @@ private func routeSummaryRows(
             unit: distance.unit
         ),
         HairlineMetricRow(
-            id: "route-summary-duration",
-            title: "Duration",
-            value: routeDurationPresentation(RouteMath.duration(route: record)),
-            unit: "elapsed"
+            id: "route-summary-moving",
+            title: "Moving time",
+            value: routeDurationPresentation(RouteAnalysis.movingSeconds(route: record))
         ),
         HairlineMetricRow(
-            id: "route-summary-points",
-            title: "Location points",
-            value: String(record.points.count),
-            unit: "points"
+            id: "route-summary-duration",
+            title: "Elapsed",
+            value: routeDurationPresentation(RouteMath.duration(route: record))
         )
     ]
 }

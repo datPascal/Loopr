@@ -181,7 +181,7 @@ public actor CycleRepository: CycleStore {
     @discardableResult
     public func log(_ entry: CycleEntry) throws -> CycleEntry {
         guard enabled && !disabled else { throw CycleError.optedOut }
-        guard entry.day.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil else { throw CycleError.invalidDay }
+        guard CycleDate.parse(entry.day) != nil else { throw CycleError.invalidDay }
         entries[entry.id] = entry
         return entry
     }
@@ -193,7 +193,17 @@ public actor CycleRepository: CycleStore {
 
     public func estimate(today: String? = nil) -> CycleEstimate {
         guard enabled, !disabled else { return CycleEstimate(phase: .unknown, confidence: 0, uncertainty: "Cycle tracking is not enabled.", sampleSize: 0) }
-        let starts = history().filter { $0.kind == .periodStart }.map(\.day).compactMap(CycleDate.parse).sorted()
+        return CycleEstimation.estimate(entries: history(), today: today)
+    }
+
+    public func export() -> CycleExport { CycleExport(entries: history(), settings: settings) }
+}
+
+public enum CycleEstimation {
+    public static func estimate(entries: [CycleEntry], today: String? = nil) -> CycleEstimate {
+        let reference = today.flatMap(CycleDate.parse) ?? CycleDate.parse(CycleDate.localDay(Date())) ?? Date()
+        let starts = Set(entries.filter { $0.kind == .periodStart }.map(\.day).compactMap(CycleDate.parse))
+            .filter { $0 <= reference }.sorted()
         guard let latest = starts.last else { return CycleEstimate(phase: .unknown, confidence: 0, uncertainty: "Log a period start to begin; no phase is inferred.", sampleSize: 0) }
         let lengths = zip(starts, starts.dropFirst()).map { CycleDate.days(from: $0, to: $1) }.filter { $0 > 0 }
         let typical = lengths.isEmpty ? 28.0 : Double(lengths.sorted()[lengths.count / 2])
@@ -210,7 +220,6 @@ public actor CycleRepository: CycleStore {
         let sampleSize = starts.count
         let baseConfidence = min(1, Double(sampleSize) / 3)
         let confidence = irregular ? baseConfidence * 0.45 : baseConfidence
-        let reference = today.flatMap(CycleDate.parse) ?? latest
         let elapsed = max(0, CycleDate.days(from: latest, to: reference))
         let cycleDay = elapsed + 1
         let phase: CyclePhase
@@ -227,8 +236,6 @@ public actor CycleRepository: CycleStore {
         let fertileEnd = CycleDate.adding(days: max(1, Int(typical.rounded()) - 12), to: latest)
         return CycleEstimate(phase: phase, nextPeriodDay: next, fertileWindow: fertileStart...fertileEnd, ovulationDay: ovulation, confidence: confidence, uncertainty: uncertainty, sampleSize: sampleSize)
     }
-
-    public func export() -> CycleExport { CycleExport(entries: history(), settings: settings) }
 }
 
 public enum CycleDate {
@@ -250,6 +257,16 @@ public enum CycleDate {
 
     public static func string(_ value: Date) -> String {
         let components = calendar().dateComponents([.year, .month, .day], from: value)
+        return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
+    }
+
+    /// Convert a real instant to the user's calendar day. Parsed day labels and
+    /// date arithmetic continue to use UTC so daylight-saving shifts cannot
+    /// change their meaning.
+    public static func localDay(_ value: Date, timeZone: TimeZone = .autoupdatingCurrent) -> String {
+        var local = calendar()
+        local.timeZone = timeZone
+        let components = local.dateComponents([.year, .month, .day], from: value)
         return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
     }
 

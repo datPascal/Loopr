@@ -5,7 +5,7 @@ import Testing
 struct UnitFormatterTests {
     /// The formatter is locale aware on purpose, so the expectations are too.
     private func number(_ value: Double, digits: Int) -> String {
-        value.formatted(.number.precision(.fractionLength(digits)))
+        value.formatted(.number.precision(.fractionLength(digits)).locale(LooprUnitFormatter.displayLocale))
     }
 
     @Test func metricDistanceSwitchesToKilometresAtOneThousandMetres() {

@@ -135,6 +135,8 @@ public enum LooprFixtureMetrics {
         LooprMetricLinkID.strain: Story(today: 8.6, usual: 11.5, noise: 2.6, weekly: 1.8, drift: 1.2, floor: 0.5, ceiling: 21, digits: 1, coupling: -1),
         LooprMetricLinkID.stress: Story(today: 21, usual: 30, noise: 7, weekly: 3, drift: 3, floor: 0, ceiling: 100, digits: 0, coupling: -1),
         LooprMetricLinkID.sleepDuration: Story(today: 462, usual: 452, noise: 28, weekly: 16, drift: 8, floor: 200, ceiling: 620, digits: 0),
+        LooprMetricLinkID.sleepPerformance: Story(today: 462 / sleepNeedMinutes * 100, usual: 100, noise: 6, weekly: 3, drift: 2, floor: 40, ceiling: 150, digits: 0),
+        LooprMetricLinkID.sleepDebt: Story(today: 28, usual: 45, noise: 15, weekly: 5, drift: 3, floor: 0, ceiling: 180, digits: 0),
         LooprMetricLinkID.sleepEfficiency: Story(today: 91, usual: 89, noise: 2.4, weekly: 1, drift: 1, floor: 60, ceiling: 99, digits: 0),
         LooprMetricLinkID.deepSleep: Story(today: 82, usual: 78, noise: 11, weekly: 4, drift: 4, floor: 10, ceiling: 160, digits: 0),
         LooprMetricLinkID.remSleep: Story(today: 96, usual: 94, noise: 13, weekly: 5, drift: 5, floor: 15, ceiling: 180, digits: 0),

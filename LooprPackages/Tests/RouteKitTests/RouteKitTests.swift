@@ -32,6 +32,101 @@ final class RouteKitTests: XCTestCase {
         RoutePoint(timestamp: Date(timeIntervalSince1970: seconds), latitude: lat, longitude: lon, horizontalAccuracy: accuracy, speedMetersPerSecond: 3)
     }
 
+    func testConcurrentPointsDoNotOverwriteEachOther() async throws {
+        let recorder = RouteRecorder(location: LocationFixture())
+        try await recorder.start(workoutID: "concurrent", activity: .walk, permission: .authorized)
+        let accepted = try await withThrowingTaskGroup(of: Bool.self) { group in
+            for index in 0..<100 {
+                let sample = RoutePoint(timestamp: Date(timeIntervalSince1970: 100), latitude: 0,
+                    longitude: Double(index) / 1_000_000, horizontalAccuracy: 5)
+                group.addTask { try await recorder.append(sample) }
+            }
+            var count = 0
+            for try await success in group { if success { count += 1 } }
+            return count
+        }
+        let route = try await recorder.finish()
+        XCTAssertEqual(accepted, 100)
+        XCTAssertEqual(route.points.count, accepted)
+        XCTAssertEqual(Set(route.points.map(\.longitude)).count, accepted)
+    }
+
+    func testLateResumeCannotRestartAFinishedRoute() async throws {
+        let location = DelayedResumeLocation()
+        let recorder = RouteRecorder(location: location)
+        try await recorder.start(workoutID: "late-resume", activity: .walk, permission: .authorized)
+        try await recorder.suspend()
+        let resuming = Task { try await recorder.resume() }
+        await location.waitForResume()
+        let finished = try await recorder.finish()
+        XCTAssertTrue(finished.completed)
+        await location.release()
+        do {
+            try await resuming.value
+            XCTFail("Finishing must invalidate an outstanding resume")
+        } catch is CancellationError {}
+        let state = await recorder.currentState()
+        XCTAssertEqual(state, .idle)
+    }
+
+    func testSplitTimesInterpolateBoundariesAndUseTheZoneAtThatLocation() {
+        let points = (0...20).map { point(0, Double($0) / 1000, Double($0) * 10) }
+        let route = RouteRecord(workoutID: "split-zones", activity: .run, points: points, segments: [
+            RouteSegment(points: Array(points.prefix(5)), zone: 1),
+            RouteSegment(points: Array(points.dropFirst(5)), zone: 3)
+        ])
+        let splits = RouteMath.splits(route: route)
+        XCTAssertEqual(splits.count, 2)
+        let speed = RouteMath.distanceMeters(from: points[0], to: points[1]) / 10
+        for split in splits {
+            XCTAssertEqual(split.duration, 1000 / speed, accuracy: 0.001)
+            XCTAssertEqual(split.zone, 3)
+        }
+        // One long recorded edge can cross more than one boundary.
+        let sparse = RouteRecord(workoutID: "sparse", activity: .run, points: [points[0], points[20]])
+        XCTAssertEqual(RouteMath.splits(route: sparse).count, 2)
+    }
+
+    func testInvalidTimeAndAltitudeAreFilteredBeforePersistence() {
+        let filter = RouteFilter()
+        XCTAssertFalse(filter.accepts(RoutePoint(timestamp: Date(timeIntervalSince1970: .infinity),
+            latitude: 0, longitude: 0, horizontalAccuracy: 5), after: nil))
+        XCTAssertFalse(filter.accepts(RoutePoint(timestamp: Date(), latitude: 0, longitude: 0,
+            horizontalAccuracy: 5, altitude: .nan), after: nil))
+    }
+
+    func testFailedPointAfterGPSGapKeepsTheGapForRetry() async throws {
+        let store = RetryRouteStore()
+        let recorder = RouteRecorder(store: store, location: LocationFixture())
+        try await recorder.start(workoutID: "retry-gap", activity: .walk, permission: .authorized)
+        _ = try await recorder.append(point(0, 0, 0))
+        try await recorder.suspend()
+        try await recorder.resume()
+        await store.failNextSave()
+        do {
+            _ = try await recorder.append(point(0, 0.0001, 1))
+            XCTFail("The injected write failure must be reported")
+        } catch RouteStoreFixtureError.writeFailed {}
+        _ = try await recorder.append(point(0, 0.0002, 2))
+        let route = try await recorder.finish()
+        XCTAssertEqual(route.points.count, 2)
+        XCTAssertEqual(route.gapStartIndices, [1])
+        XCTAssertEqual(RouteMath.distanceMeters(route: route), 0)
+    }
+
+    func testPermissionEventDoesNotCancelTheParentFinalizer() async throws {
+        let location = EventLocationFixture()
+        let finalized = expectation(description: "Parent finalizer remains active")
+        let recorder = RouteRecorder(location: location, parentFinalizer: { _ in
+            XCTAssertFalse(Task.isCancelled)
+            finalized.fulfill()
+        })
+        try await recorder.start(workoutID: "event-denial", activity: .walk, permission: .authorized)
+        location.continuation.yield(.permissionRevoked)
+        await fulfillment(of: [finalized], timeout: 2)
+        _ = try await recorder.finish()
+    }
+
     func testEligibilityAndPermissionGateFailClosed() async {
         let recorder = RouteRecorder()
         do {
@@ -232,4 +327,46 @@ final class RouteKitTests: XCTestCase {
         XCTAssertNotEqual(RouteScreenStateFixtures.accessibilitySummary(for: .absent), RouteScreenStateFixtures.accessibilitySummary(for: .measuredZero))
         XCTAssertTrue(RouteScreenStateFixtures.accessibilityIdentifiers.allSatisfy { !$0.isEmpty })
     }
+}
+
+private actor DelayedResumeLocation: LocationStartGate {
+    private var starts = 0
+    private var pending: CheckedContinuation<Void, Never>?
+    private var waiter: CheckedContinuation<Void, Never>?
+    func start() async {
+        starts += 1
+        if starts > 1 {
+            waiter?.resume(); waiter = nil
+            await withCheckedContinuation { pending = $0 }
+        }
+    }
+    func waitForResume() async {
+        if starts < 2 { await withCheckedContinuation { waiter = $0 } }
+    }
+    func release() { pending?.resume(); pending = nil }
+    func stop() async {}
+}
+
+private actor RetryRouteStore: RouteStore {
+    private var rows: [String: RouteRecord] = [:]
+    private var shouldFail = false
+    func failNextSave() { shouldFail = true }
+    func route(workoutID: String) -> RouteRecord? { rows[workoutID] }
+    func all() -> [RouteRecord] { Array(rows.values) }
+    func save(_ route: RouteRecord) throws {
+        if shouldFail { shouldFail = false; throw RouteStoreFixtureError.writeFailed }
+        rows[route.workoutID] = route
+    }
+    func delete(workoutID: String) { rows.removeValue(forKey: workoutID) }
+    func count() -> Int { rows.count }
+    func deleteAll() { rows.removeAll() }
+}
+
+private struct EventLocationFixture: LocationStartGate {
+    let stream: AsyncStream<LocationGateEvent>
+    let continuation: AsyncStream<LocationGateEvent>.Continuation
+    init() { (stream, continuation) = AsyncStream.makeStream() }
+    func start() async throws {}
+    func stop() async {}
+    func events() -> AsyncStream<LocationGateEvent> { stream }
 }

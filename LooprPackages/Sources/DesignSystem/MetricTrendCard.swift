@@ -266,15 +266,15 @@ public struct LooprMetricTrendCard: View {
             }
             var trailing: String?
             if let low = point.low, let high = point.high, kind == .rangeBars || series.window.bucket == .week {
-                trailing = "RANGE \(valueFormat(low))-\(valueFormat(high))"
+                trailing = "Range \(valueFormat(low))-\(valueFormat(high))"
             }
             if series.window.bucket == .week {
-                let days = "\(point.measuredDays) OF 7 \(noun.plural.uppercased())"
+                let days = "\(point.measuredDays) of 7 \(noun.plural)"
                 trailing = trailing.map { "\($0)\n\(days)" } ?? days
             }
             return HeaderContent(eyebrow: label, value: valueFormat(point.value), trailing: trailing, hasValue: true, isSelection: true)
         }
-        let eyebrow = "\(range == .year ? "1-YEAR" : "\(range.dayCount)-\(noun.singular.uppercased())") AVERAGE"
+        let eyebrow = "\(range == .year ? "1-year" : range == .twoYears ? "2-year" : range == .halfYear ? "6-month" : "\(range.dayCount)-\(noun.singular)") average"
         let stats = LooprSeriesStatistics.compute(points, window: series.window, endingOn: endingOn)
         guard let stats else {
             return HeaderContent(eyebrow: eyebrow, value: "No readings", trailing: nil, hasValue: false, isSelection: false)
@@ -284,12 +284,12 @@ public struct LooprMetricTrendCard: View {
             let words = stats.measuredDays == 1
                 ? "\(noun.count(1)) so far"
                 : "Average of \(noun.count(stats.measuredDays))"
-            return HeaderContent(eyebrow: words.uppercased(), value: valueFormat(stats.mean), trailing: nil, hasValue: true, isSelection: false)
+            return HeaderContent(eyebrow: words.looprLabelCased, value: valueFormat(stats.mean), trailing: nil, hasValue: true, isSelection: false)
         }
         return HeaderContent(
             eyebrow: eyebrow,
             value: valueFormat(stats.mean),
-            trailing: "\(stats.measuredDays) OF \(stats.windowDays) \(noun.plural.uppercased())",
+            trailing: "\(stats.measuredDays) of \(stats.windowDays) \(noun.plural)",
             hasValue: true,
             isSelection: false
         )
@@ -324,8 +324,8 @@ public struct LooprMetricTrendCard: View {
                 .frame(width: 14, height: 8)
                 .accessibilityHidden(true)
             Text(options.legendShowsValues
-                 ? "USUAL RANGE \(valueFormat(band.lower))-\(valueFormat(band.upper)) \(unit.uppercased())"
-                 : "YOUR USUAL RANGE")
+                 ? "Usual range \(valueFormat(band.lower))-\(valueFormat(band.upper)) \(unit)"
+                 : "Your usual range")
                 .looprTypography(.confidence)
                 .foregroundStyle(Color.loopr(.inkSecondary))
                 .lineLimit(1)

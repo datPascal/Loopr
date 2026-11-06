@@ -82,7 +82,7 @@ private actor IntervalActivityRuntime {
     }
 
     private func content(_ progress: IntervalProgress) -> ActivityContent<LooprIntervalActivityAttributes.ContentState> {
-        .init(state: .init(phase: progress.phase == .work ? "Work" : progress.phase == .rest ? "Rest" : "Complete",
+        .init(state: .init(phase: progress.phase.title,
                            round: progress.round, phaseStartedAt: progress.phaseStartedAt, phaseEndsAt: progress.phaseEndsAt),
               staleDate: progress.phaseEndsAt)
     }

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import CycleKit
+import NotificationKit
 
 @testable import Loopr
 
@@ -216,4 +217,93 @@ private actor RecordingNotificationCenterClient: LooprNotificationCenterClient {
     func deliveredIDs() -> [String] { delivered }
     func removeAllPendingCount() -> Int { allPendingRemovalCount }
     func removeAllDeliveredCount() -> Int { allDeliveredRemovalCount }
+}
+
+/// One pretend iOS notification center that the layer schedules into and the deleter empties.
+private actor PretendNotificationCenter: LooprNotificationCenterClient, NotificationSchedulingClient {
+    private(set) var held: [NotificationRequest] = []
+    func schedule(_ request: NotificationRequest) async throws { held.append(request) }
+    func remove(identities: Set<NotificationIdentity>) async { held.removeAll { identities.contains($0.identity) } }
+    func pending(among identities: Set<NotificationIdentity>) async -> Set<NotificationIdentity>? {
+        Set(held.map(\.identity)).intersection(identities)
+    }
+    func authorizationStatus() async -> LooprNotificationAuthorizationStatus { .authorized }
+    func requestAuthorization() async throws -> Bool { true }
+    func addDailyRequest(identifier: String, hour: Int) async throws {}
+    func removePendingNotificationRequests(withIdentifiers identifiers: [String]) async {}
+    func removeDeliveredNotifications(withIdentifiers identifiers: [String]) async {}
+    func removeAllPendingNotificationRequests() async { held = [] }
+    func removeAllDeliveredNotifications() async {}
+}
+
+extension PlatformDeletionTests {
+    /// DEC-07 line 1: reminders from Ask and from Patterns tests are ordinary pending notifications, so Delete all data
+    /// removes them, and Settings has nothing left to list.
+    @Test
+    func deleteAllLeavesNoReminderPendingOrListed() async throws {
+        let center = PretendNotificationCenter()
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let historyURL = folder.appendingPathComponent("reminder-history.json")
+        let reminderURL = folder.appendingPathComponent("reminders.json")
+        let policy = NotificationPolicy(client: center, claims: NotificationClaimLedger(),
+                                        reminderURL: reminderURL, historyURL: historyURL)
+        await policy.setAuthorization(.authorized)
+        let fire = Date().addingTimeInterval(3_600)
+        let requests = [
+            UserReminderRequestFactory.request(source: .ask, objectID: "ask.\(UUID().uuidString)", day: "2099-01-01", fireDate: fire, title: "Stretch", detail: "Ten slow reps."),
+            UserReminderRequestFactory.request(source: .ask, objectID: "ask.\(UUID().uuidString)", day: UserReminderRequestFactory.recurringDay, fireDate: fire, title: "Wind down", detail: "Phone away.", repeats: .daily),
+            UserReminderRequestFactory.request(source: .patternsTest, objectID: LooprNotificationRuntime.patternObjectID(UUID()), day: UserReminderRequestFactory.recurringDay, fireDate: fire, title: "Patterns test", detail: "Open Patterns.", repeats: .daily, expiresAt: fire.addingTimeInterval(86_400))
+        ]
+        for request in requests { #expect(try await policy.schedule(request) == .scheduled) }
+        #expect(await center.held.count == 3)
+        #expect(try await policy.pendingReminders().count == 3)
+
+        #expect(await policy.reminderHistory().count == 3)
+        #expect(FileManager.default.fileExists(atPath: historyURL.path))
+
+        try await LooprNotificationDataDeletionDeleter(client: center, forgetReminders: { try await policy.forgetUserReminders() }).deleteAll()
+
+        #expect(await center.held.isEmpty, "no reminder is left pending in iOS")
+        #expect(try await policy.pendingReminders().isEmpty, "Settings > Notifications lists none")
+        // The history holds the words the person confirmed, so it goes too, and the next save cannot write it back.
+        #expect(await policy.reminderHistory().isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: historyURL.path))
+        #expect(!FileManager.default.fileExists(atPath: reminderURL.path))
+        _ = try await policy.schedule(requests[0])
+        #expect(await policy.reminderHistory().count == 1)
+    }
+
+    @Test
+    func deletingAccountDataCancelsTheOwnedSystemAlarmAndPropagatesFailure() async throws {
+        let client = RecordingSystemAlarmDeletionClient()
+        let deleter = LooprAlarmDataDeletionDeleter(client: client)
+        try await deleter.deleteAll()
+        #expect(await client.identifiers == [PhoneAlarmFallback.alarmID])
+        await client.setFailure(true)
+        await #expect(throws: SystemAlarmDeletionFailure.self) { try await deleter.deleteAll() }
+    }
+
+    @Test
+    func accountDeletionOwnsAllAlarmEvidenceAndPreferences() {
+        let keys = Set(ProductRepositoryKeys.allOwnedDefaultsKeys)
+        #expect(keys.contains(LooprPhoneAlarmPreference.key))
+        #expect(keys.contains(PhoneAlarmFallback.outcomeKey))
+        #expect(keys.contains(LooprStrapAlarmArmRecord.fireDateKey))
+        #expect(keys.contains(LooprStrapAlarmArmRecord.sessionKey))
+        #expect(keys.contains(LooprStrapAlarmArmRecord.pendingDisableKey))
+        #expect(keys.contains(LooprStrapAlarmArmRecord.firedDateKey))
+    }
+}
+
+private struct SystemAlarmDeletionFailure: Error {}
+
+private actor RecordingSystemAlarmDeletionClient: LooprSystemAlarmDeletionClient {
+    private(set) var identifiers: [UUID] = []
+    private var shouldFail = false
+    func setFailure(_ value: Bool) { shouldFail = value }
+    func cancel(id: UUID) async throws {
+        if shouldFail { throw SystemAlarmDeletionFailure() }
+        identifiers.append(id)
+    }
 }

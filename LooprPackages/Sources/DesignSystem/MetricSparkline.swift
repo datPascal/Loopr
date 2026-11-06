@@ -53,6 +53,8 @@ public struct LooprSparkline: View {
                     BarMark(x: .value("Day", point.date, unit: .day), y: .value("Value", point.value), width: .ratio(0.6))
                         .clipShape(RoundedRectangle(cornerRadius: 1.5, style: .continuous))
                         .foregroundStyle(Color.loopr(accent).opacity(point.id == series.latest?.id ? 1 : 0.5))
+                        // The day, not Charts' bin "8 Nov 2023 at 00 to 9 Nov 2023 at 00" (ICP R3-OPT-13).
+                        .accessibilityLabel(point.date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
                 }
             } else {
                 ForEach(series.points) { point in

@@ -23,6 +23,8 @@ public final class StorageDocumentStore: @unchecked Sendable {
     }
 
     private static let table = "loopr_product_document"
+    /// The table every namespace shares, for a change that has to join another transaction.
+    public static var documentTable: String { table }
     private let database: StorageDatabase
     private let namespace: String
 
@@ -116,8 +118,8 @@ public final class StorageDocumentStore: @unchecked Sendable {
         guard Self.isValidKey(prefix) else { throw StoreError.invalidKey }
         try database.write { db in
             try db.execute(
-                sql: "DELETE FROM \(Self.table) WHERE namespace = ? AND document_key LIKE ?",
-                arguments: [namespace, "\(prefix)%"]
+                sql: "DELETE FROM \(Self.table) WHERE namespace = ? AND substr(document_key, 1, length(?)) = ? COLLATE BINARY",
+                arguments: [namespace, prefix, prefix]
             )
         }
     }
@@ -125,7 +127,7 @@ public final class StorageDocumentStore: @unchecked Sendable {
     /// Applies a complete document change set in one SQLite transaction.
     /// Callers encode values before this method opens the transaction, so an
     /// encoding failure cannot leave a partial restore, migration, or delete.
-    public func mutate(_ mutations: [StorageDocumentMutation]) throws {
+    public func mutate(_ mutations: [StorageDocumentMutation], additionalChanges: (Database) throws -> Void = { _ in }) throws {
         for mutation in mutations {
             let key: String
             switch mutation {
@@ -133,7 +135,6 @@ public final class StorageDocumentStore: @unchecked Sendable {
             }
             guard Self.isValidKey(key) else { throw StoreError.invalidKey }
         }
-        guard !mutations.isEmpty else { return }
         let timestamp = Date().timeIntervalSince1970
         try database.write { db in
             for mutation in mutations {
@@ -156,6 +157,7 @@ public final class StorageDocumentStore: @unchecked Sendable {
                     )
                 }
             }
+            try additionalChanges(db)
         }
     }
 

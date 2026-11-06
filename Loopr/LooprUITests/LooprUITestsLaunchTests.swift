@@ -191,6 +191,8 @@ final class LooprUITestsLaunchTests: XCTestCase {
 
     @MainActor
     private func selectTab(_ app: XCUIApplication, _ tab: String, root: String) {
+        if ["Sleep", "Heart", "Body", "Workouts", "Records", "Stress"].contains(tab) { _ = app.openLooprArea(tab); return }
+
         for _ in 0..<6 {
             // Query the native tab bar and its label on every attempt.  A
             // SwiftUI TabView can recycle the AX element behind a previously
@@ -286,6 +288,8 @@ final class LooprUITestsLaunchTests: XCTestCase {
         identifier: String? = nil,
         labelContaining: String? = nil
     ) {
+        if identifier == "open-settings" { XCTAssertTrue(app.openLooprSettings()); return }
+
         precondition(identifier != nil || labelContaining != nil)
         let attempts = 10
         for _ in 0..<attempts {
@@ -488,7 +492,7 @@ final class LooprUITestsLaunchTests: XCTestCase {
         app.launch()
 
         navigate(app, using: candidate.steps)
-        XCTAssertTrue(element(app, candidate.id).waitForExistence(timeout: 5), "Missing Phase 06 visual screen \(candidate.id)")
+        XCTAssertTrue(element(app, candidate.screen).waitForExistence(timeout: 5), "Missing Phase 06 visual screen \(candidate.screen)")
         XCTAssertGreaterThan(app.staticTexts.count, 0, "Phase 06 visual screen \(candidate.id) has no accessible text")
         switch candidate.id {
         case "stress-screen":
@@ -530,11 +534,11 @@ final class LooprUITestsLaunchTests: XCTestCase {
             .init("wake-alarm-screen", launchMode: populated, steps: [.tapID("open-settings"), .tapID("settings-device-center"), .tapID("strap-alarm-setup")]),
             .init("gesture-mapping-screen", launchMode: populated, deepLink: "phase06/gesture-mapping", steps: [.deepLink("phase06/gesture-mapping")]),
             .init("today-screen", launchMode: populated, steps: [.selectTab("Today", root: "today-screen")]),
-            .init("goal-settings-screen", launchMode: populated, steps: [.tapID("today-goal-movement")]),
-            .init("coach-screen", launchMode: populated, steps: [.tapID("today-coach")]),
+            .init("goal-settings-screen", launchMode: populated, deepLink: "today/goals", steps: [.deepLink("today/goals")]),
+            .init("ask-sheet", launchMode: populated, steps: [.tapID("today-header-coach")]),
             .init("sleep-screen", launchMode: populated, steps: [.selectTab("Sleep", root: "sleep-screen")]),
-            .init("sleep-hypnogram-screen", launchMode: populated, steps: [.selectTab("Sleep", root: "sleep-screen"), .tapLabel("Sleep stages")]),
-            .init("sleep-trends-screen", launchMode: populated, steps: [.selectTab("Sleep", root: "sleep-screen"), .tapLabel("Sleep trends")]),
+            .init("sleep-hypnogram-screen", launchMode: populated, steps: [.selectTab("Sleep", root: "sleep-screen"), .tapID("sleep-hypnogram-route")]),
+            .init("sleep-trends-screen", launchMode: populated, steps: [.selectTab("Sleep", root: "sleep-screen"), .tapID("sleep-scope-month")]),
             .init("sleep-corrections-screen", launchMode: populated, steps: [.selectTab("Sleep", root: "sleep-screen"), .tapLabel("Corrections")]),
             .init("heart-screen", launchMode: populated, steps: [.selectTab("Heart", root: "heart-screen")]),
             .init("heart-live-screen", launchMode: populated, steps: [.selectTab("Heart", root: "heart-screen"), .tapID("heart-live-card")]),
@@ -558,26 +562,26 @@ final class LooprUITestsLaunchTests: XCTestCase {
             .init("route-map-screen", launchMode: populated, steps: [.selectTab("Workouts", root: "workouts-screen"), .tapID("workout-row-00000000-0000-0000-0000-000000000701"), .tapID("workout-detail-route"), .tapID("route-map")]),
             .init("route-splits-screen", launchMode: populated, steps: [.selectTab("Workouts", root: "workouts-screen"), .tapID("workout-row-00000000-0000-0000-0000-000000000701"), .tapID("workout-detail-route"), .tapID("route-splits")]),
             .init("route-share-preview-screen", launchMode: populated, steps: [.selectTab("Workouts", root: "workouts-screen"), .tapID("workout-row-00000000-0000-0000-0000-000000000701"), .tapID("workout-detail-route"), .tapID("route-share-preview")]),
-            .init("journal-screen", launchMode: populated, steps: [.tapLabel("Journal")]),
-            .init("journal-compose-screen", launchMode: populated, steps: [.tapLabel("Journal"), .tapID("journal-compose")]),
-            .init("journal-history-screen", launchMode: populated, steps: [.tapLabel("Journal"), .tapID("journal-history")]),
+            .init("journal-screen", launchMode: populated, steps: [.selectTab("Protocol", root: "journal-screen")]),
+            .init("journal-compose-screen", launchMode: populated, steps: [.selectTab("Protocol", root: "journal-screen"), .tapID("protocol-evening-open"), .tapID("journal-check-in-note")]),
+            .init("journal-history-screen", launchMode: populated, steps: [.selectTab("Protocol", root: "journal-screen"), .tapID("protocol-evening-open"), .tapID("protocol-notes")]),
             .init("habit-insights-screen", launchMode: populated, deepLink: "phase06/journal-correlations", steps: [.deepLink("phase06/journal-correlations")]),
-            .init("journal-privacy-screen", launchMode: populated, steps: [.tapLabel("Journal"), .tapID("journal-privacy")]),
+            .init("journal-privacy-screen", launchMode: populated, steps: [.selectTab("Protocol", root: "journal-screen"), .tapID("protocol-evening-open"), .tapID("journal-privacy")]),
             .init("cycle-screen", launchMode: populated, steps: [.tapID("open-settings"), .tapID("settings-cycle-tracking")]),
             .init("cycle-log-screen", launchMode: populated, steps: [.tapID("open-settings"), .tapID("settings-cycle-tracking"), .tapID("cycle-opt-in"), .tapID("cycle-log")]),
             .init("cycle-reminders-screen", launchMode: populated, steps: [.tapID("open-settings"), .tapID("settings-cycle-tracking"), .tapID("cycle-opt-in"), .tapID("cycle-reminders")]),
             .init("cycle-export-screen", launchMode: populated, steps: [.tapID("open-settings"), .tapID("settings-cycle-tracking"), .tapID("cycle-opt-in"), .tapID("cycle-export")]),
-            .init("records-screen", launchMode: populated, steps: [.tapLabel("Records")]),
-            .init("records-detail-screen", launchMode: populated, deepLink: "phase06/records-detail", steps: [.deepLink("phase06/records-detail")]),
-            .init("records-streaks-screen", launchMode: populated, steps: [.tapLabel("Streaks")]),
-            .init("records-journey-screen", launchMode: populated, steps: [.tapLabel("Journey")]),
-            .init("records-timeline-screen", launchMode: populated, steps: [.tapLabel("Records"), .tapID("records-timeline")]),
+            .init("records-screen", launchMode: populated, steps: [.selectTab("Records", root: "records-screen")]),
+            .init("records-detail-screen", screen: "records-screen", launchMode: populated, deepLink: "phase06/records-detail", steps: [.deepLink("phase06/records-detail")]),
+            .init("records-streaks-screen", launchMode: populated, steps: [.selectTab("Records", root: "records-screen"), .tapID("records-streaks")]),
+            .init("records-journey-screen", launchMode: populated, steps: [.selectTab("Records", root: "records-screen"), .tapID("records-journey")]),
+            .init("records-timeline-screen", launchMode: populated, steps: [.selectTab("Records", root: "records-screen"), .tapID("records-timeline")]),
             .init("records-recap-screen", launchMode: populated, deepLink: "phase06/records-recap", steps: [.deepLink("phase06/records-recap")]),
-            .init("records-share-preview-screen", launchMode: populated, steps: [.tapLabel("Records"), .tapID("records-share-preview")]),
-            .init("stress-screen", launchMode: populated, steps: [.tapID("today-metric-stress")]),
-            .init("stress-breathing-screen", launchMode: populated, steps: [.tapID("today-metric-stress"), .tapID("stress-breathing")]),
-            .init("stress-spot-check-screen", launchMode: populated, steps: [.tapID("today-metric-stress"), .tapID("stress-spot-check")]),
-            .init("stress-history-screen", launchMode: populated, steps: [.tapID("today-metric-stress"), .tapID("stress-history")]),
+            .init("records-share-preview-screen", launchMode: populated, steps: [.selectTab("Records", root: "records-screen"), .tapID("records-share-preview")]),
+            .init("stress-screen", launchMode: populated, steps: [.selectTab("Stress", root: "stress-screen")]),
+            .init("stress-breathing-screen", launchMode: populated, steps: [.selectTab("Stress", root: "stress-screen"), .tapID("stress-breathing")]),
+            .init("stress-spot-check-screen", launchMode: populated, steps: [.selectTab("Stress", root: "stress-screen"), .tapID("stress-spot-check")]),
+            .init("stress-history-screen", launchMode: populated, steps: [.selectTab("Stress", root: "stress-screen"), .tapID("stress-history")]),
             .init("settings-modal", launchMode: populated, steps: [.tapID("open-settings")]),
             .init("settings-screen", launchMode: populated, steps: [.tapID("open-settings")]),
             .init("settings-destination-profile", launchMode: populated, steps: [.tapID("open-settings"), .tapID("settings-profile")]),
@@ -597,12 +601,15 @@ final class LooprUITestsLaunchTests: XCTestCase {
 private struct Phase06VisualCandidate {
     enum LaunchMode: String { case onboarding, populated }
     let id: String
+    /// The identifier the route lands on, when several candidates land on the same screen.
+    let screen: String
     let launchMode: LaunchMode
     let deepLink: String?
     let steps: [Phase06VisualStep]
 
-    init(_ id: String, launchMode: LaunchMode, deepLink: String? = nil, steps: [Phase06VisualStep]) {
+    init(_ id: String, screen: String? = nil, launchMode: LaunchMode, deepLink: String? = nil, steps: [Phase06VisualStep]) {
         self.id = id
+        self.screen = screen ?? id
         self.launchMode = launchMode
         self.deepLink = deepLink
         self.steps = steps

@@ -44,7 +44,7 @@ struct WorkoutHeartRateRecoveryCard: View {
     var body: some View {
         LooprSurface {
             VStack(alignment: .leading, spacing: LooprSpacing.sm) {
-                LooprText("HEART RATE RECOVERY", style: .sectionLabel, color: .inkSecondary)
+                LooprText("Heart rate recovery", style: .sectionLabel, color: .inkSecondary)
                 LooprText(presentation.sentence, style: presentation.assessment.firstMinute == nil ? .prose : .cardTitle,
                           color: presentation.assessment.firstMinute == nil ? .inkSecondary : .ink)
                     .fixedSize(horizontal: false, vertical: true)

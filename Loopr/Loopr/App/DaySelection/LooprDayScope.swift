@@ -18,6 +18,7 @@ struct LooprDaySelectionDriver: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.looprDaySelection, selection)
+            .environment(\.looprDayNavigation, selection.navigation)
             .task(id: repositories.storageGeneration) {
                 guard let analytics = repositories.persistent?.analytics else { return }
                 selection.attach(AnalyticsDayDataSource(analytics: analytics))

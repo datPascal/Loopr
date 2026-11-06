@@ -84,12 +84,21 @@ struct AppleHealthSettingsScreen: View {
                                 .frame(minHeight: 56)
                                 .accessibilityIdentifier("settings-health-read-\(quantity.rawValue)")
                             }
+                            ForEach(AppleHealthSourceKind.addedReads, id: \.self) { kind in
+                                Toggle(kind.healthDisplayName, isOn: Binding(
+                                    get: { !status.disabledSources.contains(kind) },
+                                    set: { changeSource($0, kind: kind) }
+                                ))
+                                .frame(minHeight: 56)
+                                .accessibilityIdentifier("settings-health-read-\(kind.rawValue)")
+                            }
                             Toggle("Sleep", isOn: Binding(
                                 get: { status.sleepReadEnabled },
                                 set: { changeRead($0, quantity: nil) }
                             ))
                             .frame(minHeight: 56)
                             .accessibilityIdentifier("settings-health-read-sleep")
+                            LooprText("Each value keeps the name of the app or device that recorded it.", style: .caption, color: .inkSecondary)
                         }
                         .tint(Color.loopr(.brand))
                         .disabled(!loaded || runtime == nil || !status.enabled || changingPreference)
@@ -184,6 +193,7 @@ struct AppleHealthSettingsScreen: View {
         !status.allowed.subtracting(status.disabledWrite).isEmpty
             || status.sleepReadEnabled
             || HealthHistoryQuantity.allCases.contains { !status.disabledRead.contains($0) }
+            || AppleHealthSourceKind.addedReads.contains { !status.disabledSources.contains($0) }
     }
 
     private func changeMaster(_ enabled: Bool) {
@@ -200,6 +210,11 @@ struct AppleHealthSettingsScreen: View {
     private func changeRead(_ enabled: Bool, quantity: HealthHistoryQuantity?) {
         guard let runtime else { return }
         change { try await runtime.setReadEnabled(enabled, for: quantity) }
+    }
+
+    private func changeSource(_ enabled: Bool, kind: AppleHealthSourceKind) {
+        guard let runtime else { return }
+        change { try await runtime.setSourceEnabled(enabled, for: kind) }
     }
 
     private func changeWrite(_ enabled: Bool, metric: ExportMetricKind) {
@@ -257,6 +272,21 @@ private extension HealthHistoryQuantity {
         case .vo2Max: "VO₂ max"
         case .steps: "Steps"
         case .activeEnergy: "Active energy"
+        }
+    }
+}
+
+private extension AppleHealthSourceKind {
+    var healthDisplayName: String {
+        switch self {
+        case .vo2Max: "VO₂ max"
+        case .daylight: "Time in daylight"
+        case .bloodPressure: "Blood pressure"
+        case .weight: "Weight"
+        case .bodyFat: "Body fat"
+        case .leanMass: "Lean body mass"
+        case .bloodGlucose: "Blood glucose"
+        case .steps: "Steps"
         }
     }
 }

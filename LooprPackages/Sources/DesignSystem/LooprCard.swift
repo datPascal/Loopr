@@ -39,6 +39,33 @@ public enum LooprCardDensity: Equatable, Sendable {
     }
 }
 
+/// The edge a card catches the light on. Cards stay solid fills; the edge is what lifts them off
+/// the colour field, never glass.
+public enum LooprCardEdge: Equatable, Sendable {
+    /// No lit edge: a recessed well.
+    case none
+    /// The neutral lit edge (`surfaceEdge`).
+    case lit
+    /// The lead card: lit in its accent from the top.
+    case accent(LooprColorToken)
+    /// The amber outline of a card that needs a look.
+    case caution
+
+    public static func forStyle(_ style: LooprCardStyle) -> Self {
+        switch style {
+        case .standard, .elevated: .lit
+        case .hero(let accent): .accent(accent)
+        case .warning: .caution
+        case .sunk: .none
+        }
+    }
+
+    /// How far down the card the dark-mode highlight fades out, as a fraction of its height.
+    static let darkHighlightFade = 0.35
+    /// The highlight's width: the contract's 0.5 px inset edge, drawn a little firmer for a phone.
+    static let width: CGFloat = 0.75
+}
+
 /// The one card surface. Every tab card, tile and list draws its background
 /// through this, so radius, fill, outline and shadow agree everywhere.
 public struct LooprCard<Content: View>: View {
@@ -91,14 +118,32 @@ public struct LooprCardBackground: ViewModifier {
                 }
             }
             .overlay {
+                if let litEdge {
+                    shape.strokeBorder(litEdge, lineWidth: LooprCardEdge.width)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+            .overlay {
                 if strokeWidth > 0 {
                     shape.strokeBorder(stroke, lineWidth: strokeWidth)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
             }
-            .shadow(color: shadow, radius: LooprRadius.surfaceShadow, y: LooprSpacing.surfaceShadowOffset)
-            .shadow(color: heroShadow, radius: 15, y: 10)
+            .shadow(color: shadow, radius: 18, y: 6)
+    }
+
+    /// The neutral lit edge. In dark mode a highlight runs along the top edge and fades down the
+    /// sides; on paper a warm hairline goes round the card. Hero cards draw their accent edge
+    /// instead, below.
+    private var litEdge: AnyShapeStyle? {
+        guard LooprCardEdge.forStyle(style) == .lit else { return nil }
+        let edge = Color.loopr(.surfaceEdge)
+        guard isDark else { return AnyShapeStyle(edge) }
+        return AnyShapeStyle(LinearGradient(stops: [.init(color: edge, location: 0),
+                                                    .init(color: edge.opacity(0), location: LooprCardEdge.darkHighlightFade)],
+                                            startPoint: .top, endPoint: .bottom))
     }
 
     private var isDark: Bool { LooprAppearance.isDark(colorScheme) }
@@ -115,38 +160,38 @@ public struct LooprCardBackground: ViewModifier {
         }
     }
 
-    private var tint: Color? {
+    /// A lead card is lit from its top edge in its accent: a wash that fades down the card and an
+    /// edge that catches the light, then disappears towards the bottom.
+    private var tint: AnyShapeStyle? {
         switch style {
-        case .hero(let accent): Color.loopr(accent).opacity(isDark ? 0.06 : 0.03)
-        case .warning: isDark ? Color.loopr(.strain).opacity(0.05) : nil
+        case .hero(let accent):
+            AnyShapeStyle(LinearGradient(colors: [Color.loopr(accent).opacity(isDark ? 0.11 : 0.06), .clear],
+                                         startPoint: .top, endPoint: .bottom))
+        case .warning: isDark ? AnyShapeStyle(Color.loopr(.strain).opacity(0.06)) : nil
         default: nil
         }
     }
 
-    private var stroke: Color {
+    private var stroke: AnyShapeStyle {
         switch style {
-        case .standard, .elevated: Color.loopr(.surfaceStroke)
-        case .hero(let accent): Color.loopr(accent).opacity(isDark ? 0.30 : 0.25)
-        case .warning: Color.loopr(.caution).opacity(isDark ? 0.35 : 0.30)
-        case .sunk: .clear
+        case .hero(let accent):
+            AnyShapeStyle(LinearGradient(colors: [Color.loopr(accent).opacity(isDark ? 0.34 : 0.22), Color.loopr(accent).opacity(0)],
+                                         startPoint: .top, endPoint: .center))
+        case .warning: AnyShapeStyle(Color.loopr(.caution).opacity(isDark ? 0.30 : 0.26))
+        default: AnyShapeStyle(Color.loopr(.surfaceStroke))
         }
     }
 
+    /// Plain cards have no outline: the fill is enough on warm black and the shadow on paper.
     private var strokeWidth: CGFloat {
         switch style {
-        case .warning: 1
-        case .sunk: 0
-        default: isDark ? 1 : 0
+        case .warning, .hero: 1
+        case .standard, .elevated, .sunk: 0
         }
     }
 
     private var shadow: Color {
         guard !isDark, style != .sunk else { return .clear }
-        return Color.loopr(.ink).opacity(0.06)
-    }
-
-    private var heroShadow: Color {
-        guard !isDark, case .hero = style else { return .clear }
         return Color.loopr(.ink).opacity(0.05)
     }
 }

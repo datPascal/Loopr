@@ -77,7 +77,7 @@ struct WakeAlarmFeatureRoot: View {
             WakeAlarmScreen(
                 model: snapshot.screenModel(suggestion: suggestion),
                 isBusy: isBusy,
-                message: message,
+                message: snapshot.cancellationWarning ?? message,
                 actions: actions(controller)
             )
         } else if didResolve, controller == nil {
@@ -134,7 +134,7 @@ struct WakeAlarmFeatureRoot: View {
     private func setPhoneLayer(_ enabled: Bool) {
         guard let controller else { return }
         run(controller) {
-            await controller.setPhoneLayerEnabled(enabled)
+            try await controller.setPhoneLayerEnabled(enabled)
             return enabled ? "Phone alarm on." : "Phone alarm off. Only your band will wake you."
         }
     }
@@ -165,6 +165,7 @@ struct WakeAlarmCardFeatureRoot: View {
     let repositories: ProductRepositoryContainer?
     var suggestion: WakeAlarmSuggestion?
     let accessibilityIdentifier: String
+    var compact = false
     let open: () -> Void
 
     @State private var controller: (any WakeAlarmControlling)?
@@ -172,7 +173,7 @@ struct WakeAlarmCardFeatureRoot: View {
     @State private var snapshot: WakeAlarmSnapshot?
 
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 6) {
             if didResolve, controller == nil {
                 // No alarm store, so there is nothing to show or set.
                 EmptyView()
@@ -185,8 +186,15 @@ struct WakeAlarmCardFeatureRoot: View {
                             formatter: WakeAlarmFormatter()
                         ) ?? .loading,
                         accessibilityIdentifier: accessibilityIdentifier,
+                        compact: compact,
                         action: open
                     )
+                }
+                if snapshot?.cancellationPending == true {
+                    Text("An alarm may still ring. Open to check.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal)
                 }
             }
         }

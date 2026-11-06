@@ -101,6 +101,57 @@ private func fixtureData(_ hex: String) -> Data {
 }
 
 final class SerializedWriterTests: XCTestCase {
+    func testReconnectWaitsForTheOldTransportDisconnect() async throws {
+        let transport = PausedDisconnectTransport()
+        let writer = SerializedGenerationPinnedWriter(transport: transport, clock: ImmediateBLETestClock())
+        try await writer.begin(generation: 1)
+        let disconnect = Task { await writer.disconnect() }
+        await transport.waitForDisconnect()
+        let reconnect = Task {
+            try await writer.begin(generation: 2)
+            try await writer.write(.hello(sequence: 1), generation: 2)
+        }
+        for _ in 0..<100 { await Task.yield() }
+        let duringCleanup = await writer.isConnected()
+        let earlyWrites = await transport.writeCount()
+        XCTAssertFalse(duringCleanup)
+        XCTAssertEqual(earlyWrites, 0)
+        await transport.release()
+        await disconnect.value
+        try await reconnect.value
+        let writes = await transport.writeCount()
+        XCTAssertEqual(writes, 1)
+    }
+
+    func testAnOldDrainCannotClearTheNewDrainAfterReconnect() async throws {
+        let transport = NonCooperativeWriterTransport()
+        let writer = SerializedGenerationPinnedWriter(transport: transport, clock: ImmediateBLETestClock())
+        try await writer.begin(generation: 1)
+        let old = Task { try await writer.write(.hello(sequence: 0), generation: 1) }
+        while await transport.writeCount() < 1 { await Task.yield() }
+        await writer.disconnect()
+        try await writer.begin(generation: 2)
+        let current = Task { try await writer.write(.hello(sequence: 1), generation: 2) }
+        while await transport.writeCount() < 2 { await Task.yield() }
+        await transport.releaseFirst()
+        _ = await old.result
+        let queued = Task { try await writer.write(.hello(sequence: 2), generation: 2) }
+        for _ in 0..<100 { await Task.yield() }
+        let writes = await transport.writeCount()
+        XCTAssertEqual(writes, 2, "The third write must wait for the second write")
+        await transport.releaseAll()
+        try await current.value
+        try await queued.value
+    }
+
+    func testUnrepresentableClockDatesThrowInsteadOfTrapping() {
+        for value in [Double.nan, .infinity, -.infinity, Double.greatestFiniteMagnitude] {
+            XCTAssertThrowsError(try ClockCommandSequence(wallDate: Date(timeIntervalSince1970: value), setSequence: 0, getSequence: 1)) {
+                XCTAssertEqual($0 as? ClockSequenceError, .unrepresentableDate)
+            }
+        }
+    }
+
 #if canImport(CoreBluetooth)
     func testCoreBluetoothATTBondErrorsMapToTypedTransportFailures() {
         let authentication = NSError(
@@ -399,5 +450,40 @@ final class SerializedWriterTests: XCTestCase {
                 now: wall.addingTimeInterval(ClockDiscipline.recheckInterval)
             )
         )
+    }
+}
+
+private actor PausedDisconnectTransport: CommandWriteTransport {
+    private var entered = false
+    private var entry: CheckedContinuation<Void, Never>?
+    private var blocked: CheckedContinuation<Void, Never>?
+    private var writes = 0
+    func writeCommand(_ data: Data) async throws { writes += 1 }
+    func disconnect() async {
+        entered = true; entry?.resume(); entry = nil
+        await withCheckedContinuation { blocked = $0 }
+    }
+    func waitForDisconnect() async {
+        if !entered { await withCheckedContinuation { entry = $0 } }
+    }
+    func release() { blocked?.resume(); blocked = nil }
+    func writeCount() -> Int { writes }
+}
+
+private actor NonCooperativeWriterTransport: CommandWriteTransport {
+    private var writes = 0
+    private var blocked: [CheckedContinuation<Void, Never>] = []
+    private var released = false
+    func writeCommand(_ data: Data) async throws {
+        writes += 1
+        if !released { await withCheckedContinuation { blocked.append($0) } }
+    }
+    func disconnect() async {}
+    func writeCount() -> Int { writes }
+    func releaseFirst() { blocked.removeFirst().resume() }
+    func releaseAll() {
+        released = true
+        let pending = blocked; blocked = []
+        for waiter in pending { waiter.resume() }
     }
 }

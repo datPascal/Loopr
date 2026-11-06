@@ -47,8 +47,9 @@ struct LooprTests {
     }
     #endif
 
-    @Test func shellUsesCanonicalEdgeTabOrder() {
-        #expect(MainTab.allCases.map(\.rawValue) == ["today", "sleep", "heart", "body", "workouts"])
+    /// DEC-12.1: Today, Food, Fitness, Protocol, Data. Raw values stay build 21's saved strings.
+    @Test func shellUsesTheLongevityTabOrder() {
+        #expect(MainTab.allCases.map(\.rawValue) == ["today", "food", "train", "journal", "health"])
     }
 
     @Test func completedWorkoutReplacesLiveAndKeepsUUIDThroughDetail() {

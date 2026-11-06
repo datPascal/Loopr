@@ -19,6 +19,7 @@ struct BackgroundTaskSchedulingTests {
         // declared, and every later submit throws notPermitted. Both failures
         // are silent at runtime.
         #expect(LooprBluetoothBackgroundTaskID.all.isSubset(of: declared))
+        #expect(declared.contains(CoachBriefingRuntime.taskIdentifier))
     }
 
     @Test

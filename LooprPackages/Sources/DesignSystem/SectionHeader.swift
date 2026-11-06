@@ -1,5 +1,34 @@
 import SwiftUI
 
+/// A compact navigation link with the shared 56-point interaction target. `color` is the link's ink: the brand teal
+/// by default, `.protocolChip` on Protocol screens and sheets.
+public struct LooprInlineAction: View {
+    private let title: String
+    private let identifier: String
+    private let color: LooprColorToken
+    private let action: () -> Void
+    public init(_ title: String, identifier: String, color: LooprColorToken = .brandInk, action: @escaping () -> Void) {
+        self.title = title; self.identifier = identifier; self.color = color; self.action = action
+    }
+    public var body: some View {
+        Button(action: action) {
+            HStack(spacing: LooprSpacing.xxs) {
+                LooprText(title, style: .label, color: color)
+                LooprChevron()
+            }
+            .frame(minHeight: LooprSpacing.interactiveRowHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.looprPressableRow)
+        .accessibilityLabel(title)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+#Preview("Inline action") {
+    LooprInlineAction("Edit questions", identifier: "inline-action-preview") {}.padding()
+}
+
 /// The one "this opens something" glyph: SF Symbol `chevron.right` in the
 /// quietest ink (tabs spec, principle 9). Put it on every row that navigates
 /// and on no row that does not. It scales with Dynamic Type and is hidden
@@ -29,12 +58,12 @@ public struct LooprChevron: View {
 /// LooprSectionHeader("Contributors", detail: "vs your last 30 days")
 /// ```
 ///
-/// - The title is set uppercase in mono (`.sectionLabel`), as every Loopr
-///   eyebrow is. Pass it in sentence case; VoiceOver reads it that way.
+/// - The title is a sentence-case heading in ink (`.title`). Pass it in
+///   sentence case; VoiceOver reads it that way.
 /// - `detail` is a quiet second line in sentence case, for the window or the
 ///   source ("vs your last 30 days").
-/// - The action is a 44 pt tall button in the accent's text colour with the
-///   one chevron. Leave `action` nil for a plain eyebrow.
+/// - The action is a 56 pt tall button in the accent's text colour, a word
+///   such as "Edit" or "All" with no chevron. Leave `action` nil for a plain eyebrow.
 ///
 /// Put it directly above the card or list it names, with `LooprSpacing.xs`
 /// between them.
@@ -45,14 +74,18 @@ public struct LooprSectionHeader: View {
     private let actionTitle: String?
     private let accent: LooprColorToken
     private let identifier: String?
+    private let actionIdentifier: String?
     private let action: (() -> Void)?
 
+    /// `actionIdentifier` names the action button exactly. Without it the
+    /// button is `<identifier>-action`.
     public init(
         _ title: String,
         detail: String? = nil,
         actionTitle: String? = nil,
         accent: LooprColorToken = .brand,
         identifier: String? = nil,
+        actionIdentifier: String? = nil,
         action: (() -> Void)? = nil
     ) {
         self.title = title
@@ -60,6 +93,7 @@ public struct LooprSectionHeader: View {
         self.actionTitle = actionTitle
         self.accent = accent
         self.identifier = identifier
+        self.actionIdentifier = actionIdentifier
         self.action = action
     }
 
@@ -70,9 +104,9 @@ public struct LooprSectionHeader: View {
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: LooprSpacing.sm))
         return layout {
             VStack(alignment: .leading, spacing: LooprSpacing.xxs / 2) {
-                Text(title.uppercased())
-                    .looprTypography(.sectionLabel)
-                    .foregroundStyle(Color.loopr(.inkSecondary))
+                Text(title.looprLabelCased)
+                    .looprTypography(.title)
+                    .foregroundStyle(Color.loopr(.ink))
                     .accessibilityLabel(title)
                     .accessibilityAddTraits(.isHeader)
                 if let detail {
@@ -93,19 +127,18 @@ public struct LooprSectionHeader: View {
                         Text(actionTitle)
                             .looprTypography(.label)
                             .foregroundStyle(Color.loopr(accent.textInk))
-                        LooprChevron()
                     }
-                    .frame(minHeight: 44)
+                    .frame(minHeight: LooprSpacing.interactiveRowHeight)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(actionTitle)
                 .accessibilityHint(Text(title))
-                .modifier(LooprOptionalIdentifier(identifier.map { "\($0)-action" }))
+                .modifier(LooprOptionalIdentifier(actionIdentifier ?? identifier.map { "\($0)-action" }))
             }
         }
         .padding(.horizontal, LooprSpacing.xxs)
-        .frame(minHeight: action == nil ? nil : 44, alignment: .bottom)
+        .frame(minHeight: action == nil ? nil : LooprSpacing.interactiveRowHeight, alignment: .bottom)
     }
 }
 

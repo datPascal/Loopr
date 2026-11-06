@@ -23,28 +23,31 @@ final class DayNavigationUITests: XCTestCase {
 
         // Previous day. The title stays "Today"; the meta line names the day.
         tap(navigator, previous: true)
-        XCTAssertTrue(app.staticTexts["YESTERDAY · MON 13 NOV"].waitForExistence(timeout: 5))
+        // Header labels are sentence case since build 18; match without case.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "YESTERDAY · MON 13 NOV")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(navigator.value as? String, "Yesterday, Monday 13 November")
         XCTAssertTrue(element(app, "day-navigator-today").waitForExistence(timeout: 5))
-        XCTAssertTrue(element(app, "today-goals").waitForExistence(timeout: 5))
+        XCTAssertTrue(element(app, "today-more").waitForExistence(timeout: 5))
 
-        // The day follows to Sleep, with that day's night in the header.
-        selectTab(app, "Sleep", root: "sleep-screen")
-        XCTAssertTrue(app.staticTexts["SUN 12 → MON 13 NOV"].waitForExistence(timeout: 5))
+        // The day follows to Health, and into Sleep, whose header names that day's night.
+        selectTab(app, "Data", root: "health-screen")
         XCTAssertEqual(element(app, "day-navigator").value as? String, "Yesterday, Monday 13 November")
+        // Sleep opens under Health on that same day; its title bar names only the screen.
+        XCTAssertTrue(app.openLooprArea("Sleep"))
+        XCTAssertTrue(element(app, "sleep-screen").waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(element(app, "health-screen").waitForExistence(timeout: 5))
 
-        // One more day back is a day with nothing recorded.
+        // One more day back, on Today, is a day with nothing recorded. Health keeps its layout with empty readings.
+        selectTab(app, "Today", root: "today-screen")
         tap(element(app, "day-navigator"), previous: true)
         XCTAssertTrue(element(app, "day-empty-state").waitForExistence(timeout: 5))
         XCTAssertFalse(element(app, "day-empty-show-latest").exists)
-        XCTAssertTrue(app.staticTexts["Nothing recorded on Sun 12 Nov"].exists)
-
-        selectTab(app, "Heart", root: "heart-screen")
-        XCTAssertTrue(element(app, "day-empty-state").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["No band data on Sun 12 Nov"].exists)
 
         // The Today pill jumps back and disappears.
         element(app, "day-navigator-today").tap()
-        XCTAssertTrue(app.staticTexts["TUE 14 NOV"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "TUE 14 NOV")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(element(app, "day-navigator-today").exists)
         selectTab(app, "Today", root: "today-screen")
         XCTAssertEqual(element(app, "day-navigator").value as? String, "Today, Tuesday 14 November")
@@ -60,7 +63,7 @@ final class DayNavigationUITests: XCTestCase {
         for _ in 0..<6 { tap(navigator, previous: true) }
         // The earliest fixture day is three days back; further taps stay there.
         XCTAssertEqual(navigator.value as? String, "Saturday 11 November")
-        XCTAssertTrue(app.staticTexts["SAT 11 NOV"].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "SAT 11 NOV")).firstMatch.exists)
     }
 
     @MainActor
@@ -70,14 +73,15 @@ final class DayNavigationUITests: XCTestCase {
         app.launch()
         let navigator = element(app, "day-navigator")
         XCTAssertTrue(navigator.waitForExistence(timeout: 10))
-        selectTab(app, "Heart", root: "heart-screen")
-        // The flick starts over the metric list, whose rows open detail pages.
-        element(app, "heart-screen").swipeRight(velocity: .fast)
-        XCTAssertTrue(app.staticTexts["YESTERDAY · MON 13 NOV"].waitForExistence(timeout: 5))
+        // Today changes the day with a sideways flick. Pushed screens such as Heart keep the system back swipe.
+        XCTAssertTrue(element(app, "today-screen").waitForExistence(timeout: 10))
+        // The flick starts over Today's rows, which open other screens when tapped.
+        element(app, "today-screen").swipeRight(velocity: .fast)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "YESTERDAY · MON 13 NOV")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(element(app, "metric-detail-screen").exists)
         XCTAssertFalse(app.navigationBars.buttons.firstMatch.exists)
-        element(app, "heart-screen").swipeLeft(velocity: .fast)
-        XCTAssertTrue(app.staticTexts["TUE 14 NOV"].waitForExistence(timeout: 5))
+        element(app, "today-screen").swipeLeft(velocity: .fast)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "TUE 14 NOV")).firstMatch.waitForExistence(timeout: 5))
     }
 
     @MainActor
@@ -87,9 +91,9 @@ final class DayNavigationUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(element(app, "today-screen").waitForExistence(timeout: 10))
-        let sync = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "SYNCED 2 MIN AGO")).firstMatch
+        let sync = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Synced 2 min ago")).firstMatch
         XCTAssertTrue(sync.waitForExistence(timeout: 5))
-        let date = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "TUE 14 NOV")).firstMatch
+        let date = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "TUE 14 NOV")).firstMatch
         XCTAssertTrue(date.exists)
         XCTAssertTrue(element(app, "day-navigator").isHittable)
         XCTAssertTrue(app.buttons["open-settings"].isHittable)
@@ -108,6 +112,8 @@ final class DayNavigationUITests: XCTestCase {
 
     @MainActor
     private func selectTab(_ app: XCUIApplication, _ tab: String, root identifier: String) {
+        if ["Sleep", "Heart", "Body", "Workouts"].contains(tab) { _ = app.openLooprArea(tab); return }
+
         for _ in 0..<4 {
             let button = app.tabBars.firstMatch.buttons[tab].firstMatch
             if button.waitForExistence(timeout: 3), button.isHittable {

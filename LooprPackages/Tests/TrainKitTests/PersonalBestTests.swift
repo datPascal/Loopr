@@ -1,0 +1,122 @@
+import Foundation
+import Testing
+import TrainKit
+
+struct PersonalBestTests {
+    private func set(_ load: Double?, _ reps: Int, at seconds: TimeInterval = 0, skipped: Bool = false) -> LoggedSet {
+        .init(loadKg: load, reps: reps, loggedAt: TrainFixture.date.addingTimeInterval(seconds), skipped: skipped)
+    }
+
+    private func session(day: Int, sets: [LoggedSet], exercise: ExerciseRef = TrainFixture.bench, status: TrainSessionStatus = .completed,
+                         lineStatus: SessionExerciseStatus = .done, id: UUID = UUID()) throws -> TrainSession {
+        let start = TrainFixture.date.addingTimeInterval(Double(day) * 86_400)
+        let line = SessionExercise(planned: TrainFixture.line(exercise), exercise: exercise, status: lineStatus, sets: sets)
+        return try TrainSession(id: id, name: "Upper A", startedAt: start, timeZoneIdentifier: TrainFixture.zone,
+                                endedAt: status == .active ? nil : start.addingTimeInterval(3_600), status: status, exercises: [line])
+    }
+
+    private func metric(_ results: [PersonalBest], _ metric: PersonalBest.Metric) -> PersonalBest? { results.first { $0.metric == metric } }
+
+    @Test func epleyEstimateIsFlaggedAndOneRepIsTheLoad() {
+        #expect(PersonalBestEvaluator.estimatedOneRepMax(loadKg: 100, reps: 1) == 100)
+        #expect(abs(PersonalBestEvaluator.estimatedOneRepMax(loadKg: 100, reps: 5) - 116.6666667) < 0.0001)
+        #expect(PersonalBest.Metric.estimatedOneRepMax.isEstimated)
+        #expect(!PersonalBest.Metric.heaviestLoad.isEstimated && !PersonalBest.Metric.bestSetVolume.isEstimated)
+    }
+
+    @Test func firstEverPerformanceIsABaselineNotABest() throws {
+        let current = try session(day: 0, sets: [set(80, 8, at: 100), set(80, 7, at: 200)])
+        let results = PersonalBestEvaluator.evaluate(session: current, history: [])
+        #expect(results.map(\.metric) == [.estimatedOneRepMax, .heaviestLoad, .bestSetVolume])
+        #expect(results.allSatisfy { $0.isBaseline && !$0.isNewBest && $0.previousValue == nil })
+        #expect(abs((metric(results, .estimatedOneRepMax)?.value ?? 0) - 80 * (1 + 8.0 / 30)) < 1e-9)
+        #expect(metric(results, .heaviestLoad)?.value == 80)
+        #expect(metric(results, .bestSetVolume)?.value == 640)
+        #expect(results.allSatisfy { $0.sessionID == current.id && $0.exerciseName == "Barbell bench press" })
+        #expect(results.allSatisfy { $0.value > 0 && $0.value.isFinite })
+    }
+
+    @Test func beatingEveryPriorValueIsANewBestWithThePreviousValue() throws {
+        let earlier = try session(day: -7, sets: [set(80, 8)])
+        let current = try session(day: 0, sets: [set(80, 8, at: 10), set(82.5, 8, at: 20)])
+        let results = PersonalBestEvaluator.evaluate(session: current, history: [earlier])
+        #expect(results.count == 3 && results.allSatisfy { $0.isNewBest })
+        #expect(metric(results, .heaviestLoad)?.previousValue == 80 && metric(results, .heaviestLoad)?.value == 82.5)
+        #expect(metric(results, .bestSetVolume)?.previousValue == 640 && metric(results, .bestSetVolume)?.value == 660)
+        #expect(results.allSatisfy { $0.setID == current.exercises[0].sets[1].id && $0.achievedAt == TrainFixture.date.addingTimeInterval(20) })
+    }
+
+    @Test func tiesAreNotNewBests() throws {
+        let earlier = try session(day: -7, sets: [set(80, 8)])
+        let current = try session(day: 0, sets: [set(80, 8)])
+        #expect(PersonalBestEvaluator.evaluate(session: current, history: [earlier]).isEmpty)
+    }
+
+    @Test func onlyTheMetricsThatImprovedAreReported() throws {
+        let earlier = try session(day: -7, sets: [set(80, 8)])
+        let current = try session(day: 0, sets: [set(90, 3)])
+        let results = PersonalBestEvaluator.evaluate(session: current, history: [earlier])
+        #expect(results.map(\.metric) == [.heaviestLoad])
+        #expect(results.first?.value == 90)
+    }
+
+    @Test func skippedSetsNeverCountForOrAgainstABest() throws {
+        let earlier = try session(day: -7, sets: [set(80, 8), set(200, 0, skipped: true)])
+        let current = try session(day: 0, sets: [set(82.5, 8), set(300, 0, at: 50, skipped: true)])
+        let results = PersonalBestEvaluator.evaluate(session: current, history: [earlier])
+        #expect(metric(results, .heaviestLoad)?.value == 82.5 && metric(results, .heaviestLoad)?.previousValue == 80)
+        let onlySkipped = try session(day: 1, sets: [set(300, 0, skipped: true)])
+        #expect(PersonalBestEvaluator.evaluate(session: onlySkipped, history: [earlier]).isEmpty)
+        let skippedLine = try session(day: 2, sets: [set(300, 5)], lineStatus: .skipped)
+        #expect(PersonalBestEvaluator.evaluate(session: skippedLine, history: []).isEmpty)
+    }
+
+    @Test func aSkippedFirstPerformanceStillLeavesTheNextOneAsABaseline() throws {
+        let earlier = try session(day: -7, sets: [set(200, 0, skipped: true)])
+        let current = try session(day: 0, sets: [set(80, 8)])
+        let results = PersonalBestEvaluator.evaluate(session: current, history: [earlier])
+        #expect(results.count == 3 && results.allSatisfy { $0.isBaseline })
+    }
+
+    @Test func setsWithoutALoadAreIgnored() throws {
+        let current = try session(day: 0, sets: [set(nil, 12), set(0, 10)])
+        #expect(PersonalBestEvaluator.evaluate(session: current, history: []).isEmpty)
+    }
+
+    @Test func historyIsLimitedToEarlierCompletedSessions() throws {
+        let current = try session(day: 0, sets: [set(80, 8)])
+        let later = try session(day: 3, sets: [set(120, 8)])
+        let abandoned = try session(day: -3, sets: [set(120, 8)], status: .abandoned)
+        let itself = try session(day: 0, sets: [set(120, 8)], id: current.id)
+        let results = PersonalBestEvaluator.evaluate(session: current, history: [later, abandoned, itself])
+        #expect(results.count == 3 && results.allSatisfy { $0.isBaseline })
+    }
+
+    @Test func eachExerciseIsComparedOnItsOwn() throws {
+        let earlier = try session(day: -7, sets: [set(60, 8)], exercise: TrainFixture.row)
+        let start = TrainFixture.date
+        let current = try TrainSession(name: "Upper A", startedAt: start, timeZoneIdentifier: TrainFixture.zone, endedAt: start.addingTimeInterval(3_600),
+            status: .completed, exercises: [
+                SessionExercise(planned: TrainFixture.line(TrainFixture.bench), status: .done, sets: [set(80, 8)]),
+                SessionExercise(planned: TrainFixture.line(TrainFixture.row), status: .done, sets: [set(65, 8)])])
+        let results = PersonalBestEvaluator.evaluate(session: current, history: [earlier])
+        #expect(results.filter { $0.exerciseKey == "barbell-bench-press" }.allSatisfy { $0.isBaseline })
+        #expect(results.filter { $0.exerciseKey == "bent-over-row" }.allSatisfy { $0.isNewBest })
+        #expect(results.prefix(3).allSatisfy { $0.exerciseKey == "barbell-bench-press" })
+    }
+
+    @Test func aTieInsideOneSessionKeepsTheEarliestSet() throws {
+        let current = try session(day: 0, sets: [set(80, 8, at: 300), set(80, 8, at: 100)])
+        let results = PersonalBestEvaluator.evaluate(session: current, history: [])
+        let earliest = current.exercises[0].sets[1]
+        #expect(results.allSatisfy { $0.setID == earliest.id })
+    }
+
+    @Test func bestValuesReadTheHighestPerMetric() throws {
+        let one = try session(day: -14, sets: [set(80, 8)])
+        let two = try session(day: -7, sets: [set(90, 3)])
+        let best = PersonalBestEvaluator.bestValues(exerciseKey: "barbell-bench-press", in: [one, two])
+        #expect(best?[.heaviestLoad] == 90 && best?[.bestSetVolume] == 640)
+        #expect(PersonalBestEvaluator.bestValues(exerciseKey: "missing", in: [one]) == nil)
+    }
+}

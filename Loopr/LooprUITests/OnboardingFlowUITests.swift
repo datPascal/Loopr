@@ -22,27 +22,22 @@ final class OnboardingFlowUITests: XCTestCase {
     func testBackReturnsToThePreviousStepAndKeepsTheProfile() {
         let app = launch(appearance: "dark")
         tap(app, "onboarding-continue")
-        XCTAssertTrue(step(app, "whoopHandover").waitForExistence(timeout: 5))
-        tap(app, "onboarding-handover-continue")
         XCTAssertTrue(step(app, "prepareBand").waitForExistence(timeout: 5))
-        tap(app, "onboarding-back")
-        XCTAssertTrue(step(app, "whoopHandover").waitForExistence(timeout: 5))
         tap(app, "onboarding-back")
         XCTAssertTrue(step(app, "welcomeDisclosures").waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["onboarding-back"].exists)
 
         tap(app, "onboarding-continue")
-        tap(app, "onboarding-handover-continue")
         tap(app, "onboarding-prepare-later")
         XCTAssertTrue(element(app, "profile-setup-screen").waitForExistence(timeout: 5))
-        type(app, "profile-age", "40")
+        type(app, "profile-birth-year", "1983")
         tap(app, "profile-save")
         XCTAssertTrue(step(app, "appleHealth").waitForExistence(timeout: 5))
         tap(app, "onboarding-back")
         XCTAssertTrue(element(app, "profile-setup-screen").waitForExistence(timeout: 5))
-        let age = app.textFields["profile-age"]
-        XCTAssertEqual(age.value as? String, "40")
-        XCTAssertTrue(element(app, "profile-max-heart-rate").label.contains("180"))
+        let birthYear = app.textFields["profile-birth-year"]
+        XCTAssertEqual(birthYear.value as? String, "1983")
+        XCTAssertFalse(element(app, "profile-max-heart-rate").exists)
     }
 
     @MainActor
@@ -59,16 +54,54 @@ final class OnboardingFlowUITests: XCTestCase {
     func testSkippingTheBandStepsEndsWithConnectLater() {
         let app = launch(appearance: "dark")
         tap(app, "onboarding-continue")
-        XCTAssertTrue(step(app, "whoopHandover").waitForExistence(timeout: 5))
-        tap(app, "onboarding-handover-later")
+        XCTAssertTrue(step(app, "prepareBand").waitForExistence(timeout: 5))
+        tap(app, "onboarding-prepare-later")
         XCTAssertTrue(element(app, "profile-setup-screen").waitForExistence(timeout: 5))
         tap(app, "profile-save")
         tap(app, "onboarding-health-skip")
-        tap(app, "onboarding-notifications-skip")
-        XCTAssertTrue(step(app, "sleepGoal").waitForExistence(timeout: 5))
-        tap(app, "onboarding-sleep-goal-skip")
         XCTAssertTrue(step(app, "finish").waitForExistence(timeout: 5))
         XCTAssertTrue(element(app, "onboarding-finish-later").waitForExistence(timeout: 5))
+        tap(app, "onboarding-finish")
+        XCTAssertTrue(element(app, "main-tab-shell").waitForExistence(timeout: 10))
+    }
+
+    /// No WHOOP: Welcome goes straight to About you, the count is out of 4,
+    /// no band step appears, and Back from About you returns to Welcome.
+    @MainActor
+    func testNoBandPathSkipsTheBandStepsInFourSteps() {
+        let app = launch(appearance: "light")
+        XCTAssertTrue(step(app, "welcomeDisclosures").waitForExistence(timeout: 10))
+        XCTAssertTrue(element(app, "onboarding-welcome-no-band-line").exists)
+        XCTAssertTrue(element(app, "onboarding-privacy").exists)
+        capture(app, "onboarding-no-band-01-welcome")
+        tap(app, "onboarding-no-band")
+
+        XCTAssertTrue(element(app, "profile-setup-screen").waitForExistence(timeout: 5))
+        XCTAssertEqual(element(app, "onboarding-progress").label, "Step 2 of 4")
+        // The header meta reads "STEP 2 OF 4 · OPTIONAL"; the header combines it with the title.
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", "of 4")).firstMatch.exists)
+        XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", "of 6")).firstMatch.exists)
+        tap(app, "onboarding-back")
+        XCTAssertTrue(step(app, "welcomeDisclosures").waitForExistence(timeout: 5))
+        XCTAssertFalse(step(app, "prepareBand").exists)
+        tap(app, "onboarding-no-band")
+
+        XCTAssertTrue(element(app, "profile-setup-screen").waitForExistence(timeout: 5))
+        tap(app, "profile-save")
+        XCTAssertTrue(step(app, "appleHealth").waitForExistence(timeout: 5))
+        XCTAssertEqual(element(app, "onboarding-progress").label, "Step 3 of 4")
+        XCTAssertFalse(app.staticTexts["Your band"].exists)
+        capture(app, "onboarding-no-band-02-health")
+        tap(app, "onboarding-health-skip")
+
+        XCTAssertTrue(step(app, "finish").waitForExistence(timeout: 5))
+        XCTAssertEqual(element(app, "onboarding-progress").label, "Step 4 of 4")
+        XCTAssertTrue(element(app, "onboarding-finish-no-band").exists)
+        XCTAssertFalse(element(app, "onboarding-finish-later").exists)
+        capture(app, "onboarding-no-band-03-finish")
+        for bandStep in ["whoopHandover", "prepareBand", "pairing"] {
+            XCTAssertFalse(step(app, bandStep).exists)
+        }
         tap(app, "onboarding-finish")
         XCTAssertTrue(element(app, "main-tab-shell").waitForExistence(timeout: 10))
     }
@@ -81,13 +114,9 @@ final class OnboardingFlowUITests: XCTestCase {
         )
         XCTAssertTrue(step(app, "welcomeDisclosures").waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["onboarding-continue"].isHittable)
+        XCTAssertTrue(app.buttons["onboarding-no-band"].isHittable)
         capture(app, "onboarding-ax5-welcome")
         tap(app, "onboarding-continue")
-
-        XCTAssertTrue(step(app, "whoopHandover").waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["onboarding-handover-continue"].isHittable)
-        capture(app, "onboarding-ax5-handover")
-        tap(app, "onboarding-handover-continue")
 
         XCTAssertTrue(step(app, "prepareBand").waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["onboarding-prepare-continue"].isHittable)
@@ -103,16 +132,6 @@ final class OnboardingFlowUITests: XCTestCase {
         XCTAssertTrue(app.buttons["onboarding-health-skip"].isHittable)
         capture(app, "onboarding-ax5-health")
         tap(app, "onboarding-health-skip")
-
-        XCTAssertTrue(step(app, "notifications").waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["onboarding-notifications-skip"].isHittable)
-        capture(app, "onboarding-ax5-notifications")
-        tap(app, "onboarding-notifications-skip")
-
-        XCTAssertTrue(step(app, "sleepGoal").waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["onboarding-sleep-goal-skip"].isHittable)
-        capture(app, "onboarding-ax5-sleep-goal")
-        tap(app, "onboarding-sleep-goal-skip")
 
         XCTAssertTrue(step(app, "finish").waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["onboarding-finish"].isHittable)
@@ -195,22 +214,17 @@ final class OnboardingFlowUITests: XCTestCase {
         XCTAssertTrue(step(app, "welcomeDisclosures").waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", "independent from WHOOP")).firstMatch.exists)
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", "not a medical device")).firstMatch.exists)
-        XCTAssertEqual(element(app, "onboarding-progress").label, "Step 1 of 9")
+        // Welcome holds the band choice, so it shows no step count until the path is known (R3-NEW-16).
+        XCTAssertFalse(element(app, "onboarding-progress").exists)
+        XCTAssertTrue(app.buttons["onboarding-no-band"].exists)
         capture(app, shot(appearance, &index, "welcome"))
         scrollDown(app)
         capture(app, shot(appearance, &index, "welcome-disclosures"))
         tap(app, "onboarding-continue")
 
-        XCTAssertTrue(step(app, "whoopHandover").waitForExistence(timeout: 5))
-        XCTAssertEqual(element(app, "onboarding-progress").label, "Step 2 of 9")
-        XCTAssertTrue(app.buttons["onboarding-handover-open-settings"].exists)
-        capture(app, shot(appearance, &index, "whoop-handover"))
-        scrollDown(app)
-        capture(app, shot(appearance, &index, "whoop-handover-steps"))
-        tap(app, "onboarding-handover-continue")
-
         XCTAssertTrue(step(app, "prepareBand").waitForExistence(timeout: 5))
-        XCTAssertEqual(element(app, "onboarding-progress").label, "Step 3 of 9")
+        XCTAssertEqual(element(app, "onboarding-progress").label, "Step 2 of 6")
+        XCTAssertTrue(app.buttons["onboarding-handover-open-settings"].exists)
         capture(app, shot(appearance, &index, "prepare"))
         scrollDown(app)
         capture(app, shot(appearance, &index, "prepare-steps"))
@@ -225,14 +239,15 @@ final class OnboardingFlowUITests: XCTestCase {
 
         XCTAssertTrue(element(app, "profile-setup-screen").waitForExistence(timeout: 5))
         capture(app, shot(appearance, &index, "profile-empty"))
-        type(app, "profile-age", "34")
+        type(app, "profile-birth-year", "1989")
         dismissKeyboard(app)
         tap(app, "profile-sex-female")
         XCTAssertTrue(element(app, "profile-setup-screen").exists)
+        // Height and weight wait under "More about you".
+        tap(app, "profile-more")
         type(app, "profile-height", "172")
         type(app, "profile-weight", "64")
         dismissKeyboard(app)
-        XCTAssertTrue(element(app, "profile-max-heart-rate").label.contains("184"))
         capture(app, shot(appearance, &index, "profile-filled"))
         tap(app, "profile-save")
 
@@ -245,24 +260,8 @@ final class OnboardingFlowUITests: XCTestCase {
         capture(app, shot(appearance, &index, "health-lists"))
         tap(app, "onboarding-health-skip")
 
-        XCTAssertTrue(step(app, "notifications").waitForExistence(timeout: 5))
-        XCTAssertTrue(element(app, "onboarding-notifications-on").exists)
-        capture(app, shot(appearance, &index, "notifications"))
-        scrollDown(app)
-        capture(app, shot(appearance, &index, "notifications-lists"))
-        tap(app, "onboarding-notifications-skip")
-
-        XCTAssertTrue(step(app, "sleepGoal").waitForExistence(timeout: 5))
-        // The default sleep need is picked already, so Save works at once.
-        XCTAssertTrue(app.buttons["onboarding-sleep-goal-save"].isEnabled)
-        XCTAssertTrue(element(app, "onboarding-sleep-need-value").label.contains("8 hours"))
-        tap(app, "onboarding-sleep-goal-7.5")
-        XCTAssertTrue(element(app, "onboarding-sleep-need-value").label.contains("7.5 hours"))
-        capture(app, shot(appearance, &index, "sleep-need"))
-        tap(app, "onboarding-sleep-goal-save")
-
         XCTAssertTrue(step(app, "finish").waitForExistence(timeout: 5))
-        XCTAssertEqual(element(app, "onboarding-progress").label, "Step 9 of 9")
+        XCTAssertEqual(element(app, "onboarding-progress").label, "Step 6 of 6")
         XCTAssertFalse(element(app, "onboarding-finish-later").exists)
         capture(app, shot(appearance, &index, "finish"))
         scrollDown(app)
@@ -328,7 +327,7 @@ final class OnboardingFlowUITests: XCTestCase {
 
     @MainActor
     private func dismissKeyboard(_ app: XCUIApplication) {
-        let done = app.toolbars.buttons["Done"].firstMatch
+        let done = app.buttons["profile-done-editing"].firstMatch
         if done.waitForExistence(timeout: 2) { done.tap() }
     }
 

@@ -117,7 +117,7 @@ struct HeartOvernightSection: View {
         let presentation = HeartOvernightPresentation(snapshot: snapshot)
         LooprCard {
             VStack(alignment: .leading, spacing: LooprSpacing.xs) {
-                LooprText(title.uppercased(), style: .sectionLabel, color: .inkSecondary)
+                LooprText(title.looprLabelCased, style: .sectionLabel, color: .inkSecondary)
                 LooprText(presentation.summary, style: .cardTitle)
                     .fixedSize(horizontal: false, vertical: true)
                 if let explanation = presentation.explanation {
@@ -169,7 +169,7 @@ struct HeartAdvancedSection: View {
     static var metricIDs: [HeartMetricID] { [.sdnn, .pNN50, .heartRateDip, .sleepingHeartRate, .maxHeartRate, .frequencyDomain, .quality] }
     static func explanation(_ id: HeartMetricID) -> String {
         switch id {
-        case .sdnn: "How widely the time between heartbeats varied overnight. This is a different HRV measure from the one above."
+        case .sdnn: "Another way to measure HRV: how widely the time between heartbeats varied overnight. Recovery uses RMSSD, the HRV above."
         case .pNN50: "The share of consecutive beat intervals that differed by more than 50 milliseconds."
         case .heartRateDip: "How far your average heart rate fell during sleep compared with waking hours."
         case .sleepingHeartRate: "Your average heart rate across the recorded sleep window."
@@ -187,7 +187,7 @@ struct HeartAdvancedSection: View {
                     ForEach(Self.metricIDs.compactMap { snapshot.metric($0) }) { metric in
                         VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
                             let id = metric.id.metricLinkID
-                            LooprContributorRow(title: metric.id == .sdnn ? "HRV (SDNN)" : metric.title,
+                            LooprContributorRow(title: metric.id == .sdnn ? "HRV, second method (SDNN)" : metric.title,
                                 value: metric.value, unit: metric.unit, accent: .heart,
                                 identifier: "heart-metric-\(metric.id.rawValue)",
                                 action: id.flatMap { id in

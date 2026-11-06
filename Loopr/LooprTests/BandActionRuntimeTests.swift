@@ -7,8 +7,11 @@ import JournalKit
 import SleepKit
 import SyncKit
 import Testing
+import AlarmKit
+import UserNotifications
 @testable import Loopr
 
+@Suite(.serialized)
 @MainActor
 struct BandActionRuntimeTests {
     @Test
@@ -100,6 +103,9 @@ struct BandActionRuntimeTests {
         )
 
         await consumer.handle(runtime.envelope(eventID: 57))
+        for _ in 0..<100 where await runtime.alarmFireDates.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
 
         let armed = await runtime.alarmFireDates
         #expect(armed.count == 1)
@@ -487,10 +493,17 @@ extension BandActionRuntimeTests {
 }
 
 /// Stands in for AlarmKit so the fallback can be asserted without a device.
-private actor RecordingPhoneAlarm: PhoneAlarmScheduling {
+@MainActor
+private final class RecordingPhoneAlarm: PhoneAlarmScheduling {
     private(set) var scheduled: [Date] = []
     private(set) var cancelCount = 0
     private var outcome: PhoneAlarmOutcome?
+    private var failsCancellation = false
+    func setCancellationFailure(_ value: Bool) { failsCancellation = value }
+    func cancelChecked() async throws {
+        if failsCancellation { throw BandCommandError.notReady }
+        await cancel()
+    }
 
     func prepare() async {}
 
@@ -547,6 +560,18 @@ private actor BandActionTestRuntime: LooprDeviceCenterRuntime {
 
     private(set) var alarmFireDates: [Date] = []
     private(set) var disableCount = 0
+    private var disableFails = false
+    private var alarmStatus = BandAlarmStatus.unknown
+    private let emitAlarmEvents: Bool
+    private let events = AsyncStream<BandEventEnvelope>.makeStream()
+
+    init(emitAlarmEvents: Bool = false) { self.emitAlarmEvents = emitAlarmEvents }
+
+    func bandEvents() async -> AsyncStream<BandEventEnvelope> { events.stream }
+
+    func setDisableFailure(_ value: Bool) { disableFails = value }
+    func setAlarmStatus(_ value: BandAlarmStatus) { alarmStatus = value }
+    func readBandAlarmStatus() async throws -> BandAlarmStatus { alarmStatus }
 
     nonisolated func envelope(eventID: UInt16, at date: Date = Date()) -> BandEventEnvelope {
         BandEventEnvelope(
@@ -598,11 +623,17 @@ private actor BandActionTestRuntime: LooprDeviceCenterRuntime {
     func setBandAlarm(fireDate: Date) async throws {
         alarmFireDates.append(fireDate)
         // The fake band latches at once, like a band that answers event 56.
-        await LooprAlarmLatchSignal.shared.noteLatch()
+        if emitAlarmEvents {
+            events.continuation.yield(envelope(eventID: 59))
+            events.continuation.yield(envelope(eventID: 56))
+        } else {
+            await LooprAlarmLatchSignal.shared.noteLatch()
+        }
     }
 
     func disableBandAlarm() async throws {
         disableCount += 1
+        if disableFails { throw BandCommandError.notReady }
     }
 }
 
@@ -724,7 +755,7 @@ extension BandActionRuntimeTests {
         try await controller.save(WakeAlarmPlan(isEnabled: true, wakeMinute: 7 * 60))
         #expect(await phone.scheduled.count == 1)
 
-        await controller.setPhoneLayerEnabled(false)
+        try await controller.setPhoneLayerEnabled(false)
         #expect(await phone.cancelCount >= 1)
         #expect(!preference.isEnabled)
 
@@ -732,7 +763,7 @@ extension BandActionRuntimeTests {
         #expect(await phone.scheduled.count == 1)
         #expect(await controller.snapshot().phone == .disabled)
 
-        await controller.setPhoneLayerEnabled(true)
+        try await controller.setPhoneLayerEnabled(true)
         #expect(await phone.scheduled.count == 2)
     }
 
@@ -785,6 +816,54 @@ extension BandActionRuntimeTests {
         )
         await #expect(throws: BandCommandError.notReady) { try await controller.testBuzz() }
         await #expect(throws: BandCommandError.notReady) { try await controller.retryBand() }
+    }
+
+    @Test
+    func failedPhoneLayerSwitchLeavesThePreferenceOnAndReportsFailure() async throws {
+        let phone = RecordingPhoneAlarm()
+        let preference = isolatedPreference()
+        let controller = LooprWakeAlarmController(runtime: nil, repository: InMemoryDeviceCenterRepository(),
+            phoneAlarm: phone, preference: preference, armRecord: isolatedArmRecord())
+        try await controller.save(WakeAlarmPlan(isEnabled: true, wakeMinute: 8 * 60))
+        await phone.setCancellationFailure(true)
+        await #expect(throws: LooprStrapAlarmError.phoneCancellationPending) {
+            try await controller.setPhoneLayerEnabled(false)
+        }
+        #expect(preference.isEnabled)
+        #expect(await phone.lastOutcome() == .systemAlarm)
+        await phone.setCancellationFailure(false)
+        try await controller.setPhoneLayerEnabled(false)
+        #expect(!preference.isEnabled)
+        #expect(await phone.lastOutcome() == nil)
+    }
+
+    @Test
+    func noRuntimeTurnOffReportsPhoneCancellationFailure() async throws {
+        let phone = RecordingPhoneAlarm()
+        let controller = LooprWakeAlarmController(runtime: nil, repository: InMemoryDeviceCenterRepository(),
+            phoneAlarm: phone, preference: isolatedPreference(), armRecord: isolatedArmRecord())
+        try await controller.save(WakeAlarmPlan(isEnabled: true, wakeMinute: 8 * 60))
+        await phone.setCancellationFailure(true)
+        await #expect(throws: LooprStrapAlarmError.phoneCancellationPending) { try await controller.turnOff() }
+        #expect(await phone.lastOutcome() == .systemAlarm)
+        #expect(await controller.snapshot().cancellationPending)
+        await phone.setCancellationFailure(false)
+        try await controller.turnOff()
+        #expect(await phone.lastOutcome() == nil)
+        #expect(!(await controller.snapshot().cancellationPending))
+    }
+
+    @Test
+    func noRuntimeTurnOffKeepsTheBandCancellationPending() async throws {
+        let record = isolatedArmRecord()
+        record.write(fireDate: Date().addingTimeInterval(3_600), armedAt: Date(), linkGeneration: 1)
+        record.markConfirmedByEvent(at: Date())
+        let controller = LooprWakeAlarmController(runtime: nil, repository: InMemoryDeviceCenterRepository(),
+            phoneAlarm: RecordingPhoneAlarm(), preference: isolatedPreference(), armRecord: record)
+        await #expect(throws: LooprStrapAlarmError.cancellationPending) { try await controller.turnOff() }
+        #expect(record.needsDisable)
+        #expect(record.read()?.isTrusted == false)
+        #expect(await controller.snapshot().cancellationWarning != nil)
     }
 
     @Test
@@ -857,5 +936,219 @@ extension BandActionRuntimeTests {
         #expect(on.settingsSummary(formatter: formatter) == "06:30")
         let off = WakeAlarmSnapshot(configuration: nil, assurance: nil, phoneLayerEnabled: true, bandConnected: false)
         #expect(off.settingsSummary(formatter: formatter) == "Off")
+    }
+}
+
+extension BandActionRuntimeTests {
+    @Test
+    func clearingTheSlotDoesNotBlockTheEventReaderFromConfirmingTheArm() async throws {
+        let runtime = BandActionTestRuntime(emitAlarmEvents: true)
+        let repository = InMemoryDeviceCenterRepository(alarmConfiguration:
+            WakeAlarmPlan(isEnabled: true, wakeMinute: 7 * 60).configuration())
+        let record = isolatedArmRecord()
+        let consumer = BandEventActionConsumerFactory.make(
+            runtime: runtime, journal: RecordingJournalStore(), alarmRepository: repository,
+            performer: LooprPhoneActionPerformer(), armRecord: record, phoneAlarm: RecordingPhoneAlarm()
+        )
+        await consumer.start()
+        for _ in 0..<200 where record.read()?.confirmedByEvent != true {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(record.read()?.confirmedByEvent == true)
+        #expect(await runtime.alarmFireDates.count == 1)
+        await consumer.stop()
+    }
+
+    @Test
+    func aQueuedArmCannotRestoreAnAlarmThatWasTurnedOff() async throws {
+        let runtime = BandActionTestRuntime()
+        let repository = InMemoryDeviceCenterRepository()
+        let service = LooprStrapAlarmService(runtime: runtime, repository: repository, armRecord: isolatedArmRecord())
+        let configuration = WakeAlarmPlan(isEnabled: true, wakeMinute: 7 * 60).configuration()
+        let wake = try #require(try await service.save(configuration))
+        _ = try await service.save(StrapAlarmConfiguration(isEnabled: false))
+        let writes = await runtime.alarmFireDates.count
+        await service.armIfCurrent(wake, configuration: configuration, reason: "a delayed screen task")
+        #expect(await runtime.alarmFireDates.count == writes)
+        #expect(service.armRecord.read() == nil)
+    }
+
+    @Test
+    func failedPhoneCancellationIsReportedAndRetried() async throws {
+        let runtime = BandActionTestRuntime()
+        let repository = InMemoryDeviceCenterRepository()
+        let phone = RecordingPhoneAlarm()
+        let record = isolatedArmRecord()
+        let service = LooprStrapAlarmService(runtime: runtime, repository: repository, armRecord: record, phoneAlarm: phone)
+        _ = try await service.save(WakeAlarmPlan(isEnabled: true, wakeMinute: 7 * 60).configuration())
+        await phone.setCancellationFailure(true)
+        await #expect(throws: LooprStrapAlarmError.phoneCancellationPending) {
+            try await service.save(StrapAlarmConfiguration(isEnabled: false))
+        }
+        #expect(record.needsDisable)
+        #expect(await runtime.disableCount == 1)
+        #expect(await phone.lastOutcome() == .systemAlarm)
+        await phone.setCancellationFailure(false)
+        _ = try await service.reconcile()
+        #expect(!record.needsDisable)
+        #expect(await phone.lastOutcome() == nil)
+    }
+
+    @Test @MainActor
+    func systemCancellationFailureCannotReportPhoneAlarmOff() async throws {
+        let suite = "loopr-phone-cancel-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let phone = PhoneAlarmFallback(defaults: defaults, cancelSystemAlarm: { throw BandCommandError.notReady })
+        await #expect(throws: BandCommandError.notReady) { try await phone.cancelChecked() }
+        guard case .unavailable = await phone.lastOutcome() else {
+            Issue.record("A cancellation error must remain visible")
+            return
+        }
+        let relaunched = PhoneAlarmFallback(defaults: defaults)
+        #expect(await relaunched.lastOutcome() == phone.lastOutcome())
+    }
+
+    @Test
+    func failedBandCancellationSurvivesUntilReconnection() async throws {
+        let runtime = BandActionTestRuntime()
+        let repository = InMemoryDeviceCenterRepository()
+        let phone = RecordingPhoneAlarm()
+        let record = isolatedArmRecord()
+        let service = LooprStrapAlarmService(runtime: runtime, repository: repository, armRecord: record, phoneAlarm: phone)
+        _ = try await service.save(WakeAlarmPlan(isEnabled: true, wakeMinute: 7 * 60).configuration())
+        await runtime.setDisableFailure(true)
+        await #expect(throws: LooprStrapAlarmError.cancellationPending) {
+            try await service.save(StrapAlarmConfiguration(isEnabled: false))
+        }
+        #expect(record.needsDisable)
+        #expect(await phone.cancelCount == 1)
+        await runtime.setDisableFailure(false)
+        _ = try await service.reconcile()
+        #expect(!record.needsDisable)
+        #expect(record.read() == nil)
+        #expect(await runtime.disableCount == 2)
+    }
+
+    @Test
+    func confirmedEvidenceFromAnotherProcessDoesNotSkipArming() async throws {
+        let defaults = UserDefaults(suiteName: "alarm-relaunch-\(UUID())")!
+        let record = LooprStrapAlarmArmRecord(defaults: defaults)
+        let runtime = BandActionTestRuntime()
+        let repository = InMemoryDeviceCenterRepository()
+        let service = LooprStrapAlarmService(runtime: runtime, repository: repository, armRecord: record)
+        _ = try await service.save(WakeAlarmPlan(isEnabled: true, wakeMinute: 7 * 60).configuration())
+        #expect(record.read()?.isTrusted == true)
+        defaults.set("previous-process", forKey: LooprStrapAlarmArmRecord.sessionKey)
+        #expect(try await service.reconcile() != nil)
+        #expect(await runtime.alarmFireDates.count == 2)
+    }
+
+    @Test
+    func latchSignalsRejectOtherConnectionsAndExpiredExpectations() async {
+        let latch = LooprAlarmLatchSignal()
+        await latch.expectLatch(generation: 7)
+        await latch.noteLatch(generation: 6)
+        #expect(await latch.waitForLatch(timeout: 0) == false)
+        await latch.noteLatch(generation: 7)
+        #expect(await latch.waitForLatch(timeout: 0) == false)
+        await latch.expectLatch(generation: 7)
+        await latch.noteLatch(generation: 7, receivedAt: Date().addingTimeInterval(-60))
+        #expect(await latch.waitForLatch(timeout: 0) == false)
+        await latch.expectLatch(generation: 7)
+        await latch.noteLatch(generation: 7)
+        #expect(await latch.waitForLatch(timeout: 0))
+    }
+
+    @Test
+    func phoneWakeRepeatsOnSelectedDaysWithoutTheAppRunning() throws {
+        let configuration = WakeAlarmPlan(isEnabled: true, wakeMinute: 7 * 60 + 15,
+                                         smartWindowMinutes: 30, weekdays: [.monday, .friday]).configuration()
+        let first = Date(timeIntervalSince1970: 1_790_000_000)
+        let schedule = PhoneAlarmFallback.systemSchedule(at: first, repeating: configuration)
+        #expect(schedule == .relative(.init(time: .init(hour: 7, minute: 15), repeats: .weekly([.monday, .friday]))))
+        #expect(schedule == PhoneAlarmFallback.systemSchedule(at: first.addingTimeInterval(86_400), repeating: configuration))
+        let requests = PhoneAlarmFallback.notificationRequests(at: first, repeating: configuration)
+        #expect(requests.count == 2)
+        for request in requests {
+            let trigger = try #require(request.trigger as? UNCalendarNotificationTrigger)
+            #expect(trigger.repeats)
+            #expect(trigger.dateComponents.hour == 7)
+            #expect(trigger.dateComponents.minute == 15)
+            #expect(trigger.dateComponents.year == nil)
+        }
+        #expect(Set(requests.compactMap { ($0.trigger as? UNCalendarNotificationTrigger)?.dateComponents.weekday }) == [2, 6])
+    }
+
+    @Test
+    func deniedQuietOrMutedNotificationsCannotClaimAnAudibleBackup() {
+        #expect(!PhoneAlarmFallback.notificationIsAudible(authorization: .denied, sound: .enabled, alert: .enabled))
+        #expect(!PhoneAlarmFallback.notificationIsAudible(authorization: .provisional, sound: .enabled, alert: .enabled))
+        #expect(!PhoneAlarmFallback.notificationIsAudible(authorization: .authorized, sound: .disabled, alert: .enabled))
+        #expect(PhoneAlarmFallback.notificationIsAudible(authorization: .authorized, sound: .enabled, alert: .enabled))
+    }
+}
+
+extension BandActionRuntimeTests {
+    @Test
+    func testingTheBuzzNearWakeTimeCannotConsumeTheScheduledAlarm() async throws {
+        let runtime = BandActionTestRuntime()
+        let date = Date().addingTimeInterval(60)
+        let calendar = Calendar.autoupdatingCurrent
+        let parts = calendar.dateComponents([.hour, .minute], from: date)
+        let configuration = WakeAlarmPlan(isEnabled: true, wakeMinute: parts.hour! * 60 + parts.minute!, smartWindowMinutes: 0).configuration()
+        let wake = try #require(StrapAlarmSchedulePlanner.nextFireDate(for: configuration, after: Date(), calendar: calendar))
+        let record = isolatedArmRecord()
+        record.write(fireDate: wake, armedAt: Date(), linkGeneration: BandActionTestRuntime.generation)
+        record.markConfirmedByEvent(at: Date())
+        let repository = InMemoryDeviceCenterRepository(alarmConfiguration: configuration)
+        let phone = RecordingPhoneAlarm()
+        let consumer = BandEventActionConsumerFactory.make(
+            runtime: runtime, journal: RecordingJournalStore(), alarmRepository: repository,
+            performer: LooprPhoneActionPerformer(), armRecord: record, phoneAlarm: phone
+        )
+        await consumer.handle(runtime.envelope(eventID: 58))
+        await consumer.handle(runtime.envelope(eventID: 60))
+        await consumer.stop()
+        #expect(record.read()?.fireDate == wake)
+        #expect(await runtime.alarmFireDates.isEmpty)
+        #expect(await phone.cancelCount == 0)
+    }
+
+    @Test
+    func historicalAlarmEventsCannotClearOrConfirmTheCurrentOccurrence() async throws {
+        let runtime = BandActionTestRuntime()
+        let record = isolatedArmRecord()
+        let wake = Date(timeIntervalSince1970: (Date().timeIntervalSince1970 + 60).rounded(.down))
+        record.write(fireDate: wake, armedAt: Date(), linkGeneration: BandActionTestRuntime.generation)
+        let consumer = BandEventActionConsumerFactory.make(
+            runtime: runtime, journal: RecordingJournalStore(),
+            alarmRepository: InMemoryDeviceCenterRepository(alarmConfiguration: WakeAlarmPlan(isEnabled: true).configuration()),
+            performer: LooprPhoneActionPerformer(), armRecord: record, phoneAlarm: RecordingPhoneAlarm()
+        )
+        for eventID: UInt16 in [56, 57, 59] {
+            await consumer.handle(BandEventEnvelope(
+                eventID: eventID, generation: BandActionTestRuntime.generation, receivedAt: Date(),
+                bandEpochSeconds: nil, occurredAt: Date().addingTimeInterval(-3_600)
+            ))
+        }
+        await consumer.stop()
+        #expect(record.read()?.fireDate == wake)
+        #expect(record.read()?.confirmedByEvent == false)
+        #expect(await runtime.alarmFireDates.isEmpty)
+    }
+
+    @Test
+    func anExplicitlyEmptyAlarmSlotOverridesALatchEvent() async throws {
+        let runtime = BandActionTestRuntime()
+        await runtime.setAlarmStatus(.empty)
+        let record = isolatedArmRecord()
+        let service = LooprStrapAlarmService(
+            runtime: runtime, repository: InMemoryDeviceCenterRepository(), armRecord: record,
+            operations: LooprAlarmOperationQueue()
+        )
+        await service.arm(Date().addingTimeInterval(3_600), reason: "empty readback regression")
+        #expect(await runtime.alarmFireDates.count == 2)
+        #expect(record.read()?.isTrusted == false)
     }
 }

@@ -1,0 +1,111 @@
+{
+  "createdAt": "2026-10-25T00:00:00Z",
+  "format": "loopr-protocol",
+  "name": "Fitness for the long run",
+  "rules": [
+    {
+      "cadence": {
+        "every": 1,
+        "unit": "week"
+      },
+      "evidence": "WHO guidelines from 2020 ask adults for 150 to 300 minutes of moderate activity a week. Zone 2 is a steady effort where you can still talk. The template starts at 150.",
+      "group": "fitness",
+      "key": "zone-2",
+      "source": "band",
+      "target": {
+        "kind": "atLeast",
+        "metric": "zone2_minutes",
+        "unit": "min",
+        "value": 150
+      },
+      "title": "Zone 2, 150 minutes a week",
+      "why": "Steady exercise where you can still talk keeps your heart and lungs fit."
+    },
+    {
+      "cadence": {
+        "every": 1,
+        "unit": "week"
+      },
+      "evidence": "WHO guidelines from 2020 ask adults to do muscle-strengthening activity on 2 or more days a week.",
+      "group": "fitness",
+      "key": "strength",
+      "source": "fitness",
+      "target": {
+        "kind": "atLeast",
+        "metric": "strength_sessions",
+        "unit": "sessions",
+        "value": 2
+      },
+      "title": "Two strength sessions a week",
+      "why": "Strength work keeps your muscles and bones strong as you get older."
+    },
+    {
+      "cadence": {
+        "every": 1,
+        "unit": "week"
+      },
+      "evidence": "Hard means too out of breath to say more than a few words. WHO guidelines from 2020 count 75 hard minutes a week as equal to 150 moderate ones. The template starts at 30, below that.",
+      "group": "fitness",
+      "key": "hard-minutes",
+      "source": "band",
+      "target": {
+        "kind": "atLeast",
+        "metric": "zone45_minutes",
+        "unit": "min",
+        "value": 30
+      },
+      "title": "30 hard minutes a week",
+      "why": "In the WHO advice, one hard minute counts as much as two steady ones."
+    },
+    {
+      "cadence": {
+        "every": 1,
+        "unit": "week"
+      },
+      "evidence": "The American College of Sports Medicine suggests stretching or other flexibility exercise on 2 or more days a week, in its 2011 position stand.",
+      "group": "fitness",
+      "key": "mobility",
+      "source": "fitness",
+      "target": {
+        "kind": "atLeast",
+        "metric": "mobility_sessions",
+        "unit": "sessions",
+        "value": 2
+      },
+      "title": "Two mobility sessions a week",
+      "why": "Regular stretching keeps your joints moving through their full range."
+    },
+    {
+      "cadence": {
+        "every": 1,
+        "unit": "month"
+      },
+      "evidence": "In a 2015 Lancet study of about 140,000 adults in 17 countries, a weaker grip went with a higher risk of dying early.",
+      "group": "tests",
+      "key": "grip-retest",
+      "source": "manual",
+      "target": {
+        "kind": "done"
+      },
+      "title": "Grip strength retest",
+      "why": "A regular grip test shows whether your strength is holding up."
+    },
+    {
+      "cadence": {
+        "every": 1,
+        "unit": "month"
+      },
+      "evidence": "In a 2022 study in the British Journal of Sports Medicine of people aged 51 to 75, those who could not stand on one leg for 10 seconds were more likely to die in the years after.",
+      "group": "tests",
+      "key": "balance-retest",
+      "source": "manual",
+      "target": {
+        "kind": "done"
+      },
+      "title": "One-leg balance retest",
+      "why": "A regular balance test shows whether your steadiness is holding up."
+    }
+  ],
+  "schemaVersion": 1,
+  "version": 1
+}

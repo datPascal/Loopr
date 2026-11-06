@@ -62,42 +62,6 @@ public enum AIProviderFailure: Error, Equatable, Sendable {
 }
 public protocol AITransport: Sendable { func send(payload: Data, configuration: AIProviderConfiguration, key: Data) async throws -> Data }
 
-/// A single-attempt OpenAI-compatible transport. Retry policy deliberately lives nowhere in
-/// AIKit: a user action produces at most one provider request.
-public struct URLSessionAITransport: AITransport {
-    private let session: URLSession
-    private let timeout: TimeInterval
-    public init(session: URLSession = .shared, timeout: TimeInterval = 30) {
-        self.session = session; self.timeout = timeout
-    }
-    public func send(payload: Data, configuration: AIProviderConfiguration, key: Data) async throws -> Data {
-        guard var components = URLComponents(url: configuration.baseURL, resolvingAgainstBaseURL: false),
-              let scheme = components.scheme?.lowercased(), ["https", "http"].contains(scheme) else {
-            throw AIProviderFailure.malformedResponse
-        }
-        if components.path.isEmpty || components.path == "/" { components.path = "/v1/chat/completions" }
-        guard let url = components.url else { throw AIProviderFailure.malformedResponse }
-        var request = URLRequest(url: url, timeoutInterval: timeout)
-        request.httpMethod = "POST"; request.httpBody = payload
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(configuration.model, forHTTPHeaderField: "X-Loopr-Model")
-        request.setValue("Bearer " + String(decoding: key, as: UTF8.self), forHTTPHeaderField: "Authorization")
-        do {
-            let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse else { throw AIProviderFailure.malformedResponse }
-            guard (200..<300).contains(http.statusCode) else { throw AIProviderFailure.http(http.statusCode) }
-            guard !data.isEmpty,
-                  (try? JSONSerialization.jsonObject(with: data)) != nil else {
-                throw AIProviderFailure.malformedResponse
-            }
-            return data
-        } catch let failure as AIProviderFailure { throw failure }
-        catch is CancellationError { throw AIProviderFailure.cancelled }
-        catch let error as URLError where error.code == .timedOut { throw AIProviderFailure.timeout }
-        catch { throw AIProviderFailure.malformedResponse }
-    }
-}
-
 public actor AIProviderClient {
     private let settings: AISettings
     private let transport: any AITransport
@@ -150,47 +114,190 @@ public struct AIBriefingNotificationBridge: Sendable {
     }
 }
 
+/// What the agent asked to change. A proposal is inert data until the person confirms it.
+/// The payloads carry the model's request as JSON text. The app validates that JSON when the
+/// proposal is created and again when it is applied.
 public enum AIProposal: Equatable, Codable, Sendable {
     case journal(text: String, tags: [String])
     case goalAdjustment(goalID: UUID, value: Double)
+    /// A food draft in the `FoodEstimate` JSON shape, with when and where it happened.
+    case meal(estimateJSON: String, slot: String, occurredAt: Date, timeZoneID: String, provider: String, model: String)
+    case journalQuestion(name: String, question: String)
+    case templateEdit(templateID: UUID, expectedRevision: Int, editJSON: String)
+    case programDraft(json: String)
+    /// A reminder at a local time of day. `repeatsDaily` false means the next time it comes round, once.
+    case reminder(title: String, body: String, minuteOfDay: Int, repeatsDaily: Bool)
+    case test(candidateID: String, metric: String?, reminderMinuteOfDay: Int?)
 }
+
+/// What the confirmation card says. Written by the app when the proposal is created.
+public struct AIProposalCard: Equatable, Codable, Sendable {
+    public var title: String
+    public var lines: [String]
+    public var confirmTitle: String
+    public var dismissTitle: String
+    /// Shown after the change is saved.
+    public var doneText: String
+    public init(title: String, lines: [String] = [], confirmTitle: String, dismissTitle: String = "Not now", doneText: String) {
+        self.title = title; self.lines = lines; self.confirmTitle = confirmTitle
+        self.dismissTitle = dismissTitle; self.doneText = doneText
+    }
+}
+
+public enum AIProposalState: String, Codable, Sendable {
+    case pending, applied, dismissed
+    /// Confirmed, but saving failed. The person can try again.
+    case failed
+}
+
 public struct StoredAIProposal: Identifiable, Equatable, Codable, Sendable {
     public let id: UUID
     public let conversationID: UUID
+    /// The assistant message the card sits under.
+    public var messageID: UUID?
     public let proposal: AIProposal
+    public var card: AIProposalCard?
+    public var createdAt: Date
     public var confirmedAt: Date?
     public var appliedAt: Date?
-    public init(id: UUID, conversationID: UUID, proposal: AIProposal) {
+    public var dismissedAt: Date?
+    public var failure: String?
+
+    public var state: AIProposalState {
+        if appliedAt != nil { return .applied }
+        if dismissedAt != nil { return .dismissed }
+        if failure != nil { return .failed }
+        return .pending
+    }
+
+    public init(id: UUID, conversationID: UUID, proposal: AIProposal, messageID: UUID? = nil, card: AIProposalCard? = nil,
+                createdAt: Date = Date()) {
         self.id = id; self.conversationID = conversationID; self.proposal = proposal
+        self.messageID = messageID; self.card = card; self.createdAt = createdAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, conversationID, messageID, proposal, card, createdAt, confirmedAt, appliedAt, dismissedAt, failure
+    }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        conversationID = try c.decode(UUID.self, forKey: .conversationID)
+        proposal = try c.decode(AIProposal.self, forKey: .proposal)
+        messageID = try c.decodeIfPresent(UUID.self, forKey: .messageID)
+        card = try c.decodeIfPresent(AIProposalCard.self, forKey: .card)
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? .distantPast
+        confirmedAt = try c.decodeIfPresent(Date.self, forKey: .confirmedAt)
+        appliedAt = try c.decodeIfPresent(Date.self, forKey: .appliedAt)
+        dismissedAt = try c.decodeIfPresent(Date.self, forKey: .dismissedAt)
+        failure = try c.decodeIfPresent(String.self, forKey: .failure)
     }
 }
-public protocol AIProposalApplier: Sendable { func apply(_ proposal: AIProposal) async throws }
+public protocol AIProposalApplier: Sendable {
+    func apply(_ proposal: AIProposal) async throws
+    /// The ledger calls this one. `id` is the proposal's id, a stable key for applying once.
+    func apply(_ proposal: AIProposal, id: UUID) async throws
+}
+public extension AIProposalApplier {
+    func apply(_ proposal: AIProposal, id: UUID) async throws { try await apply(proposal) }
+}
+
+/// Where proposals live between launches. The app backs it with its document store.
+public protocol AIProposalPersistence: Sendable {
+    /// Rows that cannot be decoded are skipped, not fatal.
+    func load() throws -> [StoredAIProposal]
+    func save(_ row: StoredAIProposal) throws
+    func remove(ids: [UUID]) throws
+    func removeAll() throws
+}
+
+/// Proposals and the one place they turn into changes. `confirmAndApply` is the only path to
+/// the applier, so nothing is saved until the person confirms. A second confirm, a double tap
+/// or a tap that arrives while the first is still saving does nothing.
 public actor AIProposalLedger {
     private var rows: [UUID: StoredAIProposal] = [:]
-    private let persistenceURL: URL?
+    private var applying: Set<UUID> = []
+    private let persistence: (any AIProposalPersistence)?
+
     public init(persistenceURL: URL? = nil) {
-        self.persistenceURL = persistenceURL
-        guard let persistenceURL, let data = try? Data(contentsOf: persistenceURL),
-              let restored = try? JSONDecoder().decode([UUID: StoredAIProposal].self, from: data) else { return }
-        rows = restored
+        persistence = persistenceURL.map { FileAIProposalPersistence(url: $0) }
+        rows = Dictionary(((try? persistence?.load()) ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
     }
-    public func store(_ row: StoredAIProposal) { rows[row.id] = row; persist() }
+    public init(persistence: any AIProposalPersistence) {
+        self.persistence = persistence
+        rows = Dictionary(((try? persistence.load()) ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+    }
+
+    /// Stores a new proposal. Throws when it could not be saved, so the caller does not offer a card
+    /// that would vanish on relaunch. An id that exists is left alone.
+    public func create(_ row: StoredAIProposal) throws {
+        guard rows[row.id] == nil else { return }
+        try persistence?.save(row)
+        rows[row.id] = row
+    }
+    public func store(_ row: StoredAIProposal) { rows[row.id] = row; try? persistence?.save(row) }
     public func proposal(id: UUID) -> StoredAIProposal? { rows[id] }
-    public func confirmAndApply(id: UUID, at date: Date, using applier: any AIProposalApplier) async throws {
-        guard var row = rows[id], row.appliedAt == nil else { return }
-        row.confirmedAt = date; rows[id] = row; persist()
-        try await applier.apply(row.proposal)
-        row.appliedAt = date; rows[id] = row; persist()
+    public func proposals(conversationID: UUID) -> [StoredAIProposal] {
+        rows.values.filter { $0.conversationID == conversationID }.sorted { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }
     }
+
+    /// Applies a pending or failed proposal once. Returns true only when this call applied it.
+    /// A failed apply keeps the proposal confirmable and records the reason on the row.
+    @discardableResult
+    public func confirmAndApply(id: UUID, at date: Date, using applier: any AIProposalApplier) async throws -> Bool {
+        guard var row = rows[id], row.appliedAt == nil, row.dismissedAt == nil, !applying.contains(id) else { return false }
+        applying.insert(id); defer { applying.remove(id) }
+        row.confirmedAt = row.confirmedAt ?? date; row.failure = nil
+        try persistence?.save(row)
+        rows[id] = row
+        do { try await applier.apply(row.proposal, id: row.id) }
+        catch {
+            row.failure = error.localizedDescription.isEmpty ? "Could not save this." : error.localizedDescription
+            rows[id] = row; try? persistence?.save(row)
+            throw error
+        }
+        row.appliedAt = date
+        rows[id] = row; try? persistence?.save(row)
+        return true
+    }
+
+    /// Records "Not now". Nothing was applied, so nothing else changes.
+    @discardableResult
+    public func dismiss(id: UUID, at date: Date) -> Bool {
+        guard var row = rows[id], row.appliedAt == nil, row.dismissedAt == nil, !applying.contains(id) else { return false }
+        row.dismissedAt = date; row.failure = nil
+        rows[id] = row; try? persistence?.save(row)
+        return true
+    }
+
     public func delete(conversationID: UUID) {
-        rows = rows.filter { $0.value.conversationID != conversationID }; persist()
+        let ids = rows.values.filter { $0.conversationID == conversationID }.map(\.id)
+        guard !ids.isEmpty else { return }
+        for id in ids { rows[id] = nil }
+        try? persistence?.remove(ids: ids)
     }
-    private func persist() {
-        guard let persistenceURL, let data = try? JSONEncoder().encode(rows) else { return }
-        try? FileManager.default.createDirectory(at: persistenceURL.deletingLastPathComponent(),
-                                                 withIntermediateDirectories: true)
-        try? data.write(to: persistenceURL, options: .atomic)
+    public func deleteAll() {
+        rows = [:]; try? persistence?.removeAll()
     }
+}
+
+/// The original single-file store. Kept so existing callers and tests keep working.
+struct FileAIProposalPersistence: AIProposalPersistence {
+    let url: URL
+    func load() throws -> [StoredAIProposal] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        return Array(try JSONDecoder().decode([UUID: StoredAIProposal].self, from: data).values)
+    }
+    private func write(_ rows: [UUID: StoredAIProposal]) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(rows).write(to: url, options: .atomic)
+    }
+    private func current() -> [UUID: StoredAIProposal] {
+        Dictionary(((try? load()) ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+    }
+    func save(_ row: StoredAIProposal) throws { var rows = current(); rows[row.id] = row; try write(rows) }
+    func remove(ids: [UUID]) throws { var rows = current(); for id in ids { rows[id] = nil }; try write(rows) }
+    func removeAll() throws { try write([:]) }
 }
 public struct AIConversation: Identifiable, Equatable, Codable, Sendable {
     public let id: UUID

@@ -71,7 +71,7 @@ public struct LooprAmbientBackground: View {
     }
 
     private var peakOpacity: Double {
-        LooprAppearance.isDark(colorScheme) ? 0.22 : 0.11
+        LooprAppearance.isDark(colorScheme) ? 0.16 : 0.09
     }
 }
 

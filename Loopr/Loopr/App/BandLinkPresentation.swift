@@ -216,6 +216,27 @@ final class BandLinkPresentation {
         }
     }
 
+    /// The Settings band line. A launch whose shell stands in a paired band (the populated fixture) has no real link,
+    /// so the line reads the indicator every tab's band button shows instead of "Not paired" (R2-UPG-24).
+    static func settingsSummary(link: BandLinkPresentation?, shown: LooprBandIndicator?, paired: Bool) -> String {
+        if let link, link.isPaired || !paired { return link.settingsSummary }
+        guard paired, let shown else { return link?.settingsSummary ?? "Not paired" }
+        return summary(for: shown)
+    }
+
+    /// The Settings words for an indicator the shell shows.
+    nonisolated static func summary(for indicator: LooprBandIndicator) -> String {
+        switch indicator.link {
+        case .connected: indicator.onWrist == false ? "Off wrist" : indicator.charging == true ? "Charging" : "Connected"
+        case .syncing: "Syncing"
+        case .reconnecting: "Connecting"
+        case .disconnected: "Not connected"
+        case .bluetoothOff: "Bluetooth is off"
+        case .notPaired: "Not paired"
+        case .needsAttention: "Can't connect"
+        }
+    }
+
     /// The live heart stream keeps running through a blip. Stopping it there
     /// tore the stream down and rebuilt it for a link that came back a
     /// second later.

@@ -17,7 +17,7 @@ Changes to wellness metrics must cite the implemented method, expose an honest c
 
 ## Development setup
 
-You need Xcode 26 or later and the iOS 26 SDK.
+You need Xcode 27 or later and the iOS 27 SDK. Run tests on an iOS 27.0 simulator.
 
 Run the Swift package tests:
 

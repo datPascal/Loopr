@@ -527,7 +527,7 @@ nonisolated struct LooprHeartAlertsNotificationPublisher: HeartAlertsPublishing 
         case .deferred?: return .heldForQuietHours
         case .queued?: return .waitingForPermission
         case .disabled?, .denied?: return .notificationsOff
-        case .quietHours?, .expired?, nil: return .notSent
+        case .quietHours?, .expired?, .limitReached?, nil: return .notSent
         }
         #else
         return .notificationsOff

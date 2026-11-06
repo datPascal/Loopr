@@ -414,15 +414,17 @@ actor LooprDerivedDataPublisher {
 
     /// The identity is the bout's start second, so re-deriving the same day
     /// produces the same row rather than a second copy of the same workout.
-    /// `DetectedWorkout` carries only the identity, the activity and the
-    /// window; the heart-rate, zone, strain and energy detail stays in the
-    /// derivation until the person confirms the bout and it becomes a record.
+    /// `DetectedWorkout` carries the identity, the activity, the window and
+    /// the average heart rate the review sheet shows (R2-WOD-05); the zone,
+    /// strain and energy detail stays in the derivation until the person
+    /// confirms the bout and it becomes a record.
     nonisolated static func detectedWorkout(_ session: ExerciseSession) -> WorkoutKit.DetectedWorkout {
         WorkoutKit.DetectedWorkout(
             detectionID: "loopr.detected.\(Int(session.start.rounded()))",
             activity: activity(for: session.sport),
             startedAt: Date(timeIntervalSince1970: session.start),
-            endedAt: Date(timeIntervalSince1970: max(session.start, session.end))
+            endedAt: Date(timeIntervalSince1970: max(session.start, session.end)),
+            averageHeartRate: session.averageBPM.isFinite ? Int(session.averageBPM.rounded()) : nil
         )
     }
 
@@ -458,7 +460,7 @@ actor LooprDerivedDataPublisher {
         }
         let summary = projection?.today
         let sleep = summary?.metric(.sleep)
-        let hero = summary.map { TodayDashboard(summary: $0, context: nil, pinned: [], isToday: true).hero }
+        let hero = summary.map { TodayDashboard(summary: $0, context: nil, isToday: true).hero }
         var have: Int?
         var need: Int?
         if case .learning(let recorded, let required, _) = hero { have = recorded; need = required }

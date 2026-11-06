@@ -87,7 +87,6 @@ struct MetricDetailNavigation: ViewModifier {
         LooprMetricLink(
             open: { id in
                 guard let key = MetricKey(linkID: id) else { return }
-                guard key != .oxygenSaturation else { return }
                 let zooms = zoomSources?.contains(id) == true
                 route.wrappedValue = MetricDetailRoute(key: key, zoomSourceID: zooms ? id : nil)
             },
@@ -97,8 +96,7 @@ struct MetricDetailNavigation: ViewModifier {
                 return MetricTrendNarrative.chartPoints(history)
             },
             supports: { id in
-                guard let key = MetricKey(linkID: id) else { return false }
-                return key != .oxygenSaturation
+                MetricKey(linkID: id) != nil
             },
             historyEndingOn: { @Sendable [provider] id, days, endingOn in
                 guard let key = MetricKey(linkID: id) else { return [] }
@@ -151,7 +149,6 @@ enum MetricDetailDebugLaunch {
 
     static func consumeOpenKey() -> MetricKey? {
         guard !openConsumed, let raw = argument("loopr-open-metric"), let key = MetricKey(rawValue: raw) else { return nil }
-        guard key != .oxygenSaturation else { return nil }
         openConsumed = true
         return key
     }

@@ -19,6 +19,11 @@ import DesignSystem
 /// substitute a zero or a placeholder for a value the derivation did not
 /// produce.
 nonisolated enum BandMetricSeriesMapping {
+    /// Raise this when `values` gains a metric. The backfill then revisits days that already have a
+    /// band series, so history recorded before the update gets the new metric too (version 2: the
+    /// five-tab sleep performance and sleep debt series).
+    static let version = 2
+
     static func values(projection: CanonicalDailyProjection, today: TodaySummary? = nil) -> [MetricKey: Double?] {
         var values: [MetricKey: Double?] = [:]
         func number(_ value: Double?) -> Double? {
@@ -74,6 +79,14 @@ nonisolated enum BandMetricSeriesMapping {
         // display generation is at hand.
         if let today {
             values[.recovery] = todayValue(.recovery, in: today)
+            let need = number(projection.sleep.needHours).flatMap { $0 > 0 ? number($0 * 60) : nil }
+            let duration = sleep("duration")
+            let performance: Double? = hasNight ? need.flatMap { need in
+                duration.flatMap { $0 >= 0 ? number($0 / need * 100) : nil }
+            } : nil
+            let debt: Double? = hasNight ? number(projection.sleep.debtHours).flatMap { $0 >= 0 ? number($0 * 60) : nil } : nil
+            values[.sleepPerformance] = performance
+            values[.sleepDebt] = debt
             if let regularity = projection.sleep.metric("regularity"), regularity.state != .absent {
                 values[.sleepConsistency] = number(regularity.numericValue)
             } else {

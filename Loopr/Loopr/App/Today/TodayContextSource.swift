@@ -24,8 +24,6 @@ nonisolated struct LooprTodayContextSource: TodayContextRepository {
     let alarmMinute: @Sendable () async -> Int?
     var overnightAssessment: (@Sendable (DayIdentity) async -> OvernightVitalsAssessment?)? = nil
 
-    var temperatureMissingReason: (@Sendable (DayIdentity) async -> String?)? = nil
-
     /// Nights the recovery score compares with, as in `priorDays(before:)`.
     static let baselineNights = 28
 
@@ -86,8 +84,7 @@ nonisolated struct LooprTodayContextSource: TodayContextRepository {
             strainTarget: StrainTarget(recovery: recoveryScore, trainingLoad: load),
             zoneMinutes: zones,
             tonight: tonight,
-            overnightAssessment: await overnightAssessment?(day),
-            temperatureMissingReason: await temperatureMissingReason?(day)
+            overnightAssessment: await overnightAssessment?(day)
         )
     }
 
@@ -224,9 +221,6 @@ enum TodayContextSourceFactory {
                 alarmMinute: alarm,
                 overnightAssessment: { @Sendable [heart] day in
                     try? await heart.readHeartDay(for: day)?.vitals?.assessment
-                },
-                temperatureMissingReason: { @Sendable [heart] day in
-                    try? await heart.readHeartDay(for: day)?.vitals?.skinTemperature.missingReason
                 }
             )
         }

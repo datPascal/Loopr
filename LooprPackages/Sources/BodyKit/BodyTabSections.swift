@@ -343,7 +343,9 @@ struct BodyTrainingLoadCard: View {
                             .looprTypography(.prose)
                             .foregroundStyle(Color.loopr(.inkSecondary))
                             .fixedSize(horizontal: false, vertical: true)
-                        if points.contains(where: { $0.acute != nil }) {
+                        // While the history builds the chart is a flat line in an empty frame, so only the count shows
+                        // (Data ICP R1-DES-15, R2-SW-06, R2-VET-08).
+                        if isEstablished, points.contains(where: { $0.acute != nil }) {
                             BodyLoadTrendChart(points: points)
                         }
                     }
@@ -361,6 +363,13 @@ struct BodyTrainingLoadCard: View {
 
     private var isReady: Bool {
         if case .ready = state { return true }
+        return false
+    }
+
+    /// Ready and past the 42-day learning stretch. A ready model that is still learning says "Building your history",
+    /// so it must not draw the chart either (Data ICP R3-DES).
+    private var isEstablished: Bool {
+        if case .ready(let load) = state { return load.model.isEstablished }
         return false
     }
 }
@@ -564,15 +573,20 @@ struct BodyAgeSection: View {
 
     var body: some View {
         BodySection(title: "Age estimates", identifier: "body-age-estimates") {
-            LooprSurface {
-                BodyRowStack(rows: [AgeRow(id: .cardioAge, lock: cardio), AgeRow(id: .looprAge, lock: loopr)]) { row in
-                    Button { route(row.id) } label: { BodyAgeLockRow(lock: row.lock) }
-                        .buttonStyle(.looprPressableRow)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(row.lock.accessibilityLabel)
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityIdentifier(row.id == .cardioAge ? "body-cardio-age" : "body-loopr-age")
+            VStack(alignment: .leading, spacing: LooprSpacing.xs) {
+                LooprSurface {
+                    BodyRowStack(rows: [AgeRow(id: .cardioAge, lock: cardio), AgeRow(id: .looprAge, lock: loopr)]) { row in
+                        Button { route(row.id) } label: { BodyAgeLockRow(lock: row.lock) }
+                            .buttonStyle(.looprPressableRow)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(row.lock.accessibilityLabel)
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityIdentifier(row.id == .cardioAge ? "body-cardio-age" : "body-loopr-age")
+                    }
                 }
+                LooprText(LooprMedicalLine.text, style: .caption, color: .inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("body-age-not-medical")
             }
         }
     }
@@ -627,26 +641,61 @@ struct BodyAgeLockRow: View {
 
 struct BodyCompositionSection: View {
     @Environment(\.bodyOpenProfile) private var openProfile
+    @Environment(\.bodyOpenLog) private var openLog
     let composition: BodyCompositionRows
 
     var body: some View {
         BodySection(title: "Body composition", detail: composition.source, identifier: "body-composition") {
             LooprSurface {
-                if composition.rows.isEmpty {
-                    empty
-                } else {
-                    BodyRowStack(rows: composition.rows) { row in
-                        HStack(alignment: .firstTextBaseline) {
-                            LooprText(row.title, style: .rowTitle)
-                            Spacer(minLength: LooprSpacing.sm)
-                            LooprValueText(row.value, valueStyle: .metricUnit, unitStyle: .caption)
+                VStack(alignment: .leading, spacing: 0) {
+                    if composition.rows.isEmpty {
+                        empty
+                    } else {
+                        BodyRowStack(rows: composition.rows) { row in
+                            VStack(alignment: .leading, spacing: LooprSpacing.xs) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    LooprText(row.title, style: .rowTitle)
+                                    Spacer(minLength: LooprSpacing.sm)
+                                    LooprValueText(row.value, valueStyle: .metricUnit, unitStyle: .caption)
+                                }
+                                if let provenance = row.provenance {
+                                    ProvenanceChip(provenance, qualifier: row.qualifier,
+                                                   identifier: "body-composition-source-\(row.id)")
+                                }
+                            }
+                            .frame(minHeight: 28)
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("body-composition-\(row.id)")
                         }
-                        .frame(minHeight: 28)
-                        .accessibilityElement(children: .combine)
+                    }
+                    if let openLog {
+                        Rectangle().fill(Color.loopr(.divider)).frame(height: 1).accessibilityHidden(true)
+                            .padding(.vertical, LooprSpacing.sm)
+                        logRow(openLog)
                     }
                 }
             }
         }
+    }
+
+    private func logRow(_ action: BodyLogAction) -> some View {
+        Button { action.open() } label: {
+            HStack(alignment: .center, spacing: LooprSpacing.sm) {
+                VStack(alignment: .leading, spacing: 3) {
+                    LooprText(BodyLogCopy.title, style: .rowTitle)
+                    LooprText("Typed in or read from Apple Health", style: .caption, color: .inkSecondary)
+                }
+                Spacer(minLength: LooprSpacing.sm)
+                LooprText("Log", style: .metricUnit, color: .inkSecondary)
+                LooprChevron()
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.looprPressableRow)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("body-log-open")
     }
 
     @ViewBuilder

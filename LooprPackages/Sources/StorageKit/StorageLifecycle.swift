@@ -443,7 +443,7 @@ private enum StorageLifecycleInternals {
     }
 
     static func requiredTableNames() -> [String] {
-        StorageDatabase.requiredLedgerTableNames + Gen5StorageSchema.tableNames + ["release_action_audit"]
+        StorageDatabase.requiredLedgerTableNames + Gen5StorageSchema.tableNames + ["release_action_audit"] + FoodStorageSchema.tableNames + TrainStorageSchema.tableNames + RoutineStorageSchema.tableNames + LabStorageSchema.tableNames + SupplementStorageSchema.tableNames + CapacityStorageSchema.tableNames + ExperimentStorageSchema.tableNames + BodyCompositionStorageSchema.tableNames
     }
 
     static func validateRequiredTables(in snapshot: StorageSchemaSnapshot) throws {

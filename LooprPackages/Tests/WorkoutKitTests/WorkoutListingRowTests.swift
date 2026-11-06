@@ -72,6 +72,18 @@ final class WorkoutListingRowTests: XCTestCase {
         XCTAssertEqual(loaded, [first.listingRow])
     }
 
+    @MainActor
+    func test_sharePreviewUsesTheRequestedWorkoutInsteadOfTheLastSelection() async throws {
+        let first = record(startedAt: Date(timeIntervalSince1970: 100), distances: [1, 2])
+        let second = record(startedAt: Date(timeIntervalSince1970: 200), distances: [1, 2, 3])
+        let controller = WorkoutSessionController(store: InMemoryWorkoutStore(workouts: [first, second]))
+        _ = try await controller.select(id: second.id)
+        let model = WorkoutViewModel(controller: controller)
+        let preview = try await model.makeSharePreview(id: first.id)
+        XCTAssertEqual(preview.id, first.id)
+        XCTAssertEqual(preview.duration, first.duration)
+    }
+
     func test_listSectionsCallOnlyThisCalendarWeekThisWeek() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!
@@ -84,10 +96,24 @@ final class WorkoutListingRowTests: XCTestCase {
         let sections = WorkoutListSections(workouts: [monday, lastSunday, lastMonth], now: now, calendar: calendar)
         XCTAssertEqual(sections.thisWeek, [monday])
         XCTAssertEqual(sections.earlier, [lastSunday, lastMonth])
-        XCTAssertEqual(sections.headerMeta, "1 THIS WEEK")
+        XCTAssertEqual(sections.headerMeta, "1 this week")
         XCTAssertEqual(
             WorkoutListSections(workouts: [lastMonth], now: now, calendar: calendar).headerMeta,
-            "NO WORKOUTS THIS WEEK"
+            "No workouts this week"
         )
+    }
+
+    func test_listSectionsRunNewestFirst() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        calendar.firstWeekday = 2
+        let now = Date(timeIntervalSince1970: 1_700_136_000)
+        let monday = record(startedAt: now.addingTimeInterval(-3 * 86_400 + 3_600), distances: [])
+        let wednesday = record(startedAt: now.addingTimeInterval(-86_400), distances: [])
+        let lastMonth = record(startedAt: now.addingTimeInterval(-40 * 86_400), distances: [])
+        let lastSunday = record(startedAt: now.addingTimeInterval(-4 * 86_400), distances: [])
+        let sections = WorkoutListSections(workouts: [monday, lastMonth, wednesday, lastSunday], now: now, calendar: calendar)
+        XCTAssertEqual(sections.thisWeek, [wednesday, monday])
+        XCTAssertEqual(sections.earlier, [lastSunday, lastMonth])
     }
 }

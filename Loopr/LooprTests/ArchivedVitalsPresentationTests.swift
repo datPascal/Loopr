@@ -1,20 +1,27 @@
 import AnalyticsKit
 import DesignSystem
 import Foundation
+import StorageKit
 import SwiftUI
 import Testing
 @testable import Loopr
 
 struct ArchivedVitalsPresentationTests {
     @Test @MainActor
-    func metricLinksDoNotOpenArchivedVitals() {
+    func catalogLinksOpenImportedReadingsWithoutEnablingBandOxygen() {
+        var opened: MetricDetailRoute?
         let link = MetricDetailNavigation.link(
             provider: FixtureMetricHistoryProvider(),
-            route: Binding<MetricDetailRoute?>.constant(nil)
+            route: Binding(get: { opened }, set: { opened = $0 })
         )
-        #expect(!link.supports(LooprMetricLinkID.oxygenSaturation))
-        #expect(link.supports(LooprMetricLinkID.skinTemperatureDeviation))
-        #expect(link.supports(LooprMetricLinkID.stress))
+        for key in MetricKey.allCases {
+            #expect(link.supports(key.rawValue))
+            link.open(key.rawValue)
+            #expect(opened?.key == key)
+        }
+        #expect(!link.supports("unknown-metric"))
+        #expect(MetricKey.oxygenSaturation.presentation.availability == .importedOnly)
+        #expect(MetricKey.oxygenSaturation.historySourcePreference == [.whoopExport, .appleHealth])
     }
 
     @Test

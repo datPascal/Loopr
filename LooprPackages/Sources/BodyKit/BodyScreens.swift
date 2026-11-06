@@ -13,14 +13,22 @@ public enum BodyRoute: Hashable, Sendable, CaseIterable {
 
 public struct BodyScreen: View {
     @Environment(\.bodyAppleHealthVO2Max) private var appleHealthVO2Max
+    @Environment(\.bodyLogSummary) private var logSummary
+    @Environment(\.bodyOpenLog) private var openLog
+    @Environment(\.looprMeasurementSystem) private var measurementSystem
+    @Environment(\.looprAreaTrend) private var areaTrend
     /// The shared day, when the app provides one. The header then names that
     /// day and carries the day navigator.
     @Environment(\.looprDayNavigation) private var dayNavigation
     @ObservedObject private var viewModel: BodyViewModel
     private let route: (BodyRoute) -> Void
+    private let focus: BodyScreenFocus
 
-    public init(viewModel: BodyViewModel, route: @escaping (BodyRoute) -> Void = { _ in }) {
+    /// - Parameter focus: Data opens Strain and Body as two pages from one model (Data ICP R1). `.all` keeps the
+    ///   combined page for hosts that still want it.
+    public init(viewModel: BodyViewModel, focus: BodyScreenFocus = .all, route: @escaping (BodyRoute) -> Void = { _ in }) {
         self.viewModel = viewModel
+        self.focus = focus
         self.route = route
     }
 
@@ -61,6 +69,14 @@ public struct BodyScreen: View {
             } else {
                 BodyStateSurface(state: .noRecords)
             }
+            // Weight is logged by hand or read from Apple Health, so a day without band data still opens the log.
+            if openLog != nil {
+                BodyCompositionSection(composition: BodyCompositionRows.make(
+                    BodyCompositionContext(weight: nil, height: nil, bodyFat: nil, state: .absent, source: "Your profile"),
+                    log: logSummary, system: measurementSystem))
+                    .padding(.horizontal, LooprSpacing.screenGutter)
+                    .padding(.top, LooprSpacing.lg)
+            }
         case .failed:
             BodyStateSurface(state: .recoverableError)
         case .content:
@@ -84,26 +100,29 @@ public struct BodyScreen: View {
         let cardioAge = BodyDaySnapshot.cardioAgePresentation(for: snapshot.cardioAge ?? fitness?.resolution?.cardioAge)
 
         VStack(alignment: .leading, spacing: LooprSpacing.tabSection) {
-            switch hero.state {
-            case .measured:
-                BodyStrainHeroView(hero: hero, isToday: isToday, showsSentence: history != nil,
-                                   usualDelta: hero.usualDelta(history: history, anchorIsToday: isToday))
-            case .needsAge:
-                if let prompt {
-                    BodyProfilePromptCard(prompt: prompt)
+            if focus.showsStrain {
+                switch hero.state {
+                case .measured:
+                    BodyStrainHeroView(hero: hero, isToday: isToday, showsSentence: history != nil,
+                                       usualDelta: hero.usualDelta(history: history, anchorIsToday: isToday))
+                case .needsAge:
+                    if let prompt {
+                        BodyProfilePromptCard(prompt: prompt)
+                            .padding(.horizontal, LooprSpacing.screenGutter)
+                            .padding(.top, LooprSpacing.md)
+                    }
+                case .missing(let reason):
+                    BodyMissingStrainRow(reason: reason)
                         .padding(.horizontal, LooprSpacing.screenGutter)
                         .padding(.top, LooprSpacing.md)
                 }
-            case .missing(let reason):
-                BodyMissingStrainRow(reason: reason)
-                    .padding(.horizontal, LooprSpacing.screenGutter)
-                    .padding(.top, LooprSpacing.md)
             }
-
             VStack(alignment: .leading, spacing: LooprSpacing.tabSection) {
+                // Data's range picker and chart come right after the hero (Data ICP round 2).
+                if focus != .all, let areaTrend { areaTrend }
                 // Everything built on strain waits with the prompt instead of
                 // showing its own empty state.
-                if prompt == nil, let history {
+                if focus.showsStrain, prompt == nil, let history {
                     let week = BodyStrainWeek.days(history: history, anchorIsToday: isToday)
                     BodyStrainWeekSection(days: week)
                     let end = BodyStrainWeek.lastCompleteDay(anchor: history.anchor, anchorIsToday: isToday)
@@ -111,29 +130,37 @@ public struct BodyScreen: View {
                     BodyTrainingLoadCard(state: load, points: BodyTrainingLoad.trend(history: history, endingOn: end, days: 14)) { route(.load) }
                 }
 
-                if let zones = BodyZoneBar.make(snapshot.zoneMinutes) {
+                if focus.showsStrain, let zones = BodyZoneBar.make(snapshot.zoneMinutes) {
                     BodyZoneSection(bar: zones, isToday: isToday)
                 }
 
                 let activity = BodyActivityRow.rows(snapshot: snapshot, history: history, anchorIsToday: isToday)
-                if !activity.isEmpty {
+                if focus.showsStrain, !activity.isEmpty {
                     BodyActivitySection(rows: activity)
                 }
 
-                BodySection(title: "Cardio fitness") {
-                    BodyCardioFitnessCard(presentation: fitness?.presentation ?? BodyCardioFitnessPresenter.empty)
+                if focus.showsBody {
+                    BodyCompositionSection(composition: BodyCompositionRows.make(snapshot.composition, log: logSummary, system: measurementSystem))
+
+                    // On Data the VO₂max chart above reads the same history as the Body tile. The Apple Health card
+                    // stays only when it has a reading, so the page never says "needs three readings" under a VO₂max
+                    // the tile shows (Data ICP R2-VET-05, R2-DES-06).
+                    if focus == .all || areaTrend == nil || fitness != nil {
+                        BodySection(title: "Cardio fitness") {
+                            BodyCardioFitnessCard(presentation: fitness?.presentation ?? BodyCardioFitnessPresenter.empty)
+                        }
+                    }
                 }
 
-                // Both ages show, locked with what is missing, rather than
-                // hiding until a number exists. Cardio Age comes only from
-                // Apple Health or a lab test, never from the estimate above.
-                BodyAgeSection(
-                    cardio: BodyAgeLock.cardio(snapshot: snapshot, presentation: cardioAge),
-                    loopr: BodyAgeLock.loopr(presentation: snapshot.looprAgePresentation),
-                    route: route
-                )
-
-                BodyCompositionSection(composition: BodyCompositionRows.make(snapshot.composition))
+                // The combined page keeps both ages, locked with what is missing. Data's pages leave them to the age
+                // ruler, which already shows Cardio Age; a locked row beside a pin read as a contradiction (Data ICP R1).
+                if focus == .all {
+                    BodyAgeSection(
+                        cardio: BodyAgeLock.cardio(snapshot: snapshot, presentation: cardioAge),
+                        loopr: BodyAgeLock.loopr(presentation: snapshot.looprAgePresentation),
+                        route: route
+                    )
+                }
             }
             .padding(.horizontal, LooprSpacing.screenGutter)
         }
@@ -159,7 +186,7 @@ public struct BodyScreen: View {
 
     private var header: LooprTabHeaderContent {
         LooprTabHeaderContent(
-            title: "Body",
+            title: focus.title,
             accent: .strain,
             dayPhrase: dayNavigation.map(LooprHeaderMeta.dayPhrase) ?? headerMeta,
             freshness: .sync(lastSync: dayNavigation?.lastSyncedAt, now: dayNavigation?.now),
@@ -177,7 +204,7 @@ public struct BodyScreen: View {
     private var headerMeta: String {
         guard let day = viewModel.snapshot?.day,
               let formattedDate = day.bodyHeaderDate else {
-            return "LOAD & OUTPUT"
+            return "Load and output"
         }
         return "\(formattedDate) · LOAD & OUTPUT"
     }
@@ -212,25 +239,31 @@ public struct BodyAgeScreen: View {
     public var body: some View {
         let shown = resolvedPresentation
         ScrollView {
-            if title == "Loopr Age" {
-                LooprAgeDetailContent(
-                    presentation: presentation,
-                    result: looprAge
-                )
-            } else if shown.isAvailable {
-                BodyAgeCard(
-                    title: title,
-                    presentation: shown,
-                    accent: .heart
-                )
-                .padding(.horizontal, LooprSpacing.screenGutter)
-                .padding(.top, LooprSpacing.md)
-                .padding(.bottom, LooprSpacing.tabBarClearance)
-            } else {
-                BodyCardioAgeLockedContent(presentation: shown, requirements: requirements)
+            VStack(alignment: .leading, spacing: 0) {
+                if title == "Loopr Age" {
+                    LooprAgeDetailContent(
+                        presentation: presentation,
+                        result: looprAge
+                    )
+                } else if shown.isAvailable {
+                    BodyAgeCard(
+                        title: title,
+                        presentation: shown,
+                        accent: .heart
+                    )
+                    .padding(.horizontal, LooprSpacing.screenGutter)
+                    .padding(.top, LooprSpacing.md)
+                } else {
+                    BodyCardioAgeLockedContent(presentation: shown, requirements: requirements)
+                        .padding(.horizontal, LooprSpacing.screenGutter)
+                        .padding(.top, LooprSpacing.md)
+                }
+                LooprText(LooprMedicalLine.text, style: .caption, color: .inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, LooprSpacing.screenGutter)
                     .padding(.top, LooprSpacing.md)
                     .padding(.bottom, LooprSpacing.tabBarClearance)
+                    .accessibilityIdentifier("body-age-screen-not-medical")
             }
         }
         .background(Color.loopr(.background).ignoresSafeArea())
@@ -265,7 +298,6 @@ private struct LooprAgeDetailContent: View {
                 LooprAgeChangeCard()
             }
         }
-        .padding(.bottom, LooprSpacing.tabBarClearance)
     }
 }
 
@@ -276,7 +308,7 @@ private struct LooprAgeHero: View {
     var body: some View {
         SpectralLens(
             value: value,
-            caption: "LOOPR AGE",
+            caption: "Loopr age",
             accent: .brand,
             diameter: 184
         ) {
@@ -285,7 +317,7 @@ private struct LooprAgeHero: View {
                     Image(systemName: statusSymbol)
                         .font(.system(size: 12, weight: .semibold))
                         .accessibilityHidden(true)
-                    Text(statusLabel.uppercased())
+                    Text(statusLabel.looprLabelCased)
                         .looprTypography(.confidence)
                 }
                 .foregroundStyle(Color.loopr(statusColor))
@@ -350,14 +382,14 @@ private struct LooprAgeComparisonCard: View {
             VStack(alignment: .leading, spacing: LooprSpacing.md) {
                 LooprText("AGE COMPARISON", style: .sectionLabel, color: .inkSecondary)
                 HStack(spacing: 0) {
-                    ageColumn(label: "YOUR AGE", value: "\(result.realAgeYears)")
+                    ageColumn(label: "Your age", value: "\(result.realAgeYears)")
                     Rectangle()
                         .fill(Color.loopr(.divider))
                         .frame(width: 1, height: 48)
                         .padding(.horizontal, LooprSpacing.lg)
                         .accessibilityHidden(true)
                     ageColumn(
-                        label: "LOOPR AGE",
+                        label: "Loopr age",
                         value: result.looprAgeYears.map(String.init) ?? "\u{2014}",
                         accent: result.looprAgeYears == nil ? .inkMuted : .brand
                     )
@@ -390,7 +422,7 @@ private struct LooprAgeCoverageCard: View {
     var body: some View {
         LooprSurface {
             VStack(alignment: .leading, spacing: LooprSpacing.sm) {
-                LooprText("YOUR DATA", style: .sectionLabel, color: .inkSecondary)
+                LooprText("Your data", style: .sectionLabel, color: .inkSecondary)
 
                 HStack(alignment: .firstTextBaseline) {
                     LooprText(coverageTitle, style: .cardTitle)
@@ -457,7 +489,7 @@ private struct LooprAgeMethodCard: View {
     var body: some View {
         LooprSurface {
             VStack(alignment: .leading, spacing: LooprSpacing.sm) {
-                LooprText("HOW IT WORKS", style: .sectionLabel, color: .inkSecondary)
+                LooprText("How it works", style: .sectionLabel, color: .inkSecondary)
                 LooprText(
                     "Built from long-term data",
                     style: .cardTitle
@@ -482,7 +514,7 @@ private struct LooprAgeFactorsCard: View {
     var body: some View {
         LooprSurface {
             VStack(alignment: .leading, spacing: 0) {
-                LooprText("WHAT SHAPES IT", style: .sectionLabel, color: .inkSecondary)
+                LooprText("What shapes it", style: .sectionLabel, color: .inkSecondary)
                     .padding(.bottom, LooprSpacing.xs)
 
                 factorRow(
@@ -716,6 +748,26 @@ private extension DayIdentity {
             return nil
         }
 
-        return LooprDateFormatterCache.string(from: date, format: "EEE d MMM", calendar: calendar).uppercased()
+        return LooprDateFormatterCache.string(from: date, format: "EEE d MMM", calendar: calendar).looprLabelCased
+    }
+}
+
+/// Which part of the day's body page a host shows.
+public enum BodyScreenFocus: Sendable, Equatable {
+    /// Strain, recovery beside it, training load, zones and activity.
+    case strain
+    /// Weight and body composition, then cardio fitness.
+    case body
+    /// Everything on one page, with the locked ages.
+    case all
+
+    var showsStrain: Bool { self != .body }
+    var showsBody: Bool { self != .strain }
+
+    public var title: String {
+        switch self {
+        case .strain: "Strain"
+        case .body, .all: "Body"
+        }
     }
 }

@@ -138,14 +138,14 @@ final class LooprScreenshotCaptureUITests: XCTestCase {
     @MainActor
     private func openSettings(_ app: XCUIApplication) {
         XCTAssertTrue(element(app, "today-screen").waitForExistence(timeout: 10))
-        let settingsButton = app.buttons["open-settings"].firstMatch
-        XCTAssertTrue(settingsButton.waitForExistence(timeout: 5))
-        tapWhenHittable(settingsButton, in: app)
+        XCTAssertTrue(app.openLooprSettings())
         XCTAssertTrue(element(app, "settings-modal").waitForExistence(timeout: 10))
     }
 
     @MainActor
     private func selectTab(_ app: XCUIApplication, _ tab: String, root identifier: String) {
+        if ["Sleep", "Heart", "Body", "Workouts"].contains(tab) { _ = app.openLooprArea(tab); return }
+
         for _ in 0..<6 {
             let tabBar = app.tabBars.firstMatch
             let tabButton = tabBar.buttons[tab].firstMatch

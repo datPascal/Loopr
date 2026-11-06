@@ -1,9 +1,10 @@
 import Foundation
+import WorkoutKit
 
-/// Route recording is intentionally fail-closed.  This is the exact DEC-03
-/// eligibility list; an activity outside it never starts location services.
+/// Route recording is intentionally fail-closed.  This is the exact eligibility
+/// list; an activity outside it never starts location services.
 public enum RouteActivity: String, CaseIterable, Codable, Sendable {
-    case run, cycle, walk
+    case run, cycle, walk, hike
     public var isEligible: Bool { true }
 }
 
@@ -65,7 +66,9 @@ public struct RoutePoint: Codable, Equatable, Sendable {
     }
 
     public var isFinite: Bool {
-        latitude.isFinite && longitude.isFinite && horizontalAccuracy.isFinite &&
+        timestamp.timeIntervalSinceReferenceDate.isFinite &&
+            (altitude == nil || altitude!.isFinite) &&
+            latitude.isFinite && longitude.isFinite && horizontalAccuracy.isFinite &&
             latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180
     }
 }
@@ -103,8 +106,11 @@ public struct RouteFilter: Sendable {
         if point.timestamp == previous.timestamp,
            point.latitude == previous.latitude,
            point.longitude == previous.longitude { return false }
+        // A signal lost for two minutes comes back further away than one jump. Time passed earns its own allowance,
+        // or every later point would be measured against the old one and refused, and the route would end there.
         let jump = RouteMath.distanceMeters(from: previous, to: point)
-        return jump <= configuration.maximumJumpMeters
+        let elapsed = point.timestamp.timeIntervalSince(previous.timestamp)
+        return jump <= max(configuration.maximumJumpMeters, elapsed * configuration.maximumSpeedMetersPerSecond)
     }
 }
 
@@ -238,7 +244,7 @@ public typealias RouteParentFinalizer = @Sendable (String) async -> Void
 /// Owns the eligible-active-workout gate, filtering, buffering, and recovery.
 /// A route is never reconstructed after the workout ended.
 public actor RouteRecorder {
-    public let store: any RouteStore
+    private let store: any RouteStore
     private let filter: RouteFilter
     private let location: any LocationStartGate
     private let parentFinalizer: RouteParentFinalizer
@@ -248,25 +254,39 @@ public actor RouteRecorder {
     private var pendingGap = false
     private var permissionFinalized = false
     private var interruptionTask: Task<Void, Never>?
+    private var locationAttempt: UUID?
+    private var mutationActive = false
+    private var mutationWaiters: [CheckedContinuation<Void, Never>] = []
 
     public init(store: any RouteStore = InMemoryRouteStore(), filter: RouteFilter = .init(), location: any LocationStartGate = NoopLocationStartGate(), parentFinalizer: @escaping RouteParentFinalizer = { _ in }) {
         self.store = store; self.filter = filter; self.location = location; self.parentFinalizer = parentFinalizer
     }
 
+    private func acquireMutation() async throws {
+        try Task.checkCancellation()
+        if mutationActive { await withCheckedContinuation { mutationWaiters.append($0) } }
+        else { mutationActive = true }
+        do { try Task.checkCancellation() }
+        catch { releaseMutation(); throw error }
+    }
+
+    private func releaseMutation() {
+        if mutationWaiters.isEmpty { mutationActive = false }
+        else { mutationWaiters.removeFirst().resume() }
+    }
+
     public func currentState() -> RouteRecorderState { state }
     public func currentRoute() -> RouteRecord? { route }
-    public func setPermission(_ value: RoutePermission) { permission = value; if value == .denied { state = .permissionDenied } }
+    public func setPermission(_ value: RoutePermission) {
+        permission = value
+        if value == .denied { locationAttempt = nil; state = .permissionDenied }
+    }
 
-    /// Lets an app adapter forward a lifecycle event directly when it does not
-    /// expose an `events()` stream.  The same handler is used by the injected
-    /// stream monitor, keeping interruption semantics deterministic.
     public func handle(_ event: LocationGateEvent) async {
+        guard !Task.isCancelled else { return }
         switch event {
         case .interruptionBegan:
-            guard route != nil else { return }
-            pendingGap = true
-            state = .suspended
-            await location.stop()
+            try? await markGPSUnavailable()
         case .interruptionEnded:
             guard route != nil, state == .suspended else { return }
             try? await resume()
@@ -276,72 +296,98 @@ public actor RouteRecorder {
         }
     }
 
-    /// Marks a location-stream interruption without manufacturing a point at
-    /// the gap boundary.  The next accepted point starts a new polyline.
+    /// The next accepted point starts a new polyline after a GPS interruption.
     public func markGPSUnavailable() async throws {
-        guard route != nil else { throw RouteError.noActiveEligibleWorkout }
+        try await acquireMutation()
+        defer { releaseMutation() }
+        guard route?.completed == false, state == .recording || state == .suspended else {
+            throw RouteError.noActiveEligibleWorkout
+        }
+        locationAttempt = nil
         pendingGap = true
         state = .suspended
         await location.stop()
     }
 
-    /// Permission denial ends the parent workout through its typed finalizer;
-    /// this recorder only persists the route tail and never owns the workout.
     public func denyPermissionAndFinalizeParent() async throws {
-        guard let route else { throw RouteError.noActiveEligibleWorkout }
-        permission = .denied
-        state = .permissionDenied
-        pendingGap = true
+        let workoutID = try await stopForPermissionDenial()
+        // The parent can call finish() to persist the route tail. Do not hold
+        // the recorder's mutation gate while invoking that callback.
+        if let workoutID { await parentFinalizer(workoutID) }
+    }
+
+    private func stopForPermissionDenial() async throws -> String? {
+        try await acquireMutation()
+        defer { releaseMutation() }
+        guard let route, !route.completed else { throw RouteError.noActiveEligibleWorkout }
+        permission = .denied; state = .permissionDenied; pendingGap = true
+        locationAttempt = nil
+        // This can run in the event reader itself. Cancelling that task here
+        // would also cancel the parent's finalization callback.
         await location.stop()
-        guard !permissionFinalized else { return }
+        guard !permissionFinalized else { return nil }
         permissionFinalized = true
-        await parentFinalizer(route.workoutID)
+        return route.workoutID
     }
 
     @discardableResult
     public func start(workoutID: String, activity: RouteActivity?, permission: RoutePermission? = nil) async throws -> RouteRecord {
-        if let permission { self.permission = permission }
-        guard let activity else { state = .ineligible; throw RouteError.noActiveEligibleWorkout }
-        guard !workoutID.isEmpty else { state = .ineligible; throw RouteError.noActiveEligibleWorkout }
-        // `.notRequested` means Core Location has not been asked yet. Failing
-        // here would kill the first recording before the system prompt could
-        // appear, so only a known denial fails fast and the location gate
-        // decides the rest.
-        guard self.permission != .denied else { state = .permissionDenied; throw RouteError.permissionDenied }
-        let existing = try await store.route(workoutID: workoutID)
-        if existing?.completed == true { state = .idle; throw RouteError.routeAlreadyCompleted }
-        let next = existing ?? RouteRecord(workoutID: workoutID, activity: activity)
-        route = next; pendingGap = existing != nil && !next.points.isEmpty; permissionFinalized = false; state = .recording
-        do {
-            try await location.start()
-        } catch let error as LocationGateError {
-            switch error {
-            case .permissionDenied:
-                state = .permissionDenied
-                throw RouteError.permissionDenied
-            case .interrupted:
-                state = .suspended
-                pendingGap = true
-                throw RouteError.locationInterrupted
-            case .unavailable:
-                state = .suspended
-                pendingGap = true
-                throw RouteError.locationUnavailable
-            }
-        } catch {
-            state = .suspended
-            pendingGap = true
-            throw RouteError.locationUnavailable
-        }
-        startEventMonitor()
+        let (next, attempt) = try await prepareStart(workoutID: workoutID, activity: activity, permission: permission)
+        try await startLocation(attempt: attempt)
         return next
     }
 
+    private func prepareStart(workoutID: String, activity: RouteActivity?, permission: RoutePermission?) async throws -> (RouteRecord, UUID) {
+        try await acquireMutation()
+        defer { releaseMutation() }
+        if let permission { self.permission = permission }
+        guard let activity, !workoutID.isEmpty else { state = .ineligible; throw RouteError.noActiveEligibleWorkout }
+        guard self.permission != .denied else { state = .permissionDenied; throw RouteError.permissionDenied }
+        let existing = try await store.route(workoutID: workoutID)
+        guard existing?.completed != true else { state = .idle; throw RouteError.routeAlreadyCompleted }
+        let next = existing ?? RouteRecord(workoutID: workoutID, activity: activity)
+        let attempt = UUID()
+        locationAttempt = attempt
+        route = next; pendingGap = existing != nil && !next.points.isEmpty
+        permissionFinalized = false; state = .suspended
+        return (next, attempt)
+    }
+
+    /// Permission UI may suspend for a long time. Finish and deletion must be
+    /// able to stop it, so only the storage mutations hold the serial gate.
+    private func startLocation(attempt: UUID) async throws {
+        do {
+            try await location.start()
+        } catch {
+            guard locationAttempt == attempt else { throw CancellationError() }
+            locationAttempt = nil
+            pendingGap = true
+            state = .suspended
+            switch error {
+            case is CancellationError: throw CancellationError()
+            case LocationGateError.permissionDenied:
+                permission = .denied; state = .permissionDenied
+                throw RouteError.permissionDenied
+            case LocationGateError.interrupted: throw RouteError.locationInterrupted
+            default: throw RouteError.locationUnavailable
+            }
+        }
+        guard locationAttempt == attempt else { throw CancellationError() }
+        guard !Task.isCancelled else {
+            locationAttempt = nil; state = .suspended
+            await location.stop()
+            throw CancellationError()
+        }
+        permission = .authorized
+        state = .recording
+        startEventMonitor()
+    }
+
     public func append(_ point: RoutePoint, zone: Int? = nil) async throws -> Bool {
-        guard var route else { throw RouteError.noActiveEligibleWorkout }
-        guard state == .recording else { throw RouteError.noActiveEligibleWorkout }
-        let previous = route.points.last
-        guard filter.accepts(point, after: previous) else { return false }
+        try await acquireMutation()
+        defer { releaseMutation() }
+        guard var route, !route.completed, state == .recording else { throw RouteError.noActiveEligibleWorkout }
+        guard filter.accepts(point, after: route.points.last) else { return false }
         let startsAfterGap = pendingGap && !route.points.isEmpty
         if startsAfterGap { route.gapStartIndices.append(route.points.count) }
         route.points.append(point)
@@ -353,69 +399,84 @@ public actor RouteRecorder {
                 route.segments.append(RouteSegment(points: [point], zone: zone, startsAfterGap: startsAfterGap))
             }
         }
-        pendingGap = false
         route.bufferedWrites += 1
         try await store.save(route)
         self.route = route
+        pendingGap = false
         return true
     }
 
-    /// Flush is an explicit durability boundary, useful before suspension.
     public func flush() async throws -> RouteRecord {
+        try await acquireMutation()
+        defer { releaseMutation() }
+        return try await flushLocked()
+    }
+
+    private func flushLocked() async throws -> RouteRecord {
         guard let route else { throw RouteError.noActiveEligibleWorkout }
         try await store.save(route)
         return route
     }
 
     public func suspend() async throws {
+        try await acquireMutation()
+        defer { releaseMutation() }
         guard route != nil, state == .recording else { throw RouteError.noActiveEligibleWorkout }
-        pendingGap = true
-        _ = try await flush(); state = .suspended; await location.stop()
+        _ = try await flushLocked()
+        pendingGap = true; state = .suspended; locationAttempt = nil
+        await location.stop()
     }
 
     public func resume() async throws {
-        guard route != nil, state == .suspended else { throw RouteError.noActiveEligibleWorkout }
+        let attempt = try await prepareResume()
+        try await startLocation(attempt: attempt)
+    }
+
+    private func prepareResume() async throws -> UUID {
+        try await acquireMutation()
+        defer { releaseMutation() }
+        guard route?.completed == false, state == .suspended else { throw RouteError.noActiveEligibleWorkout }
         guard permission == .authorized else { state = .permissionDenied; throw RouteError.permissionDenied }
-        do {
-            try await location.start()
-            state = .recording
-            startEventMonitor()
-        } catch let error as LocationGateError {
-            switch error {
-            case .permissionDenied:
-                state = .permissionDenied
-                throw RouteError.permissionDenied
-            case .interrupted:
-                state = .suspended
-                throw RouteError.locationInterrupted
-            case .unavailable:
-                state = .suspended
-                throw RouteError.locationUnavailable
-            }
-        } catch {
-            state = .suspended
-            throw RouteError.locationUnavailable
-        }
+        let attempt = UUID()
+        locationAttempt = attempt
+        return attempt
     }
 
     @discardableResult
     public func finish() async throws -> RouteRecord {
+        try await acquireMutation()
+        defer { releaseMutation() }
         guard var route else { throw RouteError.noActiveEligibleWorkout }
-        _ = try await flush(); route.completed = true; try await store.save(route); self.route = route
-        state = .idle; stopEventMonitor(); await location.stop(); return route
+        route.completed = true
+        try await store.save(route)
+        self.route = route
+        locationAttempt = nil; state = .idle
+        stopEventMonitor()
+        await location.stop()
+        return route
     }
 
     public func recover(workoutID: String) async throws -> RouteRecord {
+        try await acquireMutation()
+        defer { releaseMutation() }
         guard let restored = try await store.route(workoutID: workoutID) else { throw RouteError.missingRoute }
-        route = restored; pendingGap = !restored.completed && !restored.points.isEmpty; state = restored.completed ? .idle : .suspended
+        locationAttempt = nil; stopEventMonitor()
+        await location.stop()
+        route = restored; pendingGap = !restored.completed && !restored.points.isEmpty
+        state = restored.completed ? .idle : .suspended
         return restored
     }
 
     @discardableResult
     public func delete(workoutID: String) async throws -> RouteDeletionReceipt {
+        try await acquireMutation()
+        defer { releaseMutation() }
         let existed = try await store.route(workoutID: workoutID) != nil || route?.workoutID == workoutID
         try await store.delete(workoutID: workoutID)
-        if route?.workoutID == workoutID { route = nil; pendingGap = false; state = .idle; stopEventMonitor(); await location.stop() }
+        if route?.workoutID == workoutID {
+            locationAttempt = nil; route = nil; pendingGap = false; state = .idle
+            stopEventMonitor(); await location.stop()
+        }
         return RouteDeletionReceipt(workoutID: workoutID, removed: existed)
     }
 
@@ -429,6 +490,7 @@ public actor RouteRecorder {
         let stream = location.events()
         interruptionTask = Task { [self] in
             for await event in stream {
+                guard !Task.isCancelled else { break }
                 await handle(event)
             }
         }
@@ -457,21 +519,24 @@ public enum RouteMath {
     }
 
     public static func splits(route: RouteRecord, everyMeters: Double = 1000) -> [RouteSplit] {
-        guard everyMeters > 0, route.points.count > 1 else { return [] }
+        guard route.points.count > 1, everyMeters.isFinite, everyMeters > 0 else { return [] }
         var output: [RouteSplit] = []
-        var distance = 0.0, next = everyMeters, segmentStart = route.points[0]
-        for (index, pair) in zip(route.points.indices.dropFirst(), zip(route.points, route.points.dropFirst())) {
-            if route.gapStartIndices.contains(index) {
-                segmentStart = pair.1
-                distance = 0
-                next = everyMeters
-                continue
-            }
-            distance += distanceMeters(from: pair.0, to: pair.1)
-            if distance >= next {
-                let duration = pair.1.timestamp.timeIntervalSince(segmentStart.timestamp)
-                output.append(RouteSplit(index: index, distanceMeters: next, duration: max(0, duration), zone: zone(at: index, route: route)))
-                next += everyMeters; segmentStart = pair.1
+        var distance = 0.0, next = everyMeters
+        var previousBoundary = route.points[0].timestamp
+        for (pointIndex, pair) in zip(route.points, route.points.dropFirst()).enumerated() {
+            guard !route.gapStartIndices.contains(pointIndex + 1) else { continue }
+            let leg = distanceMeters(from: pair.0, to: pair.1)
+            guard leg.isFinite, leg > 0 else { continue }
+            let before = distance
+            distance += leg
+            while distance >= next {
+                let fraction = (next - before) / leg
+                let boundary = pair.0.timestamp.addingTimeInterval(pair.1.timestamp.timeIntervalSince(pair.0.timestamp) * fraction)
+                output.append(RouteSplit(index: output.count + 1, distanceMeters: next,
+                    duration: max(0, boundary.timeIntervalSince(previousBoundary)),
+                    zone: zone(at: pointIndex + 1, route: route)))
+                previousBoundary = boundary
+                next += everyMeters
             }
         }
         return output
@@ -518,7 +583,8 @@ public struct RoutePrimitiveData: Equatable, Sendable {
     public let accessibilitySummary: String
 
     public init(route: RouteRecord) {
-        polylines = RouteMath.polylineSegments(route: route)
+        // A long silence is a gap too, once there are enough points to tell a line from a fixture's two.
+        polylines = route.points.count >= WorkoutPageRoute.minimumPoints ? RouteAnalysis.segments(route: route) : RouteMath.polylineSegments(route: route)
         splits = RouteMath.splits(route: route)
         zoneSegments = route.segments
         let distance = RouteMath.distanceMeters(route: route)

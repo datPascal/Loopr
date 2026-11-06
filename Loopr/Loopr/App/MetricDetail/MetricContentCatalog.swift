@@ -42,6 +42,8 @@ nonisolated enum MetricContentCatalog {
         case .strain: strain
         case .stress: stress
         case .sleepDuration: sleepDuration
+        case .sleepPerformance: sleepPerformance
+        case .sleepDebt: sleepDebt
         case .sleepEfficiency: sleepEfficiency
         case .deepSleep: deepSleep
         case .remSleep: remSleep
@@ -54,6 +56,20 @@ nonisolated enum MetricContentCatalog {
     }
 
     // MARK: - Heart
+
+    static let sleepPerformance = MetricContent(
+        definition: ["How much of your estimated sleep need you met last night."],
+        calculation: ["Loopr divides your recorded minutes asleep by your estimated sleep need, then multiplies by 100. Sleep need comes from the longer nights in your recent history, using weekends as a proxy for nights without a work alarm. The percentage stays absent until both readings exist."],
+        raises: ["More recorded sleep for the same estimated need"], lowers: ["Less recorded sleep for the same estimated need"],
+        facts: ["100% means your recorded sleep matched the estimate. A longer night can exceed 100%.", "A changed sleep-need estimate can change the percentage even when time asleep stays the same."],
+        sources: ["Loopr SleepAnalytics.sleepDebt and BandMetricSeriesMapping"], provenance: "Minutes asleep divided by estimated sleep need. Calculated on your iPhone from recorded nights.")
+
+    static let sleepDebt = MetricContent(
+        definition: ["The shortfall between your estimated sleep need and the typical length of your recent nights."],
+        calculation: ["Loopr subtracts the median length of your recent nights from its sleep-need estimate. A surplus appears as zero debt. This is a typical nightly shortfall, not a sum of every missed minute. Without enough recorded nights and a free-night estimate, debt stays absent."],
+        raises: ["A lower median sleep duration for the same estimated need"], lowers: ["A higher median sleep duration for the same estimated need"],
+        facts: ["The estimate uses recorded sleep and may change as more nights arrive.", "Zero means the recent median meets the estimate. It does not fill gaps in your sleep history."],
+        sources: ["Loopr SleepAnalytics.sleepDebt and BandMetricSeriesMapping"], provenance: "Estimated sleep need minus your recent median sleep, shown as a nightly shortfall. Calculated on your iPhone.")
 
     // CanonicalDailyAnalytics.swift:1132-1156, AnalyticsKit/Clinical/Nocturnal.swift:79-107
     static let restingHeartRate = MetricContent(

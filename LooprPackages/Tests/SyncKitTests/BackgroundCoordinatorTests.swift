@@ -21,6 +21,20 @@ private actor RecordingBackgroundDriver: BackgroundWorkDriver {
     func recordedStaleMarks() -> Int { staleMarks }
 }
 
+private actor PausedExpirationDriver: BackgroundWorkDriver {
+    private var release: CheckedContinuation<Void, Never>?
+    private(set) var actions: [BackgroundExpirationAction] = []
+    func performExpiration(_ action: BackgroundExpirationAction) async {
+        actions.append(action)
+        if actions.count == 1 {
+            await withCheckedContinuation { release = $0 }
+        }
+    }
+    func markConnectionStale() async {}
+    func isPaused() -> Bool { release != nil }
+    func resume() { release?.resume(); release = nil }
+}
+
 private final class LockedCompletionCount: @unchecked Sendable {
     private let lock = NSLock()
     private(set) var value = 0
@@ -46,6 +60,44 @@ private actor NonCooperativeGate {
 }
 
 final class BackgroundCoordinatorTests: XCTestCase {
+    func testExpirationKeepsOwnershipAfterWorkFinishesUntilCleanupEnds() async throws {
+        let coordinator = BackgroundCoordinator()
+        let driver = PausedExpirationDriver()
+        let log = BackgroundEventLog()
+        let handle = await coordinator.startBackground(kind: .processing) {
+            while !Task.isCancelled { await Task.yield() }
+            await log.append("work ended")
+        }
+        XCTAssertNotNil(handle)
+        let expiration = Task { await coordinator.expireActive(driver: driver) }
+        while !(await driver.isPaused()) { await Task.yield() }
+        while !(await log.snapshot().contains("work ended")) { await Task.yield() }
+        for _ in 0..<100 { await Task.yield() }
+
+        let overlapping = await coordinator.startBackground(kind: .restoration) {}
+        XCTAssertNil(overlapping, "Cleanup still owns the connection after the work returns")
+        let foreground = Task {
+            try await coordinator.runForeground {
+                await log.append("foreground")
+                return true
+            }
+        }
+        for _ in 0..<100 { await Task.yield() }
+        let beforeCleanup = await log.snapshot()
+        XCTAssertFalse(beforeCleanup.contains("foreground"), "Foreground must wait for expiration cleanup")
+
+        await driver.resume()
+        let expired = await expiration.value
+        XCTAssertTrue(expired)
+        let resumedForeground = try await foreground.value
+        XCTAssertTrue(resumedForeground, "Opening the app during cleanup must still revive the connection afterward")
+        let state = await coordinator.currentState()
+        XCTAssertEqual(state, .idle)
+        let next = await coordinator.startBackground(kind: .appRefresh) {}
+        XCTAssertNotNil(next)
+        await next?.cancel()
+    }
+
     func testForegroundPreemptionWaitsForBackgroundBeforeGATTWork() async throws {
         let coordinator = BackgroundCoordinator()
         let log = BackgroundEventLog()

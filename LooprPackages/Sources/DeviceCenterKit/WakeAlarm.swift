@@ -346,7 +346,7 @@ public enum WakeAlarmBandLayer: Equatable, Sendable {
         case .confirmed:
             "Your band confirmed it stored the alarm."
         case .notConfirmed:
-            "Your band took the alarm but never confirmed it. It may stay silent, so keep the phone alarm on."
+            "Loopr could not confirm the alarm on your band. Keep it nearby and try sending the alarm again."
         case .notArmed:
             "The alarm did not reach your band. Keep it close and try again."
         }

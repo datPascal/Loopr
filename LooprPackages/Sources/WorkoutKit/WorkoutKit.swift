@@ -15,6 +15,16 @@ public enum ActivityType: String, CaseIterable, Codable, Sendable {
     case cardio
     case yoga
     case hiit
+    case pilates
+    /// Stretching and mobility work.
+    case mobility
+    /// CrossFit-style sessions: a WOD with a format and a score.
+    case crossfit
+    case rowing
+    case climbing
+    /// Team and racket sports.
+    case sport
+    case dance
     case other
 
     public var displayName: String {
@@ -28,7 +38,76 @@ public enum ActivityType: String, CaseIterable, Codable, Sendable {
         case .cardio: "Cardio"
         case .yoga: "Yoga"
         case .hiit: "HIIT"
+        case .pilates: "Pilates"
+        case .mobility: "Stretching and mobility"
+        case .crossfit: "CrossFit"
+        case .rowing: "Rowing"
+        case .climbing: "Climbing"
+        case .sport: "Sport"
+        case .dance: "Dance"
         case .other: "Other"
+        }
+    }
+}
+
+public extension ActivityType {
+    /// The activities the start screen records. Strength is missing on purpose: a gym workout starts
+    /// from Train, where it logs sets, reps and weight instead of recording heart rate alone.
+    static let recordable: [ActivityType] = [.run, .cycle, .walk, .hike, .swim, .rowing, .hiit, .crossfit, .cardio,
+                                              .yoga, .pilates, .mobility, .climbing, .sport, .dance, .other]
+
+    /// "Run", "Ride", for tiles and buttons.
+    var shortName: String {
+        switch self {
+        case .run: "Run"
+        case .cycle: "Ride"
+        case .walk: "Walk"
+        case .hike: "Hike"
+        case .strength: "Gym"
+        case .swim: "Swim"
+        case .cardio: "Cardio"
+        case .yoga: "Yoga"
+        case .hiit: "HIIT"
+        case .pilates: "Pilates"
+        case .mobility: "Mobility"
+        case .crossfit: "WOD"
+        case .rowing: "Row"
+        case .climbing: "Climb"
+        case .sport: "Sport"
+        case .dance: "Dance"
+        case .other: "Other"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .run: "figure.run"
+        case .cycle: "figure.outdoor.cycle"
+        case .walk: "figure.walk"
+        case .hike: "figure.hiking"
+        case .strength: "dumbbell.fill"
+        case .swim: "figure.pool.swim"
+        case .cardio: "figure.mixed.cardio"
+        case .yoga: "figure.yoga"
+        case .hiit: "figure.highintensity.intervaltraining"
+        case .pilates: "figure.pilates"
+        case .mobility: "figure.flexibility"
+        case .crossfit: "figure.cross.training"
+        case .rowing: "figure.rower"
+        case .climbing: "figure.climbing"
+        case .sport: "figure.basketball"
+        case .dance: "figure.dance"
+        case .other: "figure.stand"
+        }
+    }
+
+    /// What Loopr records for it, in a few words.
+    var recordsCaption: String {
+        switch self {
+        case .run, .cycle, .walk, .hike: "Route, pace and heart rate"
+        case .swim: "Time and heart rate. Add your lengths after."
+        case .strength: "Sets, reps and weight"
+        default: "Heart rate and strain"
         }
     }
 }
@@ -67,7 +146,7 @@ public enum WorkoutLifecycleState: String, CaseIterable, Codable, Sendable {
     }
 }
 
-public enum WorkoutTransitionError: Error, Equatable, Sendable {
+public enum WorkoutTransitionError: Error, Equatable, Sendable, LocalizedError {
     case missingWorkout
     case illegalTransition(from: WorkoutLifecycleState, to: WorkoutLifecycleState)
     case invalidTimeRange
@@ -75,6 +154,14 @@ public enum WorkoutTransitionError: Error, Equatable, Sendable {
     case finalizationInProgress
     case liveSamplesUnavailable
     case staleLiveGeneration
+    case anotherWorkoutActive
+
+    public var errorDescription: String? {
+        if self == .anotherWorkoutActive {
+            return "Finish or discard your current workout before starting another."
+        }
+        return nil
+    }
 }
 
 public enum WorkoutRecoveryAction: String, CaseIterable, Sendable {
@@ -214,6 +301,27 @@ public struct WorkoutRecord: Codable, Equatable, Sendable, Identifiable {
     public var zoneAlertPreference: WorkoutZoneAlertPreference?
     public var zoneTargetChanges: [WorkoutZoneTargetChange]?
 
+    // What the person logged by hand (Fitness round 1). Every field is optional, so records saved
+    // before these existed decode unchanged.
+    /// A name for the session, as "Spin class" or "Bouldering".
+    public var title: String?
+    /// How hard it felt, 1 to 10, in the person's words.
+    public var effort: Int?
+    /// A distance the person typed. A measured distance stays in `samples`.
+    public var loggedDistanceMeters: Double?
+    /// An average heart rate the person typed. It is never counted as zone minutes.
+    public var typedAverageHeartRate: Int?
+    public var notes: String?
+    /// The format, movements and score of a CrossFit session.
+    public var wod: WODResult?
+    /// Pool lengths the person counted. A swim has no other way to know its distance.
+    public var lengths: Int?
+    public var poolLengthMeters: Int?
+    /// Calories read off a machine's display. Never mixed with the band's estimates.
+    public var loggedCalories: Int?
+    /// The work phases of an interval timer session.
+    public var effortWindows: [WorkoutEffortWindow]?
+
     public init(
         id: UUID,
         identity: WorkoutIdentity,
@@ -231,8 +339,22 @@ public struct WorkoutRecord: Codable, Equatable, Sendable, Identifiable {
         heartRateRecovery: TimedHeartRateRecovery? = nil,
         pauses: [WorkoutPause]? = nil,
         zoneAlertPreference: WorkoutZoneAlertPreference? = nil,
-        zoneTargetChanges: [WorkoutZoneTargetChange]? = nil
+        zoneTargetChanges: [WorkoutZoneTargetChange]? = nil,
+        title: String? = nil,
+        effort: Int? = nil,
+        loggedDistanceMeters: Double? = nil,
+        typedAverageHeartRate: Int? = nil,
+        notes: String? = nil,
+        wod: WODResult? = nil,
+        lengths: Int? = nil,
+        poolLengthMeters: Int? = nil,
+        loggedCalories: Int? = nil,
+        effortWindows: [WorkoutEffortWindow]? = nil
     ) {
+        self.lengths = lengths
+        self.poolLengthMeters = poolLengthMeters
+        self.loggedCalories = loggedCalories
+        self.effortWindows = effortWindows
         self.id = id
         self.identity = identity
         self.activity = activity
@@ -249,6 +371,12 @@ public struct WorkoutRecord: Codable, Equatable, Sendable, Identifiable {
         self.heartRateRecovery = heartRateRecovery
         self.pauses = pauses; self.zoneAlertPreference = zoneAlertPreference
         self.zoneTargetChanges = zoneTargetChanges
+        self.title = title
+        self.effort = effort
+        self.loggedDistanceMeters = loggedDistanceMeters
+        self.typedAverageHeartRate = typedAverageHeartRate
+        self.notes = notes
+        self.wod = wod
     }
 
     public var duration: TimeInterval? {
@@ -365,6 +493,8 @@ public protocol WorkoutStore: Sendable {
     func workout(identity: WorkoutIdentity) async -> WorkoutRecord?
     func all() async -> [WorkoutRecord]
     func remove(id: UUID) async
+    func removeChecked(id: UUID) async throws
+    func cacheHeartRateRecovery(_ value: TimedHeartRateRecovery, workoutID: UUID, startedAt: Date, endedAt: Date) async throws
     /// The workouts `query` covers, as list rows: see `WorkoutRecord.listingRow`.
     /// A store that keeps full records on disk can decode rows without
     /// building every sample.
@@ -372,6 +502,10 @@ public protocol WorkoutStore: Sendable {
 }
 
 public extension WorkoutStore {
+    func removeChecked(id: UUID) async throws { await remove(id: id) }
+    // Caching is optional. Durable stores override this with a conditional
+    // update; a default read/await/save could resurrect a deleted workout.
+    func cacheHeartRateRecovery(_ value: TimedHeartRateRecovery, workoutID: UUID, startedAt: Date, endedAt: Date) async throws {}
     func listingRows(_ query: WorkoutLogQuery) async -> [WorkoutRecord] {
         await all().filter { query.contains($0.startedAt ?? $0.createdAt) }.map(\.listingRow)
     }
@@ -416,6 +550,8 @@ public struct WorkoutListingRowDocument: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, identity, activity, source, state, createdAt, startedAt, endedAt
         case samples, checkpointNumber, lastCheckpointAt, finalizationStage, importedSummary, heartRateRecovery, pauses, zoneAlertPreference, zoneTargetChanges
+        case title, effort, loggedDistanceMeters, typedAverageHeartRate, notes, wod
+        case lengths, poolLengthMeters, loggedCalories, effortWindows
     }
 
     private struct DistanceProbe: Decodable {
@@ -444,7 +580,17 @@ public struct WorkoutListingRowDocument: Decodable, Sendable {
             heartRateRecovery: try container.decodeIfPresent(TimedHeartRateRecovery.self, forKey: .heartRateRecovery),
             pauses: try container.decodeIfPresent([WorkoutPause].self, forKey: .pauses),
             zoneAlertPreference: try container.decodeIfPresent(WorkoutZoneAlertPreference.self, forKey: .zoneAlertPreference),
-            zoneTargetChanges: try container.decodeIfPresent([WorkoutZoneTargetChange].self, forKey: .zoneTargetChanges)
+            zoneTargetChanges: try container.decodeIfPresent([WorkoutZoneTargetChange].self, forKey: .zoneTargetChanges),
+            title: try container.decodeIfPresent(String.self, forKey: .title),
+            effort: try container.decodeIfPresent(Int.self, forKey: .effort),
+            loggedDistanceMeters: try container.decodeIfPresent(Double.self, forKey: .loggedDistanceMeters),
+            typedAverageHeartRate: try container.decodeIfPresent(Int.self, forKey: .typedAverageHeartRate),
+            notes: try container.decodeIfPresent(String.self, forKey: .notes),
+            wod: try container.decodeIfPresent(WODResult.self, forKey: .wod),
+            lengths: try container.decodeIfPresent(Int.self, forKey: .lengths),
+            poolLengthMeters: try container.decodeIfPresent(Int.self, forKey: .poolLengthMeters),
+            loggedCalories: try container.decodeIfPresent(Int.self, forKey: .loggedCalories),
+            effortWindows: try container.decodeIfPresent([WorkoutEffortWindow].self, forKey: .effortWindows)
         )
     }
 }
@@ -465,6 +611,13 @@ public actor InMemoryWorkoutStore: WorkoutStore {
     public func save(_ workout: WorkoutRecord) {
         rowsByID[workout.id] = workout
         idByIdentity[workout.identity] = workout.id
+    }
+
+    public func cacheHeartRateRecovery(_ value: TimedHeartRateRecovery, workoutID: UUID, startedAt: Date, endedAt: Date) async throws {
+        guard var current = rowsByID[workoutID], current.state == .completed,
+              current.startedAt == startedAt, current.endedAt == endedAt else { return }
+        current.heartRateRecovery = value
+        rowsByID[workoutID] = current
     }
 
     public func workout(id: UUID) -> WorkoutRecord? { rowsByID[id] }
@@ -529,17 +682,42 @@ public actor WorkoutSessionController {
     private var selectedID: UUID?
     private var liveLease: WorkoutLiveSampleLease?
     private var liveTask: Task<Void, Never>?
+    /// Asks for the live stream again while the band refuses it. See `acquireLiveSamplesIfNeeded`.
+    private var liveRetryTask: Task<Void, Never>?
+    private let liveRetryInterval: Duration
     private var updateContinuations: [UUID: (workoutID: UUID, continuation: AsyncStream<WorkoutRecord>.Continuation)] = [:]
     private var finalizationsInProgress: Set<UUID> = []
+    private var mutationActive = false
+    private var mutationWaiters: [CheckedContinuation<Void, Never>] = []
+
+    // Actor isolation does not protect a read/modify/save transaction across
+    // store and integration awaits. Keep mutations in order; reads stay free.
+    private func acquireMutation() async throws {
+        try Task.checkCancellation()
+        if mutationActive {
+            await withCheckedContinuation { mutationWaiters.append($0) }
+        } else {
+            mutationActive = true
+        }
+        do { try Task.checkCancellation() }
+        catch { releaseMutation(); throw error }
+    }
+
+    private func releaseMutation() {
+        if mutationWaiters.isEmpty { mutationActive = false }
+        else { mutationWaiters.removeFirst().resume() }
+    }
 
     public init(
         store: any WorkoutStore,
         now: @escaping @Sendable () -> Date = Date.init,
-        liveSource: (any WorkoutLiveSampleSource)? = nil
+        liveSource: (any WorkoutLiveSampleSource)? = nil,
+        liveRetryInterval: Duration = .seconds(5)
     ) {
         self.store = store
         self.now = now
         self.liveSource = liveSource
+        self.liveRetryInterval = liveRetryInterval
     }
 
     /// A typed update stream keeps the live screen bound to the durable record
@@ -570,15 +748,31 @@ public actor WorkoutSessionController {
     }
 
     private func releaseLiveSamples() async {
+        liveRetryTask?.cancel()
+        liveRetryTask = nil
         liveTask?.cancel()
         liveTask = nil
-        await liveLease?.cancel()
+        let lease = liveLease
         liveLease = nil
+        await lease?.cancel()
     }
 
-    private func acquireLiveSamplesIfNeeded() async throws {
-        guard liveLease == nil else { return }
-        guard let liveSource else { return }
+    /// Attaches the live heart-rate stream. The workout never fails because of it: right after a reconnect
+    /// the band offloads its history and refuses live data for a while, and a run or a gym session has to
+    /// record anyway. Until the band accepts, the session records time without heart rate and asks again
+    /// every `liveRetryInterval`. A composition with no live source at all is not asked again.
+    private func acquireLiveSamplesIfNeeded() async {
+        guard liveLease == nil, liveRetryTask == nil, let liveSource else { return }
+        do {
+            try await attachLiveSamples(from: liveSource)
+        } catch WorkoutTransitionError.liveSamplesUnavailable {
+            return
+        } catch {
+            scheduleLiveRetry()
+        }
+    }
+
+    private func attachLiveSamples(from liveSource: any WorkoutLiveSampleSource) async throws {
         let generation = UUID()
         let lease = try await liveSource.acquire(generation: generation)
         liveLease = lease
@@ -590,21 +784,59 @@ public actor WorkoutSessionController {
         }
     }
 
+    private func scheduleLiveRetry() {
+        let interval = liveRetryInterval
+        liveRetryTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: interval) } catch { return }
+                guard let self, await self.retryLiveSamples() else { continue }
+                return
+            }
+        }
+    }
+
+    /// One retry. True when there is nothing left to retry: the stream attached, or the session is no longer
+    /// an active live recording.
+    private func retryLiveSamples() async -> Bool {
+        do { try await acquireMutation() } catch { return true }
+        defer { releaseMutation() }
+        guard !Task.isCancelled else { return true }
+        guard liveLease == nil, let liveSource, let id = activeID,
+              let row = await store.workout(id: id), row.source == .live, row.state == .active else {
+            liveRetryTask = nil
+            return true
+        }
+        do {
+            try await attachLiveSamples(from: liveSource)
+            liveRetryTask = nil
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// True while an active live session is still waiting for the band to allow heart rate.
+    public var isWaitingForLiveSamples: Bool { liveRetryTask != nil }
+
     /// Reattaches an active persisted session to the verified live source after
-    /// a relaunch. A missing source remains an explicit unavailable error.
+    /// a relaunch. While the band refuses live data it keeps asking in the background.
     public func reattachLiveSamples() async throws {
+        try await acquireMutation()
+        defer { releaseMutation() }
         guard let id = activeID ?? selectedID,
               let row = await store.workout(id: id),
               row.source == .live,
               row.isActive else { return }
-        try await acquireLiveSamplesIfNeeded()
+        await acquireLiveSamplesIfNeeded()
     }
 
     private func append(_ sample: WorkoutSample, generation: UUID) async throws {
+        try await acquireMutation()
+        defer { releaseMutation() }
         guard liveLease?.generation == generation else {
             throw WorkoutTransitionError.staleLiveGeneration
         }
-        try await append(sample)
+        try await appendLocked(sample)
     }
 
     public func activeWorkout() async -> WorkoutRecord? {
@@ -629,7 +861,10 @@ public actor WorkoutSessionController {
 
     @discardableResult
     public func select(id: UUID) async throws -> WorkoutRecord {
+        try await acquireMutation()
+        defer { releaseMutation() }
         guard let row = await store.workout(id: id) else { throw WorkoutTransitionError.missingWorkout }
+        if row.isActive { try await requireNoOtherActiveWorkout(id: id) }
         selectedID = id
         if row.isActive { activeID = id }
         return row
@@ -642,8 +877,16 @@ public actor WorkoutSessionController {
         sourceKey: String? = nil,
         id: UUID? = nil
     ) async throws -> WorkoutRecord {
+        try await acquireMutation()
+        defer { releaseMutation() }
         let created = now()
         let identity = WorkoutIdentity.make(activity: activity, sourceKey: sourceKey, startedAt: created, endedAt: nil)
+        if let activeID, let current = await store.workout(id: activeID),
+           current.isActive || current.state == .selectedActivity {
+            guard current.identity == identity else { throw WorkoutTransitionError.anotherWorkoutActive }
+            selectedID = current.id
+            return current
+        }
         if let existing = await store.workout(identity: identity) {
             if existing.isActive { activeID = existing.id }
             selectedID = existing.id
@@ -665,6 +908,12 @@ public actor WorkoutSessionController {
         if target == .completed || target == .discarded {
             return try await finalizeWithLease(id: id, entry: .transition(target), hooks: hooks)
         }
+        try await acquireMutation()
+        defer { releaseMutation() }
+        return try await transitionLocked(id: id, to: target)
+    }
+
+    private func transitionLocked(id: UUID, to target: WorkoutLifecycleState) async throws -> WorkoutRecord {
         guard var row = await store.workout(id: id) else { throw WorkoutTransitionError.missingWorkout }
         guard Self.isLegal(from: row.state, to: target) else {
             throw WorkoutTransitionError.illegalTransition(from: row.state, to: target)
@@ -679,16 +928,7 @@ public actor WorkoutSessionController {
         try await store.save(row)
         broadcast(row)
         if target == .active, row.source == .live {
-            do {
-                try await acquireLiveSamplesIfNeeded()
-            } catch {
-                row.state = .interruptedAndRecoverable
-                row.lastCheckpointAt = now()
-                try await store.save(row)
-                broadcast(row)
-                activeID = nil
-                throw error
-            }
+            await acquireLiveSamplesIfNeeded()
         }
         if target == .paused || target == .interruptedAndRecoverable {
             await releaseLiveSamples()
@@ -700,6 +940,8 @@ public actor WorkoutSessionController {
     /// a completed workout's target time. Configuration changes start a new span.
     @discardableResult public func configureZoneAlerts(id: UUID, preference: WorkoutZoneAlertPreference,
                                                        target: WorkoutZoneTarget?) async throws -> WorkoutRecord {
+        try await acquireMutation()
+        defer { releaseMutation() }
         guard activeID == id, var row = await store.workout(id: id), [.active, .paused].contains(row.state) else {
             throw WorkoutTransitionError.missingWorkout
         }
@@ -714,6 +956,12 @@ public actor WorkoutSessionController {
     }
 
     public func append(_ sample: WorkoutSample) async throws {
+        try await acquireMutation()
+        defer { releaseMutation() }
+        try await appendLocked(sample)
+    }
+
+    private func appendLocked(_ sample: WorkoutSample) async throws {
         guard let activeID, var row = await store.workout(id: activeID) else { throw WorkoutTransitionError.missingWorkout }
         guard [.active, .paused].contains(row.state) else { throw WorkoutTransitionError.illegalTransition(from: row.state, to: .active) }
         row.samples.append(sample)
@@ -723,6 +971,8 @@ public actor WorkoutSessionController {
 
     @discardableResult
     public func checkpoint() async throws -> WorkoutRecord {
+        try await acquireMutation()
+        defer { releaseMutation() }
         guard let activeID, var row = await store.workout(id: activeID) else { throw WorkoutTransitionError.missingWorkout }
         guard row.isActive else { throw WorkoutTransitionError.illegalTransition(from: row.state, to: .active) }
         row.checkpointNumber += 1
@@ -736,6 +986,8 @@ public actor WorkoutSessionController {
     /// It does not resume it and returns rows for the confirmation UI.
     @discardableResult
     public func recoverInterrupted() async throws -> [WorkoutRecord] {
+        try await acquireMutation()
+        defer { releaseMutation() }
         await releaseLiveSamples()
         var recovered: [WorkoutRecord] = []
         for var row in await store.all() where row.isActive {
@@ -755,11 +1007,21 @@ public actor WorkoutSessionController {
     }
 
     public func resumeRecovered(id: UUID) async throws -> WorkoutRecord {
+        try await acquireMutation()
+        defer { releaseMutation() }
         guard let row = await store.workout(id: id), row.state == .interruptedAndRecoverable else {
             throw WorkoutTransitionError.missingWorkout
         }
+        try await requireNoOtherActiveWorkout(id: id)
         activeID = id; selectedID = id
-        return try await transition(to: .active)
+        return try await transitionLocked(id: id, to: .active)
+    }
+
+    private func requireNoOtherActiveWorkout(id: UUID) async throws {
+        if let activeID, activeID != id, let current = await store.workout(id: activeID),
+           current.isActive || current.state == .selectedActivity {
+            throw WorkoutTransitionError.anotherWorkoutActive
+        }
     }
 
     @discardableResult
@@ -791,6 +1053,8 @@ public actor WorkoutSessionController {
         }
         finalizationsInProgress.insert(id)
         defer { finalizationsInProgress.remove(id) }
+        try await acquireMutation()
+        defer { releaseMutation() }
 
         guard var row = await store.workout(id: id) else {
             throw WorkoutTransitionError.missingWorkout
@@ -855,13 +1119,17 @@ public actor WorkoutSessionController {
         row.finalizationStage = .activeStateCleared
         try await store.save(row)
         broadcast(row)
-        await releaseLiveSamples()
-        if activeID == row.id { activeID = nil }
+        if activeID == row.id {
+            await releaseLiveSamples()
+            activeID = nil
+        }
         selectedID = row.id
         return row
     }
 
     public func edit(id: UUID, activity: ActivityType? = nil, startedAt: Date? = nil, endedAt: Date? = nil) async throws -> WorkoutRecord {
+        try await acquireMutation()
+        defer { releaseMutation() }
         guard var row = await store.workout(id: id) else { throw WorkoutTransitionError.missingWorkout }
         guard [.selectedActivity, .interruptedAndRecoverable, .completed].contains(row.state) else {
             throw WorkoutTransitionError.cannotEditFinalizedWorkout
@@ -880,8 +1148,10 @@ public actor WorkoutSessionController {
     }
 
     public func delete(id: UUID) async throws {
+        try await acquireMutation()
+        defer { releaseMutation() }
         guard await store.workout(id: id) != nil else { throw WorkoutTransitionError.missingWorkout }
-        await store.remove(id: id)
+        try await store.removeChecked(id: id)
         if activeID == id { await releaseLiveSamples() }
         if activeID == id { activeID = nil }
         if selectedID == id { selectedID = nil }
@@ -889,9 +1159,14 @@ public actor WorkoutSessionController {
 
     public func logManual(activity: ActivityType, startedAt: Date, endedAt: Date, id: UUID? = nil,
                           hooks: WorkoutFinalizationHooks = .init()) async throws -> WorkoutRecord {
+        try await acquireMutation()
+        defer { releaseMutation() }
         guard endedAt >= startedAt else { throw WorkoutTransitionError.invalidTimeRange }
         let identity = WorkoutIdentity.make(activity: activity, sourceKey: nil, startedAt: startedAt, endedAt: endedAt)
-        if let existing = await store.workout(identity: identity) { return existing }
+        if let existing = await store.workout(identity: identity) {
+            if existing.state == .finishing { return try await executeFinalization(row: existing, hooks: hooks) }
+            return existing
+        }
         let row = WorkoutRecord(id: id ?? UUID(), identity: identity, activity: activity, source: .manual,
                                 state: .finishing, createdAt: now(), startedAt: startedAt, endedAt: endedAt,
                                 finalizationStage: .none)
@@ -899,8 +1174,66 @@ public actor WorkoutSessionController {
         return try await executeFinalization(row: row, hooks: hooks)
     }
 
+    /// Saves a session the person typed in, with its title, effort, distance, typed heart rate, notes
+    /// or WOD score. The entry is checked first (`WorkoutLogEntry.validated`).
+    public func logManual(_ entry: WorkoutLogEntry, id: UUID? = nil,
+                          hooks: WorkoutFinalizationHooks = .init()) async throws -> WorkoutRecord {
+        let entry = try entry.validated(now: now())
+        try await acquireMutation()
+        defer { releaseMutation() }
+        let identity = WorkoutIdentity.make(activity: entry.activity, sourceKey: nil,
+                                            startedAt: entry.startedAt, endedAt: entry.endedAt)
+        if let existing = await store.workout(identity: identity) {
+            if existing.state == .finishing { return try await executeFinalization(row: existing, hooks: hooks) }
+            return existing
+        }
+        var row = WorkoutRecord(id: id ?? UUID(), identity: identity, activity: entry.activity, source: .manual,
+                                state: .finishing, createdAt: now(), startedAt: entry.startedAt, endedAt: entry.endedAt,
+                                finalizationStage: .none)
+        entry.apply(to: &row)
+        selectedID = row.id
+        return try await executeFinalization(row: row, hooks: hooks)
+    }
+
+    /// Replaces what was logged on a saved or recoverable record: activity, times and the typed details.
+    /// Measured samples stay as they are.
+    public func edit(id: UUID, entry: WorkoutLogEntry) async throws -> WorkoutRecord {
+        let entry = try entry.validated(allowingFuture: true)
+        try await acquireMutation()
+        defer { releaseMutation() }
+        guard var row = await store.workout(id: id) else { throw WorkoutTransitionError.missingWorkout }
+        guard [.selectedActivity, .interruptedAndRecoverable, .completed].contains(row.state) else {
+            throw WorkoutTransitionError.cannotEditFinalizedWorkout
+        }
+        if entry.startedAt != row.startedAt || entry.endedAt != row.endedAt { row.heartRateRecovery = nil }
+        row.activity = entry.activity
+        row.startedAt = entry.startedAt
+        row.endedAt = entry.endedAt
+        entry.apply(to: &row)
+        try await store.save(row)
+        broadcast(row)
+        selectedID = id
+        return row
+    }
+
+    /// Sets or clears how hard a finished workout felt. Nothing else on the record changes.
+    @discardableResult
+    public func setEffort(id: UUID, effort: Int?) async throws -> WorkoutRecord {
+        try await acquireMutation()
+        defer { releaseMutation() }
+        guard var row = await store.workout(id: id) else { throw WorkoutTransitionError.missingWorkout }
+        guard row.state == .completed else { throw WorkoutTransitionError.cannotEditFinalizedWorkout }
+        if let effort, !WorkoutLogEntry.effortRange.contains(effort) { throw WorkoutLogError.effortOutOfRange }
+        row.effort = effort
+        try await store.save(row)
+        broadcast(row)
+        return row
+    }
+
     public func reconcile(_ candidate: WorkoutRecord,
                           hooks: WorkoutFinalizationHooks = .init()) async throws -> WorkoutRecord {
+        try await acquireMutation()
+        defer { releaseMutation() }
         if let existing = await store.workout(identity: candidate.identity) {
             var merged = existing
             if merged.samples.isEmpty { merged.samples = candidate.samples }
@@ -910,6 +1243,7 @@ public actor WorkoutSessionController {
             try await store.save(merged)
             broadcast(merged)
             selectedID = merged.id
+            if merged.state == .finishing { return try await executeFinalization(row: merged, hooks: hooks) }
             return merged
         }
         var pending = candidate
@@ -956,13 +1290,18 @@ public struct WorkoutMiniPlayer: Equatable, Sendable {
     }
 }
 
-public struct DetectedWorkout: Codable, Equatable, Hashable, Sendable {
+public struct DetectedWorkout: Codable, Equatable, Hashable, Sendable, Identifiable {
     public let detectionID: String
     public let activity: ActivityType
     public let startedAt: Date
     public let endedAt: Date
-    public init(detectionID: String, activity: ActivityType, startedAt: Date, endedAt: Date) {
+    /// The band's average heart rate over the bout, when the detector had one (R2-WOD-05). Rows saved before it
+    /// existed decode with nil.
+    public let averageHeartRate: Int?
+    public var id: String { detectionID }
+    public init(detectionID: String, activity: ActivityType, startedAt: Date, endedAt: Date, averageHeartRate: Int? = nil) {
         self.detectionID = detectionID; self.activity = activity; self.startedAt = startedAt; self.endedAt = endedAt
+        self.averageHeartRate = averageHeartRate.flatMap { $0 > 0 ? $0 : nil }
     }
 }
 
@@ -1005,6 +1344,7 @@ public enum DetectedWorkoutCandidate {
         activity: ActivityType? = nil,
         startedAt: Date? = nil,
         endedAt: Date? = nil,
+        title: String? = nil,
         id: UUID = UUID()
     ) throws -> WorkoutRecord {
         let activity = activity ?? detection.activity
@@ -1025,7 +1365,8 @@ public enum DetectedWorkoutCandidate {
             createdAt: startedAt,
             startedAt: startedAt,
             endedAt: endedAt,
-            finalizationStage: .activeStateCleared
+            finalizationStage: .activeStateCleared,
+            title: WorkoutLogEntry.cleaned(title)
         )
     }
 }

@@ -5,6 +5,7 @@ import AnalyticsKit
 import HeartKit
 import DomainKit
 import ProfileKit
+import JournalKit
 import SwiftUI
 
 /// Loads a metric's history once, for the longest range and the day the
@@ -29,7 +30,8 @@ final class MetricDetailModel {
         case loaded([MetricCorrelation])
     }
 
-    static let historyDays = 400
+    /// Two years and a margin, for the 2Y range (Data ICP R3-VET-02).
+    static let historyDays = LooprChartRange.longestDayCount + 35
 
     let key: MetricKey
     private(set) var state: LoadState = .loading
@@ -143,6 +145,8 @@ final class MetricDetailModel {
 /// trend summary, what else moved with it, and what the number means and how
 /// Loopr works it out.
 struct MetricDetailScreen: View {
+    @Environment(\.healthMetricPins) private var pins
+    @Environment(\.looprAsk) private var ask
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.metricHistoryProvider) private var provider
@@ -152,13 +156,17 @@ struct MetricDetailScreen: View {
     @State private var model: MetricDetailModel
     @State private var range: LooprChartRange = MetricDetailDebugLaunch.initialRange ?? .month
     @State private var showsFullMethod = false
+    @State private var presentsSupportingDetails = false
+    @State private var presentsMethod = false
+    private let showsSupportingDetails: Bool
     @State private var sleepNeedMinutes = SleepNeed.defaultMinutes
 
     private let key: MetricKey
     private let presentation: MetricPresentation
     private let content: MetricContent
 
-    init(key: MetricKey, model: MetricDetailModel? = nil) {
+    init(key: MetricKey, model: MetricDetailModel? = nil, showsSupportingDetails: Bool = false) {
+        self.showsSupportingDetails = showsSupportingDetails
         self.key = key
         presentation = key.presentation
         content = MetricContentCatalog.content(for: key)
@@ -201,16 +209,25 @@ struct MetricDetailScreen: View {
                                 .accessibilityIdentifier("metric-detail-hero")
                             trend
                                 .id("metric-detail-trend")
-                            if let calendar = model.recoveryCalendar, model.state == .loaded {
+                            if showsSupportingDetails, let calendar = model.recoveryCalendar, model.state == .loaded {
                                 MetricDetailSection(title: "Recovery calendar", identifier: "metric-detail-recovery-calendar") {
                                     LooprRecoveryCalendar(model: calendar, identifier: "metric-detail-recovery-calendar-grid")
                                 }
                                 .id("metric-detail-recovery-calendar")
                             }
-                            if model.state == .loaded, !model.points.isEmpty, key != .skinTemperatureDeviation {
+                            if showsSupportingDetails, model.state == .loaded, !model.points.isEmpty, key != .skinTemperatureDeviation {
                                 summary
                                     .id("metric-detail-summary")
                             }
+                            MetricHabitSection(key: key, day: LooprDays.label(LooprDays.day(containing: anchor.day, calendar: .current)))
+                            if let ask {
+                                Button { ask.run(presentation.title) } label: {
+                                    Label("Ask about " + presentation.title, systemImage: "sparkles")
+                                }
+                                .buttonStyle(LooprButtonStyle(prominent: false))
+                                .accessibilityIdentifier("metric-detail-ask")
+                            }
+                            if showsSupportingDetails {
                             if model.state == .loaded, model.latest != nil, MetricCorrelations.canCompare(key) {
                                 MetricCorrelationSection(
                                     key: key,
@@ -243,6 +260,39 @@ struct MetricDetailScreen: View {
                                 sourceContent
                             }
                             .id("metric-detail-source")
+                            } else {
+                                VStack(alignment: .leading, spacing: LooprSpacing.sm) {
+                                    LooprSectionHeader("How it's measured")
+                                    Button { presentsSupportingDetails = true } label: {
+                                        HStack(spacing: LooprSpacing.sm) {
+                                            LooprText(content.provenance, style: .prose, color: .inkSecondary)
+                                            Spacer(minLength: 0)
+                                            LooprChevron()
+                                        }
+                                        .frame(minHeight: LooprSpacing.interactiveRowHeight)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.looprPressableRow)
+                                    .accessibilityHint("Opens the calculation, trends and data sources")
+                                    .accessibilityIdentifier("metric-detail-methodology-open")
+                                    if MetricDetailMethodLink.methodID(for: key) != nil {
+                                        Button { presentsMethod = true } label: {
+                                            HStack(spacing: LooprSpacing.sm) {
+                                                LooprText(MetricDetailMethodLink.title, style: .prose, color: .inkSecondary)
+                                                Spacer(minLength: 0)
+                                                LooprChevron()
+                                            }
+                                            .frame(minHeight: LooprSpacing.interactiveRowHeight)
+                                            .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(.looprPressableRow)
+                                        .accessibilityHint(MetricDetailMethodLink.hint)
+                                        .accessibilityIdentifier(MetricDetailMethodLink.identifier)
+                                    }
+                                }
+                                .accessibilityElement(children: .contain)
+                                .accessibilityIdentifier("metric-detail-calculation")
+                            }
                         }
                         // Give each section the viewport width. A long word
                         // in a later section must not widen every card.
@@ -264,12 +314,28 @@ struct MetricDetailScreen: View {
                 }
             }
         }
-        .background(Color.loopr(.background).ignoresSafeArea())
+        .background { LooprAmbientBackground(tint: presentation.accent) }
         .navigationTitle(presentation.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.loopr(.background), for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarTitleDisplayMode(.inlineLarge)
         .accessibilityIdentifier("metric-detail-screen")
+        .navigationDestination(isPresented: $presentsSupportingDetails) {
+            MetricDetailScreen(key: key, showsSupportingDetails: true)
+        }
+        .navigationDestination(isPresented: $presentsMethod) {
+            if let id = MetricDetailMethodLink.methodID(for: key) { MethodRouteScreen(id: id) }
+        }
+        .looprAskToolbar(origin: presentation.title)
+        .toolbar {
+            if let pins {
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                ToolbarItem(placement: .topBarTrailing) {
+                    LooprHeaderActionButton(action: .init(symbol: pins.contains(key) ? "pin.fill" : "pin",
+                        label: (pins.contains(key) ? "Unpin " : "Pin ") + presentation.title,
+                        identifier: "metric-detail-pin") { pins.toggle(key) }, accent: pins.contains(key) ? .brand : .ink)
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
+        }
         .task(id: anchor) {
             if key == .sleepDuration, let sleepNeedRepository {
                 sleepNeedMinutes = SleepNeed.minutes(from: (try? await sleepNeedRepository.readGoals()) ?? [])
@@ -285,8 +351,10 @@ struct MetricDetailScreen: View {
     // MARK: Hero
 
     @ViewBuilder
+    /// The reading leads the page with no card around it: a large number in the metric's colour on the
+    /// page's glow, then what it means.
     private var hero: some View {
-        LooprSurface(emphasis: .hero(presentation.accent)) {
+        VStack(alignment: .leading, spacing: 0) {
             Group {
                 switch model.state {
                 case .loading:
@@ -309,6 +377,9 @@ struct MetricDetailScreen: View {
             }
             .transition(.opacity)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, LooprSpacing.xxs)
+        .padding(.bottom, LooprSpacing.sm)
     }
 
     private var temperatureBand: LooprBaselineBand? {
@@ -323,7 +394,7 @@ struct MetricDetailScreen: View {
         let shown = HeartVitalsPresenter.skinTemperature(vital)
         let deviation = vital?.deviation.value
         return VStack(alignment: .leading, spacing: LooprSpacing.sm) {
-            LooprText(model.anchor.isToday ? "LAST NIGHT" : model.anchor.dateText(model.anchor.day).uppercased(), style: .sectionLabel, color: .inkSecondary)
+            LooprText(model.anchor.isToday ? "Last night" : model.anchor.dateText(model.anchor.day).looprLabelCased, style: .sectionLabel, color: .inkSecondary)
             if let deviation, !deviation.likelyFitChange {
                 if deviation.trusted && !deviation.outsideUsualRange {
                     LooprText("Within your usual range", style: .title)
@@ -385,29 +456,30 @@ struct MetricDetailScreen: View {
                     heroSource
                 }
             }
-            VStack(alignment: .leading, spacing: LooprSpacing.xs) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .firstTextBaseline, spacing: LooprSpacing.sm) {
-                        heroNumber(valueText, unit: unit)
-                        recoveryBandLabel(latest.value)
-                    }
-                    VStack(alignment: .leading, spacing: LooprSpacing.xs) {
-                        heroNumber(valueText, unit: unit)
-                        recoveryBandLabel(latest.value)
-                    }
-                }
+            LooprValueText(valueText, unit: unit, valueStyle: .hero, unitStyle: .title, color: presentation.accent)
+                .minimumScaleFactor(0.5)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(heroSpokenValue(latest.value))
                 .accessibilityIdentifier("metric-detail-value")
-                if let missing = anchor.missingCaption(for: latest.date) {
-                    LooprText(missing, style: .caption, color: .inkSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("metric-detail-missing-day")
-                }
-            }
-            if let delta {
+            if let band {
+                LooprText(rangeAssessment(band, value: latest.value), style: .title, color: .inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("metric-detail-status")
+            } else if let delta {
                 heroStatus(delta)
                     .accessibilityIdentifier("metric-detail-status")
+            }
+            if showsSupportingDetails { recoveryBandLabel(latest.value) }
+            if let band {
+                VStack(alignment: .leading, spacing: LooprSpacing.xs) {
+                    LooprTypicalRangeBar(value: latest.value, typical: band.lower...band.upper, accent: presentation.accent)
+                    LooprText(usualRangeText(band), style: .caption, color: .inkSecondary)
+                        .accessibilityIdentifier("metric-detail-usual-range")
+                }
+            }
+            if let missing = anchor.missingCaption(for: latest.date) {
+                LooprText(missing, style: .caption, color: .inkSecondary)
+                    .accessibilityIdentifier("metric-detail-missing-day")
             }
             if key == .sleepDuration {
                 let difference = latest.value - sleepNeedMinutes
@@ -416,14 +488,6 @@ struct MetricDetailScreen: View {
                                        higherIsBetter: true, format: .duration, reference: "need")
                 LooprText("\(need) needed · \(delta.text)", style: .caption, color: .inkSecondary)
                     .accessibilityIdentifier("metric-detail-sleep-need")
-            }
-            if let band {
-                VStack(alignment: .leading, spacing: LooprSpacing.xs) {
-                    LooprTypicalRangeBar(value: latest.value, typical: band.lower...band.upper, accent: presentation.accent)
-                    LooprText(usualRangeText(band), style: .caption, color: .inkSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("metric-detail-usual-range")
-                }
             }
             if key == .strain, let target = model.strainTarget {
                 VStack(alignment: .leading, spacing: LooprSpacing.xs) {
@@ -437,6 +501,14 @@ struct MetricDetailScreen: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("metric-detail-strain-target")
             }
+        }
+    }
+
+    private func rangeAssessment(_ band: LooprBaselineBand, value: Double) -> String {
+        switch band.position(of: value) {
+        case .above: "Above your usual range"
+        case .below: "Below your usual range"
+        case .within: "Within your usual range"
         }
     }
 
@@ -510,12 +582,12 @@ struct MetricDetailScreen: View {
     /// The one place the page states the usual range.
     private func usualRangeText(_ band: LooprBaselineBand) -> String {
         let high = presentation.unit.hasPrefix("/") ? presentation.value(band.upper) : presentation.valueWithUnit(band.upper)
-        return "Usual \(presentation.value(band.lower)) to \(high), from your last \(LooprBaselineBand.windowDays) days"
+        return "Usual range \(presentation.value(band.lower)) to \(high)."
     }
 
     private var heroEmpty: some View {
         VStack(alignment: .leading, spacing: LooprSpacing.sm) {
-            LooprText(model.anchor.isToday ? presentation.period : model.anchor.dateText(model.anchor.day).uppercased(), style: .sectionLabel, color: .inkSecondary)
+            LooprText(model.anchor.isToday ? presentation.period : model.anchor.dateText(model.anchor.day).looprLabelCased, style: .sectionLabel, color: .inkSecondary)
             HStack(alignment: .top, spacing: LooprSpacing.sm) {
                 Image(systemName: emptySymbol)
                     .looprTypography(.title)
@@ -755,7 +827,7 @@ struct MetricDetailEyebrow: View {
     init(_ text: String) { self.text = text }
 
     var body: some View {
-        Text(text.uppercased())
+        Text(text.looprLabelCased)
             .looprTypography(.sectionLabel)
             .foregroundStyle(Color.loopr(.inkSecondary))
             .padding(.leading, LooprSpacing.xxs)
@@ -856,7 +928,7 @@ private struct MetricDetailMovers: View {
                     .frame(width: 20, height: 20)
                     .background(Color.loopr(accent).opacity(0.14), in: Circle())
                     .accessibilityHidden(true)
-                Text(title.uppercased())
+                Text(title.looprLabelCased)
                     .looprTypography(.sectionLabel)
                     .foregroundStyle(Color.loopr(.inkSecondary))
             }
@@ -903,7 +975,7 @@ private struct MetricDetailFacts: View {
             if !sources.isEmpty {
                 MetricDetailHairline()
                 VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
-                    Text("SOURCES")
+                    Text("Sources")
                         .looprTypography(.sectionLabel)
                         .foregroundStyle(Color.loopr(.inkSecondary))
                     Text(sources.joined(separator: " · "))

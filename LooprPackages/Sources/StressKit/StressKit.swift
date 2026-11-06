@@ -246,7 +246,7 @@ public struct UnavailableSpotCheckMechanism: SpotCheckMechanism {
     public func measure(duration: Duration, generation: UUID) async throws -> SpotCheckResult { throw StressError.liveUnavailable }
 }
 
-public enum StressError: Error, Equatable, Sendable { case invalidCadence, notRunning, staleGeneration, liveUnavailable, noSession }
+public enum StressError: Error, Equatable, Sendable { case invalidCadence, notRunning, staleGeneration, liveUnavailable, noSession, operationInProgress }
 
 extension StressError: LocalizedError {
     public var errorDescription: String? {
@@ -256,6 +256,7 @@ extension StressError: LocalizedError {
         case .staleGeneration: "The band connection changed. Start a new session."
         case .liveUnavailable: "A live reading is unavailable right now. Try again when your band is connected."
         case .noSession: "No breathing session is active."
+        case .operationInProgress: "Another session is in progress. Finish or stop it before starting a new one."
         }
     }
 }
@@ -302,7 +303,8 @@ public actor BreathingSessionController {
     private var samples: [LiveCardiacSample] = []
     private var historyRows: [BreathingResult] = []
     private var streamTask: Task<Void, Never>?
-    private var releasedGeneration: UUID?
+    private var pendingGeneration: UUID?
+    private var lifecycleID = UUID()
     private let bandCue: (@Sendable (BreathingCuePhase, UUID) async -> Void)?
     private var pacingTask: Task<Void, Never>?
     private var bandPacing = false
@@ -320,27 +322,25 @@ public actor BreathingSessionController {
 
     @discardableResult
     public func start(cadence breathsPerMinute: Double = 6, now: Date = Date(), id: UUID = UUID(), paceWithBand: Bool = false) async throws -> UUID {
+        try Task.checkCancellation()
         guard breathsPerMinute > 0 && breathsPerMinute <= 30 else { throw StressError.invalidCadence }
+        guard pendingGeneration == nil else { throw StressError.operationInProgress }
         if state == .running || state == .paused { return sessionID ?? id }
         if state == .interrupted {
             try await resume()
             return sessionID ?? id
         }
         let generation = UUID()
-        let stream: AsyncStream<LiveCardiacSample>
-        do {
-            stream = try await consumer.acquire(generation: generation)
-        } catch {
-            state = .ready
-            sessionID = nil
-            self.generation = nil
-            throw error
-        }
-        self.generation = generation; releasedGeneration = nil; sessionID = id; startedAt = now; cadence = breathsPerMinute; samples.removeAll(); state = .running
+        lifecycleID = UUID()
+        self.generation = generation; pendingGeneration = generation
+        sessionID = id; startedAt = now; cadence = breathsPerMinute; samples.removeAll(); state = .ready
+        let stream = try await acquireStream(generation: generation, failureState: .ready)
+        state = .running
         bandPacing = paceWithBand
         startPacing(at: now)
         streamTask = consume(stream, generation: generation)
         await hook.started(sessionID: id, cadence: breathsPerMinute)
+        try await validateStartedGeneration(generation)
         return id
     }
 
@@ -352,7 +352,10 @@ public actor BreathingSessionController {
 
     public func pause() throws { guard state == .running else { throw StressError.notRunning }; state = .paused; pacingTask?.cancel(); pacingTask = nil }
     public func resume() async throws {
+        try Task.checkCancellation()
         guard state == .paused || state == .interrupted else { throw StressError.notRunning }
+        guard pendingGeneration == nil else { throw StressError.operationInProgress }
+        lifecycleID = UUID()
         if state == .paused {
             state = .running
             startPacing(at: Date())
@@ -360,19 +363,14 @@ public actor BreathingSessionController {
         }
         guard let id = sessionID else { throw StressError.noSession }
         let newGeneration = UUID()
-        let stream: AsyncStream<LiveCardiacSample>
-        do {
-            stream = try await consumer.acquire(generation: newGeneration)
-        } catch {
-            state = .interrupted
-            throw error
-        }
         self.generation = newGeneration
-        releasedGeneration = nil
+        pendingGeneration = newGeneration
+        let stream = try await acquireStream(generation: newGeneration, failureState: .interrupted)
         state = .running
         startPacing(at: Date())
         streamTask = consume(stream, generation: newGeneration)
         await hook.started(sessionID: id, cadence: cadence)
+        try await validateStartedGeneration(newGeneration)
     }
 
     /// Ends the current live lease while retaining the partial session for an
@@ -381,8 +379,11 @@ public actor BreathingSessionController {
     public func interrupt() async throws {
         guard let sessionID else { throw StressError.noSession }
         guard state == .running || state == .paused else { throw StressError.notRunning }
-        await releaseCurrentGeneration()
+        let operation = UUID(); lifecycleID = operation
+        let oldGeneration = detachGeneration()
         state = .interrupted
+        if let oldGeneration { await consumer.release(generation: oldGeneration) }
+        guard lifecycleID == operation, self.sessionID == sessionID else { return }
         await hook.interrupted(sessionID: sessionID)
     }
 
@@ -402,21 +403,28 @@ public actor BreathingSessionController {
         }
         let result = BreathingResult(id: id, startedAt: startedAt, endedAt: now, cadence: cadence, samples: samples.count,
                                      averageHeartRate: averageHR, beforeHeartRate: first, afterHeartRate: last)
-        await releaseCurrentGeneration()
+        lifecycleID = UUID()
+        let oldGeneration = detachGeneration()
         historyRows.append(result); state = .completed; sessionID = nil; self.generation = nil; self.startedAt = nil
+        if let oldGeneration { await consumer.release(generation: oldGeneration) }
         await hook.ended(sessionID: id, result: result); return result
     }
 
     public func cancel() async throws {
         guard let id = sessionID else { throw StressError.noSession }
-        await releaseCurrentGeneration()
-        state = .cancelled; sessionID = nil; self.generation = nil; startedAt = nil; samples.removeAll(); await hook.ended(sessionID: id, result: nil)
+        lifecycleID = UUID()
+        let oldGeneration = detachGeneration()
+        state = .cancelled; sessionID = nil; startedAt = nil; samples.removeAll()
+        if let oldGeneration { await consumer.release(generation: oldGeneration) }
+        await hook.ended(sessionID: id, result: nil)
     }
 
     public func invalidateGeneration() async {
         let invalidatedSessionID = sessionID
-        await releaseCurrentGeneration()
+        lifecycleID = UUID()
+        let oldGeneration = detachGeneration()
         state = .staleGeneration; sessionID = nil; self.generation = nil; startedAt = nil; samples.removeAll()
+        if let oldGeneration { await consumer.release(generation: oldGeneration) }
         if let invalidatedSessionID {
             await hook.ended(sessionID: invalidatedSessionID, result: nil)
         }
@@ -425,18 +433,49 @@ public actor BreathingSessionController {
     private func consume(_ stream: AsyncStream<LiveCardiacSample>, generation: UUID) -> Task<Void, Never> {
         Task { [self] in
             for await sample in stream {
+                guard !Task.isCancelled else { break }
                 try? await append(sample, generation: generation)
             }
         }
     }
 
-    private func releaseCurrentGeneration() async {
+    private func detachGeneration() -> UUID? {
         pacingTask?.cancel(); pacingTask = nil
         streamTask?.cancel()
         streamTask = nil
-        guard let generation, releasedGeneration != generation else { return }
-        releasedGeneration = generation
-        await consumer.release(generation: generation)
+        let oldGeneration = generation
+        let wasPending = oldGeneration != nil && oldGeneration == pendingGeneration
+        generation = nil; pendingGeneration = nil; pacingStartedAt = nil
+        // A pending acquire owns its eventual lease until it returns. It will
+        // see the invalidated generation and release that lease itself.
+        return wasPending ? nil : oldGeneration
+    }
+
+    private func acquireStream(generation: UUID, failureState: BreathingState) async throws -> AsyncStream<LiveCardiacSample> {
+        do {
+            let stream = try await consumer.acquire(generation: generation)
+            guard self.generation == generation, !Task.isCancelled else {
+                await consumer.release(generation: generation)
+                try Task.checkCancellation()
+                throw StressError.staleGeneration
+            }
+            pendingGeneration = nil
+            return stream
+        } catch {
+            if self.generation == generation {
+                self.generation = nil; pendingGeneration = nil; state = failureState
+                if failureState == .ready { sessionID = nil; startedAt = nil }
+            }
+            throw error
+        }
+    }
+
+    private func validateStartedGeneration(_ generation: UUID) async throws {
+        if Task.isCancelled {
+            if self.generation == generation { try? await cancel() }
+            throw CancellationError()
+        }
+        guard self.generation == generation else { throw StressError.staleGeneration }
     }
 
     private func startPacing(at date: Date) {
@@ -483,7 +522,8 @@ public actor SpotCheckController {
     private let consumer: (any LiveConsumer)?
     public let history: SpotCheckHistory
     private var activeGeneration: UUID?
-    private var releasedGeneration: UUID?
+    private var operationID: UUID?
+    private var measurementTask: Task<SpotCheckResult, Error>?
 
     public init(
         mechanism: any SpotCheckMechanism,
@@ -496,29 +536,48 @@ public actor SpotCheckController {
     }
 
     public func run(duration: Duration = .seconds(60), generation: UUID = UUID()) async throws -> SpotCheckResult {
-        if let consumer {
-            _ = try await consumer.acquire(generation: generation)
-            activeGeneration = generation
-            releasedGeneration = nil
+        try Task.checkCancellation()
+        guard operationID == nil else { throw StressError.operationInProgress }
+        let operation = UUID(); operationID = operation
+        defer {
+            if operationID == operation { operationID = nil; measurementTask = nil }
         }
         do {
-            let result = try await mechanism.measure(duration: duration, generation: generation)
+            if let consumer {
+                _ = try await consumer.acquire(generation: generation)
+                guard operationID == operation, !Task.isCancelled else {
+                    await consumer.release(generation: generation)
+                    throw CancellationError()
+                }
+                activeGeneration = generation
+            }
+            try Task.checkCancellation()
+            guard operationID == operation else { throw CancellationError() }
+            let mechanism = self.mechanism
+            let task = Task { try await mechanism.measure(duration: duration, generation: generation) }
+            measurementTask = task
+            let result = try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+            try Task.checkCancellation()
+            guard operationID == operation else { throw CancellationError() }
             await releaseCurrentGeneration()
+            try Task.checkCancellation()
+            guard operationID == operation else { throw CancellationError() }
             await history.append(result)
             return result
         } catch {
-            await releaseCurrentGeneration()
+            if operationID == operation { await releaseCurrentGeneration() }
             throw error
         }
     }
 
     public func interrupt() async {
+        operationID = nil
+        measurementTask?.cancel(); measurementTask = nil
         await releaseCurrentGeneration()
     }
 
     private func releaseCurrentGeneration() async {
-        guard let generation = activeGeneration, releasedGeneration != generation else { return }
-        releasedGeneration = generation
+        guard let generation = activeGeneration else { return }
         activeGeneration = nil
         await consumer?.release(generation: generation)
     }

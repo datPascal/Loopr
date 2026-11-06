@@ -354,7 +354,7 @@ public actor HealthHistoryImporter {
     /// Returns nil when another import is already running.
     @discardableResult
     public func importHistory(now: Date) async -> HealthHistoryImportReport? {
-        guard !running, !stopped else { return nil }
+        guard !running, !stopped, !Task.isCancelled else { return nil }
         running = true
         defer { running = false }
         var report = HealthHistoryImportReport()
@@ -381,7 +381,7 @@ public actor HealthHistoryImporter {
                 guard mayImport(), mayRead(quantity) else { continue }
                 let values = HealthHistoryMapping.values(for: quantity, statistics: statistics, calendar: calendar)
                     .filter { $0.localDay <= upperDay }
-                guard !stopped else { return report }
+                guard !stopped, !Task.isCancelled else { return report }
                 let metric = HealthHistoryMapping.metric(for: quantity)
                 try store.replaceDailyValues(metric, from: HealthHistoryDay.localDay(for: start, calendar: calendar),
                                              through: upperDay, values: values)
@@ -408,7 +408,7 @@ public actor HealthHistoryImporter {
             let lowerDay = HealthHistoryDay.localDay(for: start, calendar: calendar)
             let values = HealthSleepAggregation.values(HealthSleepAggregation.nights(samples, calendar: calendar))
                 .filter { $0.localDay >= lowerDay && $0.localDay <= upperDay }
-            guard !stopped else { return report }
+            guard !stopped, !Task.isCancelled else { return report }
             for metric in HealthHistoryMetric.sleepMetrics {
                 let metricValues = values.filter { $0.metric == metric }
                 try store.replaceDailyValues(metric, from: lowerDay, through: upperDay, values: metricValues)

@@ -12,13 +12,14 @@ public struct LooprSettingsGlassButton: View {
     public var body: some View {
         Button(action: action) {
             Image(systemName: "person.crop.circle")
-                .font(.system(size: 18, weight: .medium))
+                .looprTypography(.metricValue)
                 .foregroundStyle(Color.loopr(.ink))
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
+                .frame(width: LooprSpacing.headerControlDiameter, height: LooprSpacing.headerControlDiameter)
+                .glassEffect(.regular.interactive(), in: Circle())
+                .frame(width: LooprSpacing.interactiveRowHeight, height: LooprSpacing.interactiveRowHeight)
+                .contentShape(.interaction, Rectangle())
         }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
+        .buttonStyle(.plain)
         .accessibilityLabel(spokenLabel)
         .accessibilityIdentifier("open-settings")
     }

@@ -45,6 +45,28 @@ private actor LiveSourceFixture: WorkoutLiveSampleSource {
     }
 }
 
+/// A band that refuses live data for its first `refusals` requests, as it does while it offloads history.
+private actor RefusingLiveSourceFixture: WorkoutLiveSampleSource {
+    struct Refused: Error {}
+    private var refusals: Int
+    private(set) var attempts = 0
+    private var continuation: AsyncStream<WorkoutSample>.Continuation?
+
+    init(refusals: Int) { self.refusals = refusals }
+
+    func acquire(generation: UUID) async throws -> WorkoutLiveSampleLease {
+        attempts += 1
+        if refusals > 0 { refusals -= 1; throw Refused() }
+        let (stream, continuation) = AsyncStream<WorkoutSample>.makeStream(bufferingPolicy: .bufferingNewest(16))
+        self.continuation = continuation
+        return WorkoutLiveSampleLease(generation: generation, stream: stream) { [weak self] in await self?.finishStream() }
+    }
+
+    func emit(_ sample: WorkoutSample) { _ = continuation?.yield(sample) }
+    var isAttached: Bool { continuation != nil }
+    private func finishStream() { continuation?.finish(); continuation = nil }
+}
+
 private actor WorkoutFinalizationGate {
     private var entered = false
     private var released = false
@@ -74,6 +96,88 @@ private actor WorkoutFinalizationGate {
 }
 
 final class WorkoutKitTests: XCTestCase {
+    func testConcurrentSamplesAndCheckpointsPreserveEveryUpdate() async throws {
+        let store = InMemoryWorkoutStore()
+        let controller = WorkoutSessionController(store: store)
+        let row = try await controller.start(activity: .run)
+        _ = try await controller.transition(to: .preparing)
+        _ = try await controller.transition(to: .active)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for index in 0..<100 {
+                group.addTask {
+                    try await controller.append(WorkoutSample(timestamp: Date(timeIntervalSince1970: Double(index)), heartRate: 120))
+                }
+                group.addTask { _ = try await controller.checkpoint() }
+            }
+            try await group.waitForAll()
+        }
+        let saved = await store.workout(id: row.id)
+        XCTAssertEqual(saved?.samples.count, 100)
+        XCTAssertEqual(Set(saved?.samples.map(\.timestamp) ?? []).count, 100)
+        XCTAssertEqual(saved?.checkpointNumber, 100)
+    }
+
+    func testManualFinalizationDoesNotReleaseAnotherWorkoutsLiveStream() async throws {
+        let source = LiveSourceFixture()
+        let controller = WorkoutSessionController(store: InMemoryWorkoutStore(), liveSource: source)
+        let active = try await controller.start(activity: .run)
+        _ = try await controller.transition(to: .preparing)
+        _ = try await controller.transition(to: .active)
+        _ = try await controller.logManual(activity: .walk, startedAt: Date(timeIntervalSince1970: 100), endedAt: Date(timeIntervalSince1970: 200))
+        let releases = await source.releaseCount
+        XCTAssertEqual(releases, 0)
+        let current = await controller.activeWorkout()
+        XCTAssertEqual(current?.id, active.id)
+        _ = try await controller.finish(id: active.id)
+    }
+
+    func testRetryingManualAndDetectedSavesCompletesInterruptedFinalization() async throws {
+        for manual in [true, false] {
+            let store = InMemoryWorkoutStore()
+            let controller = WorkoutSessionController(store: store)
+            let candidate = WorkoutFixtures.completedRun
+            let failingHooks = WorkoutFinalizationHooks(enqueueHealthKit: { _ in throw FinalizationFailure.injected })
+            do {
+                if manual {
+                    _ = try await controller.logManual(activity: .run, startedAt: candidate.startedAt!, endedAt: candidate.endedAt!, hooks: failingHooks)
+                } else {
+                    _ = try await controller.reconcile(candidate, hooks: failingHooks)
+                }
+                XCTFail("The injected integration failure must be reported")
+            } catch FinalizationFailure.injected {}
+            let retried: WorkoutRecord
+            if manual {
+                retried = try await controller.logManual(activity: .run, startedAt: candidate.startedAt!, endedAt: candidate.endedAt!)
+            } else {
+                retried = try await controller.reconcile(candidate)
+            }
+            XCTAssertEqual(retried.state, .completed)
+            XCTAssertEqual(retried.finalizationStage, .activeStateCleared)
+            let rows = await store.all()
+            XCTAssertEqual(rows.count, 1)
+        }
+    }
+
+    func testAnotherStartCannotStealAnActiveWorkoutOrItsLiveStream() async throws {
+        let source = LiveSourceFixture()
+        let store = InMemoryWorkoutStore()
+        let controller = WorkoutSessionController(store: store, liveSource: source)
+        let active = try await controller.start(activity: .run, sourceKey: "first")
+        _ = try await controller.transition(to: .preparing)
+        _ = try await controller.transition(to: .active)
+        do {
+            _ = try await controller.start(activity: .cycle, sourceKey: "second")
+            XCTFail("An active workout must retain ownership")
+        } catch { XCTAssertEqual(error as? WorkoutTransitionError, .anotherWorkoutActive) }
+        let current = await controller.activeWorkout()
+        let rows = await store.all()
+        let releases = await source.releaseCount
+        XCTAssertEqual(current?.id, active.id)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(releases, 0)
+        _ = try await controller.finish()
+    }
+
     func testCatalogHasOneCanonicalActivityList() {
         XCTAssertTrue(ActivityType.allCases.contains(.run))
         XCTAssertEqual(Set(ActivityType.allCases).count, ActivityType.allCases.count)
@@ -510,6 +614,68 @@ final class WorkoutKitTests: XCTestCase {
         _ = try await controller.finish(id: id)
         let releaseCount = await source.releaseCount
         XCTAssertEqual(releaseCount, 1)
+    }
+
+    /// Right after a reconnect the band refuses live data. The workout starts anyway, and heart rate joins
+    /// when the band allows it.
+    func testAWorkoutStartsWhileTheBandRefusesLiveDataAndPicksUpHeartRateLater() async throws {
+        let source = RefusingLiveSourceFixture(refusals: 2)
+        let store = InMemoryWorkoutStore()
+        let controller = WorkoutSessionController(store: store, liveSource: source, liveRetryInterval: .milliseconds(20))
+        let started = try await controller.start(activity: .strength)
+        _ = try await controller.transition(to: .preparing)
+        let active = try await controller.transition(to: .active)
+        XCTAssertEqual(active.state, .active)
+        let waiting = await controller.isWaitingForLiveSamples
+        XCTAssertTrue(waiting)
+
+        var attached = false
+        for _ in 0..<200 where !attached {
+            try await Task.sleep(for: .milliseconds(10))
+            attached = await source.isAttached
+        }
+        XCTAssertTrue(attached, "The retry attaches once the band allows live data")
+        let attempts = await source.attempts
+        XCTAssertEqual(attempts, 3)
+        let stillWaiting = await controller.isWaitingForLiveSamples
+        XCTAssertFalse(stillWaiting)
+
+        await source.emit(WorkoutSample(timestamp: Date(timeIntervalSince1970: 30), heartRate: 131))
+        var heartRate: Int?
+        for _ in 0..<200 where heartRate == nil {
+            try await Task.sleep(for: .milliseconds(10))
+            heartRate = await store.workout(id: started.id)?.samples.last?.heartRate
+        }
+        XCTAssertEqual(heartRate, 131)
+        let finished = try await controller.finish(id: started.id)
+        XCTAssertEqual(finished.state, .completed)
+    }
+
+    func testFinishingStopsAskingTheBandForLiveData() async throws {
+        let source = RefusingLiveSourceFixture(refusals: 1_000)
+        let controller = WorkoutSessionController(store: InMemoryWorkoutStore(), liveSource: source, liveRetryInterval: .milliseconds(10))
+        _ = try await controller.start(activity: .run)
+        _ = try await controller.transition(to: .preparing)
+        _ = try await controller.transition(to: .active)
+        _ = try await controller.finish()
+        let waiting = await controller.isWaitingForLiveSamples
+        XCTAssertFalse(waiting)
+        let before = await source.attempts
+        try await Task.sleep(for: .milliseconds(80))
+        let after = await source.attempts
+        XCTAssertEqual(before, after, "No retries after the workout ends")
+    }
+
+    func testNoLiveSourceRecordsWithoutHeartRateAndDoesNotRetry() async throws {
+        let controller = WorkoutSessionController(store: InMemoryWorkoutStore(), liveSource: UnavailableWorkoutLiveSampleSource(),
+                                                  liveRetryInterval: .milliseconds(10))
+        _ = try await controller.start(activity: .walk)
+        _ = try await controller.transition(to: .preparing)
+        let active = try await controller.transition(to: .active)
+        XCTAssertEqual(active.state, .active)
+        let waiting = await controller.isWaitingForLiveSamples
+        XCTAssertFalse(waiting)
+        _ = try await controller.finish()
     }
 
     func testPausingLiveWorkoutReleasesSamplesAndResumeReacquires() async throws {

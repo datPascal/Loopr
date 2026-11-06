@@ -101,6 +101,12 @@ struct LaunchHoldView: View {
         ZStack {
             Color.loopr(.background)
                 .ignoresSafeArea()
+            // The launch screen's ring (`UILaunchScreen` in Info.plist), in the same place, so the hand-over from the
+            // system's launch frame is not a cut to a blank page (R2-UPG-12).
+            Image("LaunchMark")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
             if revealed {
                 ProgressView()
                     .tint(Color.loopr(.inkSecondary))

@@ -7,11 +7,17 @@ final class IntervalTimerUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--loopr-launch-mode=populated"]
         app.launch()
-        let workouts = app.tabBars.buttons["Workouts"].firstMatch
+        let workouts = app.tabBars.buttons["Fitness"].firstMatch
         XCTAssertTrue(workouts.waitForExistence(timeout: 10))
         workouts.tap()
-        let entry = app.buttons["workouts-interval-timer"].firstMatch
+        // The interval timer lives in the start sheet, under CrossFit.
+        let more = app.descendants(matching: .any)["train-rail-more"].firstMatch
+        XCTAssertTrue(more.waitForExistence(timeout: 5))
+        for _ in 0..<4 where !more.isHittable { app.swipeUp() }
+        more.tap()
+        let entry = app.buttons["train-start-intervals"].firstMatch
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        for _ in 0..<4 where !entry.isHittable { app.swipeUp() }
         entry.tap()
         let screen = app.descendants(matching: .any)["interval-timer-screen"].firstMatch
         XCTAssertTrue(screen.waitForExistence(timeout: 5))

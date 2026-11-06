@@ -143,6 +143,6 @@ enum LooprChartDateText {
 
     /// "TUE 22 SEP".
     static func day(_ date: Date, calendar: Calendar = .current) -> String {
-        string(date, "EEE d MMM", calendar: calendar).uppercased()
+        string(date, "EEE d MMM", calendar: calendar).looprLabelCased
     }
 }

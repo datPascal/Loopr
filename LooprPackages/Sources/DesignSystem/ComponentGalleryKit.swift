@@ -6,7 +6,7 @@ import SwiftUI
 /// Open a section directly with
 /// `--loopr-open-design-system --loopr-design-system-section=<name>` where
 /// name is one of recovery, deltas, contributors, stages, ledger, paired,
-/// scrub, rows.
+/// highlight, scrub, rows.
 struct LooprGalleryKitSections: View {
     @Binding var highlightedStage: SleepStage?
     @Binding var trendRange: LooprChartRange
@@ -20,6 +20,7 @@ struct LooprGalleryKitSections: View {
         stages.galleryIdentifier("stages")
         ledger.galleryIdentifier("ledger")
         paired.galleryIdentifier("paired")
+        highlight.galleryIdentifier("highlight")
         scrub.galleryIdentifier("scrub")
         rows.galleryIdentifier("rows")
     }
@@ -216,6 +217,21 @@ struct LooprGalleryKitSections: View {
         }
     }
 
+    private var highlight: some View {
+        VStack(alignment: .leading, spacing: LooprSpacing.xs) {
+            LooprSectionHeader("Deep sleep, minutes", detail: "Brighter bars had dinner after 21:00")
+            LooprSurface {
+                LooprHighlightBars(
+                    bars: LooprSampleNight.highlightedDeepSleep(endingOn: Self.today),
+                    accent: .sleep,
+                    title: "Deep sleep, minutes",
+                    valueFormat: { "\(Int($0.rounded())) min" },
+                    identifier: "gallery-highlight-bars"
+                )
+            }
+        }
+    }
+
     // MARK: Trend chart with hold-to-scrub
 
     private var scrub: some View {
@@ -252,6 +268,17 @@ struct LooprGalleryKitSections: View {
                 HairlineMetricRow(id: "g-dip", title: "Heart rate dip", value: "Not measured"),
                 HairlineMetricRow(id: "g-rem", title: "REM sleep", confidence: "Not measured", value: "")
             ])
+            LooprSectionHeader("Timeline rows", detail: "Later today is dimmed")
+                .padding(.top, LooprSpacing.sm)
+            LooprCard(density: .flush) {
+                VStack(spacing: LooprSpacing.none) {
+                    LooprTimelineRow(time: "06:52", title: "Woke up", detail: "Smart alarm, 8 min early", identifier: "gallery-timeline-wake")
+                    LooprTimelineRow(time: "07:30", title: "Breakfast", detail: "Yogurt, berries, granola · 520 kcal",
+                                     identifier: "gallery-timeline-meal") {}
+                    LooprTimelineRow(time: "18:00", title: "Upper A", detail: "Planned", isDimmed: true,
+                                     identifier: "gallery-timeline-workout", showsDivider: false) {}
+                }
+            }
         }
     }
 

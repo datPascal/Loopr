@@ -1,3 +1,4 @@
+#if LOOPR_PRIVATE_DATABASE_AUDITS
 import XCTest
 import Foundation
 import StorageKit
@@ -13,8 +14,8 @@ private struct BenchmarkDate: DateProviding {
 /// Timings for the read path that every tab screen sits behind, measured
 /// against a copy of a real phone history database.
 ///
-/// The copy is not in the repository, so the whole suite skips itself unless
-/// `LOOPR_REAL_HISTORY_DB` points at one (or the night-shift copy is present).
+/// Compile with LOOPR_PRIVATE_DATABASE_AUDITS and supply LOOPR_REAL_HISTORY_DB
+/// to run this private-data benchmark.
 /// Nothing here asserts a wall-clock budget: the numbers are printed so a
 /// before and after run can be compared on the same machine.
 final class CanonicalDailyAnalyticsBenchmarkTests: XCTestCase {
@@ -29,9 +30,7 @@ final class CanonicalDailyAnalyticsBenchmarkTests: XCTestCase {
     private static let day = DayIdentity(year: 2026, month: 9, day: 21)
 
     func testRealDatabaseReadTimings() async throws {
-        guard let (history, root) = try Self.openRealHistory() else {
-            throw XCTSkip("No real history copy at \(Self.sourcePath)")
-        }
+        let (history, root) = try XCTUnwrap(Self.openRealHistory(), "Private audit requires a readable history database")
         defer { try? FileManager.default.removeItem(at: root) }
         let productsURL = root.appendingPathComponent("products.sqlite")
         let now = Date(timeIntervalSince1970: try Self.latestRecordSeconds(history) + 60)
@@ -149,3 +148,5 @@ final class CanonicalDailyAnalyticsBenchmarkTests: XCTestCase {
         )
     }
 }
+
+#endif

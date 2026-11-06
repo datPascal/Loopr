@@ -20,6 +20,8 @@ nonisolated enum MetricKey: String, CaseIterable, Codable, Hashable, Sendable {
     case strain
     case stress
     case sleepDuration = "sleep_duration"
+    case sleepPerformance = "sleep_performance"
+    case sleepDebt = "sleep_debt"
     case sleepEfficiency = "sleep_efficiency"
     case deepSleep = "deep_sleep"
     case remSleep = "rem_sleep"

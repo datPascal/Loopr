@@ -12,6 +12,9 @@ struct SleepNightHero: View {
     let insights: SleepNightInsights?
     let score: SleepMetricValue?
     let open: (() -> Void)?
+    /// The Sleep page's short hero: a small ring with the lines beside it, so the stages start on the first screen
+    /// (Data ICP R3-SW-02). The large ring stays wherever the night is the whole screen.
+    var compact = false
 
     private var asleep: Double { Double(main.durationMinutes) }
     private var target: SleepTarget? { insights?.target }
@@ -32,7 +35,60 @@ struct SleepNightHero: View {
         .accessibilityIdentifier("sleep-metric-duration")
     }
 
-    private var hero: some View {
+    @ViewBuilder private var hero: some View {
+        if compact { compactHero } else { largeHero }
+    }
+
+    private var compactHero: some View {
+        LooprCard {
+            HStack(alignment: .center, spacing: LooprSpacing.md) {
+                LooprProgressRing(value: asleep, scale: target?.ringScale,
+                                  text: LooprUnitFormatter.duration(minutes: asleep) ?? main.durationLabel,
+                                  format: .hoursMinutesSpelled, accent: .sleep, diameter: 104)
+                VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
+                    if let target {
+                        Text(target.line(asleepMinutes: asleep))
+                            .looprTypography(.rowTitle)
+                            .foregroundStyle(Color.loopr(.ink))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let delta = insights?.durationUsual.delta(for: asleep, higherIsBetter: true, format: .duration) {
+                        if case .usual = delta.kind {
+                            Text("A usual length for you")
+                                .looprTypography(.caption)
+                                .foregroundStyle(Color.loopr(.inkSecondary))
+                        } else {
+                            LooprDeltaCaption(delta, accent: .sleep, style: .confidence)
+                        }
+                    }
+                    HStack(spacing: LooprSpacing.md) {
+                        clockPair("Bedtime", main.start)
+                        clockPair(main.isPartial ? "Latest" : "Woke", main.end)
+                        if let score, let value = score.numericValue {
+                            VStack(alignment: .leading, spacing: LooprSpacing.xxs) {
+                                Text("Score").looprTypography(.sectionLabel).foregroundStyle(Color.loopr(.inkSecondary))
+                                Text("\(Int(value.rounded()))").looprTypography(.metricValue).foregroundStyle(Color.loopr(.ink))
+                            }
+                        }
+                    }
+                    .padding(.top, LooprSpacing.xxs)
+                    if main.isPartial {
+                        Text("Still being recorded, so the total may change.")
+                            .looprTypography(.caption).foregroundStyle(Color.loopr(.inkSecondary))
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else if let provisional = target?.provisionalNote {
+                        Text(provisional)
+                            .looprTypography(.caption).foregroundStyle(Color.loopr(.inkSecondary))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, LooprSpacing.screenGutter)
+    }
+
+    private var largeHero: some View {
         LooprRingHero(
             value: asleep,
             scale: target?.ringScale,
@@ -44,7 +100,7 @@ struct SleepNightHero: View {
             VStack(spacing: LooprSpacing.xs) {
                 if let target {
                     Text(target.line(asleepMinutes: asleep))
-                        .looprTypography(.label)
+                        .looprTypography(.title)
                         .foregroundStyle(Color.loopr(.ink))
                         .multilineTextAlignment(.center)
                 }
@@ -53,7 +109,7 @@ struct SleepNightHero: View {
                         // A lone "Usual" under the hero reads like a label
                         // for nothing; say what is usual.
                         Text("A usual length for you")
-                            .looprTypography(.caption)
+                            .looprTypography(.prose)
                             .foregroundStyle(Color.loopr(.inkSecondary))
                             .accessibilityLabel(delta.spokenText)
                     } else if case .learning = delta.kind, dynamicTypeSize.isAccessibilitySize {
@@ -73,9 +129,9 @@ struct SleepNightHero: View {
                     clockPair(main.isPartial ? "Latest" : "Woke", main.end)
                     if let score, let value = score.numericValue {
                         Rectangle().fill(Color.loopr(.divider)).frame(width: 1, height: 26)
-                        VStack(spacing: 2) {
-                            Text("SCORE").looprTypography(.sectionLabel).foregroundStyle(Color.loopr(.inkSecondary))
-                            Text("\(Int(value.rounded()))").looprTypography(.metricUnit).fontWeight(.semibold)
+                        VStack(spacing: LooprSpacing.xxs) {
+                            Text("Score").looprTypography(.sectionLabel).foregroundStyle(Color.loopr(.inkSecondary))
+                            Text("\(Int(value.rounded()))").looprTypography(.metricValue)
                                 .foregroundStyle(Color.loopr(.ink))
                         }
                     }
@@ -92,14 +148,12 @@ struct SleepNightHero: View {
     }
 
     private func clockPair(_ title: String, _ date: Date) -> some View {
-        VStack(spacing: 2) {
-            Text(title.uppercased())
+        VStack(spacing: LooprSpacing.xxs) {
+            Text(title.looprLabelCased)
                 .looprTypography(.sectionLabel)
                 .foregroundStyle(Color.loopr(.inkSecondary))
             Text(date.formatted(date: .omitted, time: .shortened))
-                .looprTypography(.metricUnit)
-                .fontWeight(.semibold)
-                .monospacedDigit()
+                .looprTypography(.metricValue)
                 .foregroundStyle(Color.loopr(.ink))
         }
         .lineLimit(1)

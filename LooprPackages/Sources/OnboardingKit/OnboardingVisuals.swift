@@ -307,7 +307,7 @@ struct OnboardingSettingsMock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: LooprSpacing.xs) {
-            Text(OnboardingCopy.Handover.mockPath.uppercased())
+            Text(OnboardingCopy.Handover.mockPath.looprLabelCased)
                 .looprTypography(.headerMeta)
                 .foregroundStyle(Color.loopr(.inkSecondary))
                 .padding(.horizontal, LooprSpacing.xxs)
@@ -372,11 +372,13 @@ struct OnboardingSettingsMock: View {
 
 /// Two of Loopr's real notifications as lock screen banners, in glass.
 struct OnboardingNotificationMock: View {
+    var samples: [(title: String, detail: String)] = OnboardingCopy.Notifications.sample
+
     var body: some View {
         // A short list, as Notification Centre shows them. Glass is see
         // through, so the banners sit apart instead of stacked.
         VStack(spacing: LooprSpacing.xs) {
-            ForEach(Array(OnboardingCopy.Notifications.sample.enumerated()), id: \.offset) { index, sample in
+            ForEach(Array(samples.enumerated()), id: \.offset) { index, sample in
                 banner(title: sample.title, detail: sample.detail)
                     .opacity(index == 0 ? 1 : 0.7)
                     .scaleEffect(index == 0 ? 1 : 0.96)

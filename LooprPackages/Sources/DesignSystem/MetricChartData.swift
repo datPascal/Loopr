@@ -35,13 +35,20 @@ public enum LooprChartBucket: String, Sendable {
     case week
 }
 
-/// The ranges the trend chart offers. The year view averages each week so a
-/// 365-day series stays readable on a phone.
+/// The ranges the trend chart offers. The year and two-year views average each
+/// week so a long series stays readable on a phone. 6M and 2Y came with the
+/// Data ICP rounds (R3-VET-02): a Zone 2 block is a six-month question, and
+/// yearly tests compare years. 2Y is named for what it holds, not "All".
 public enum LooprChartRange: String, CaseIterable, Identifiable, Hashable, Sendable {
     case week
     case month
     case quarter
+    case halfYear
     case year
+    case twoYears
+
+    /// The longest range, which is how far back a page loads.
+    public static let longestDayCount = LooprChartRange.twoYears.dayCount
 
     public var id: String { rawValue }
 
@@ -50,7 +57,9 @@ public enum LooprChartRange: String, CaseIterable, Identifiable, Hashable, Senda
         case .week: "7D"
         case .month: "30D"
         case .quarter: "90D"
+        case .halfYear: "6M"
         case .year: "1Y"
+        case .twoYears: "2Y"
         }
     }
 
@@ -59,7 +68,9 @@ public enum LooprChartRange: String, CaseIterable, Identifiable, Hashable, Senda
         case .week: "7 days"
         case .month: "30 days"
         case .quarter: "90 days"
+        case .halfYear: "6 months"
         case .year: "1 year"
+        case .twoYears: "2 years"
         }
     }
 
@@ -68,12 +79,14 @@ public enum LooprChartRange: String, CaseIterable, Identifiable, Hashable, Senda
         case .week: 7
         case .month: 30
         case .quarter: 90
+        case .halfYear: 182
         case .year: 365
+        case .twoYears: 730
         }
     }
 
     public var bucket: LooprChartBucket {
-        self == .year ? .week : .day
+        self == .year || self == .twoYears ? .week : .day
     }
 
     public var window: LooprChartWindow {

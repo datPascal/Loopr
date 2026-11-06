@@ -517,6 +517,13 @@ private struct BandExchangeKey: Hashable, Sendable {
     let opcode: UInt8
 }
 
+private struct PendingBandExchange {
+    let id: UUID
+    let continuation: CheckedContinuation<Data, Error>
+    var task: Task<Void, Never>?
+    var hasWritten = false
+}
+
 /// Transport-neutral composition of the production Bluetooth and SyncKit
 /// seams.  The runtime owns the event stream and is the only place where a
 /// decoded frame is allowed to cross from GATT into history/live policy.
@@ -554,6 +561,9 @@ public actor BluetoothAdoptionRuntime {
     private var setupCompleteGeneration: UInt64?
     private var pendingClockGet: (generation: UInt64, sequence: UInt8, wallDate: Date)?
     private var clockDiscipline = ClockDiscipline()
+    /// Correlation for commands and events in the current RTC frame. A clock
+    /// set invalidates this even when the Bluetooth generation is unchanged.
+    private var bandActionClock: (generation: UInt64, correlation: ClockCorrelation)?
     private var clockRecheckTask: Task<Void, Never>?
     private var maintenanceTask: Task<Void, Never>?
     private var lastHeartbeatAt: Date?
@@ -580,7 +590,7 @@ public actor BluetoothAdoptionRuntime {
     private var rollingCorruption = RollingCorruptionDetector()
     private var lastError: String?
     private var stateContinuations: [UUID: AsyncStream<BluetoothAdoptionRuntimeState>.Continuation] = [:]
-    private var pendingBandExchanges: [BandExchangeKey: CheckedContinuation<Data, Error>] = [:]
+    private var pendingBandExchanges: [BandExchangeKey: PendingBandExchange] = [:]
     private var bandExchangeCursor: UInt8 = BandExchangeSequences.first
     private var bandEventContinuations: [UUID: AsyncStream<BandEventEnvelope>.Continuation] = [:]
     /// Edge's `standardHrFallback`. Once the link has proven noisy this
@@ -729,6 +739,7 @@ public actor BluetoothAdoptionRuntime {
         setupCompleteGeneration = nil
         pendingClockGet = nil
         clockDiscipline.disconnect()
+        bandActionClock = nil
         historyBufferedItems = 0
         charging = nil
         onWrist = nil
@@ -1066,13 +1077,15 @@ public actor BluetoothAdoptionRuntime {
 
     /// Arms the band's own wake alarm.
     ///
-    /// The rich twenty-byte form is the only form the reference says fires,
-    /// and the epoch is shifted into the band's clock frame first because the
+    /// WHOOP 4 takes the captured revision-1 form. The epoch is shifted into
+    /// the band's clock frame first because the
     /// band runs the alarm autonomously on its own RTC. The readback is
     /// attempted afterwards but is not allowed to fail the set: the reference
     /// parks GET_ALARM_TIME as unconfirmed on real firmware.
     public func setBandAlarm(fireDate: Date) async throws {
-        let drift = await readBandClockDriftSeconds()
+        let generation = try requireBandCommandReadiness()
+        let drift = try await readBandClockDriftSeconds()
+        guard currentGeneration == generation else { throw BandCommandError.notReady }
         let frame: BandAlarmFrame
         do {
             frame = try BandAlarmFrame(fireDate: fireDate, driftSeconds: drift)
@@ -1092,6 +1105,7 @@ public actor BluetoothAdoptionRuntime {
         } catch {
             Self.debugLog("band alarm pre-clear failed: \(error)")
         }
+        guard currentGeneration == generation else { throw BandCommandError.notReady }
         try await exchange(expectingOpcode: nil) { sequence in
             .alarm(AlarmCommand.setup(
                 sequence: sequence,
@@ -1099,6 +1113,7 @@ public actor BluetoothAdoptionRuntime {
                 subsecondTicks: frame.subsecondTicks
             ))
         }
+        guard currentGeneration == generation else { throw BandCommandError.notReady }
         Self.debugLog("band alarm armed; drift=\(drift)s epoch=\(frame.epochSeconds) ticks=\(frame.subsecondTicks)")
         _ = try? await readBandAlarm(driftSeconds: drift)
     }
@@ -1114,27 +1129,40 @@ public actor BluetoothAdoptionRuntime {
     /// before it leaves here. A caller comparing the readback against the time
     /// it asked for is then comparing two wall instants.
     public func readBandAlarm() async throws -> Date? {
-        try await readBandAlarm(driftSeconds: await readBandClockDriftSeconds())
+        try await readBandAlarmStatus().fireDate
+    }
+
+    public func readBandAlarmStatus() async throws -> BandAlarmStatus {
+        let generation = try requireBandCommandReadiness()
+        let drift = try await readBandClockDriftSeconds()
+        guard currentGeneration == generation else { throw BandCommandError.notReady }
+        return try await readBandAlarmStatus(driftSeconds: drift)
     }
 
     private func readBandAlarm(driftSeconds: Int64) async throws -> Date? {
+        try await readBandAlarmStatus(driftSeconds: driftSeconds).fireDate
+    }
+
+    private func readBandAlarmStatus(driftSeconds: Int64) async throws -> BandAlarmStatus {
+        let generation = try requireBandCommandReadiness()
         let response = try await exchange(expectingOpcode: 0x43) { sequence in
             .alarm(AlarmCommand.readback(sequence: sequence))
         }
-        guard let readback = try? AlarmCommand.decodeReadbackResponse(response) else {
+        guard currentGeneration == generation else { throw BandCommandError.notReady }
+        guard let readback = try? AlarmCommand.decodeReadbackResponse(response, layout: .whoop4Revision1) else {
             Self.debugLog("band alarm readback unrecognised")
-            return nil
+            return .unknown
         }
         guard readback.isArmed else {
             Self.debugLog("band alarm readback reports no armed alarm")
-            return nil
+            return .empty
         }
         let wall = BandAlarmFrame.wallDate(
             fromBandEpochSeconds: readback.epochSeconds,
             driftSeconds: driftSeconds
         )
         Self.debugLog("band alarm readback epoch=\(readback.epochSeconds) drift=\(driftSeconds)s wall=\(wall.timeIntervalSince1970)")
-        return wall
+        return .armed(wall)
     }
 
     /// Fires the alarm haptics immediately (RUN_ALARM, `0x44` body `0x01`).
@@ -1189,22 +1217,36 @@ public actor BluetoothAdoptionRuntime {
     /// Correlates wall time against the band RTC for the alarm shift.
     ///
     /// A fresh GET_CLOCK is preferred. When it does not answer, the session's
-    /// existing correlation is used, and when there is none the drift is zero,
-    /// which arms the raw wall epoch exactly as the reference does before its
-    /// first correlation of a session.
-    private func readBandClockDriftSeconds() async -> Int64 {
+    /// existing correlation is used. Without either, arming must fail: a raw
+    /// phone epoch can be years away on an unset band RTC.
+    private func readBandClockDriftSeconds() async throws -> Int64 {
+        let generation = try requireBandCommandReadiness()
         let wallDate = clock.now()
-        if let response = try? await exchange(expectingOpcode: 0x0B, { sequence in
-            .getClock(sequence: sequence)
-        }), let parsed = try? ClockResponse.parse(response, wallDate: wallDate) {
-            let drift = wallDate.timeIntervalSince(parsed.bandDate)
-            if drift.isFinite {
-                return Int64(drift.rounded(.towardZero))
+        var failure = BandCommandError.rejected("The band clock could not be read.")
+        do {
+            let response = try await exchange(expectingOpcode: 0x0B) { sequence in
+                .getClock(sequence: sequence)
             }
+            guard currentGeneration == generation else { throw BandCommandError.notReady }
+            let parsed = try ClockResponse.parse(response, wallDate: wallDate)
+            let drift = wallDate.timeIntervalSince(parsed.bandDate)
+            if let seconds = Int64(exactly: drift.rounded(.towardZero)) {
+                bandActionClock = (generation, ClockCorrelation(bandDate: parsed.bandDate, wallDate: wallDate))
+                return seconds
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as BandCommandError {
+            failure = error
+        } catch {
+            // Retain the typed unavailable-clock failure for an invalid reply.
         }
-        guard let correlation = clockDiscipline.correlation,
-              correlation.offsetSeconds.isFinite else { return 0 }
-        return Int64(correlation.offsetSeconds.rounded(.towardZero))
+        guard currentGeneration == generation else { throw BandCommandError.notReady }
+        guard let cached = bandActionClock, cached.generation == generation,
+              let seconds = Int64(exactly: cached.correlation.offsetSeconds.rounded(.towardZero)) else {
+            throw failure
+        }
+        return seconds
     }
 
     /// The single seam every band action writes through.
@@ -1221,8 +1263,9 @@ public actor BluetoothAdoptionRuntime {
         timeout: TimeInterval = BluetoothAdoptionRuntime.bandCommandTimeout,
         _ makeCommand: (UInt8) throws -> ProductionCommand
     ) async throws -> Data {
+        try Task.checkCancellation()
         let generation = try requireBandCommandReadiness()
-        let sequence = nextBandExchangeSequence()
+        let sequence = try nextBandExchangeSequence()
         let command: ProductionCommand
         do {
             command = try makeCommand(sequence)
@@ -1237,6 +1280,7 @@ public actor BluetoothAdoptionRuntime {
             do {
                 try await writer.write(command, generation: generation)
             } catch {
+                try Task.checkCancellation()
                 Self.debugLog("band command failed; opcode=write-only outcome=\(error)")
                 throw BandCommandError.rejected(String(describing: error))
             }
@@ -1245,11 +1289,17 @@ public actor BluetoothAdoptionRuntime {
         }
 
         let key = BandExchangeKey(generation: generation, sequence: sequence, opcode: opcode)
-        return try await withCheckedThrowingContinuation { continuation in
-            pendingBandExchanges[key] = continuation
-            Task { [weak self] in
-                await self?.driveBandExchange(key: key, command: command, timeout: timeout)
+        let id = UUID()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingBandExchanges[key] = PendingBandExchange(id: id, continuation: continuation)
+                pendingBandExchanges[key]?.task = Task { [weak self] in
+                    await self?.driveBandExchange(key: key, id: id, command: command, timeout: timeout)
+                }
             }
+        } onCancel: {
+            Task { await self.finishBandExchange(key, id: id, throwing: CancellationError()) }
         }
     }
 
@@ -1258,32 +1308,37 @@ public actor BluetoothAdoptionRuntime {
     /// no-op once route() or a teardown has already resumed the caller.
     private func driveBandExchange(
         key: BandExchangeKey,
+        id: UUID,
         command: ProductionCommand,
         timeout: TimeInterval
     ) async {
+        guard pendingBandExchanges[key]?.id == id else { return }
         do {
             try await writer.write(command, generation: key.generation)
         } catch {
             Self.debugLog("band command failed; opcode=0x\(String(key.opcode, radix: 16)) outcome=\(error)")
-            finishBandExchange(key, throwing: .rejected(String(describing: error)))
+            finishBandExchange(key, id: id, throwing: BandCommandError.rejected(String(describing: error)))
             return
         }
-        guard pendingBandExchanges[key] != nil else { return }
+        guard pendingBandExchanges[key]?.id == id else { return }
+        pendingBandExchanges[key]?.hasWritten = true
         do {
             try await clock.sleep(for: timeout)
         } catch {
-            finishBandExchange(key, throwing: .timedOut)
+            finishBandExchange(key, id: id, throwing: BandCommandError.timedOut)
             return
         }
-        if pendingBandExchanges[key] != nil {
+        if pendingBandExchanges[key]?.id == id {
             Self.debugLog("band command timed out; opcode=0x\(String(key.opcode, radix: 16))")
         }
-        finishBandExchange(key, throwing: .timedOut)
+        finishBandExchange(key, id: id, throwing: BandCommandError.timedOut)
     }
 
-    private func finishBandExchange(_ key: BandExchangeKey, throwing error: BandCommandError) {
-        guard let continuation = pendingBandExchanges.removeValue(forKey: key) else { return }
-        continuation.resume(throwing: error)
+    private func finishBandExchange(_ key: BandExchangeKey, id: UUID, throwing error: any Error) {
+        guard pendingBandExchanges[key]?.id == id,
+              let pending = pendingBandExchanges.removeValue(forKey: key) else { return }
+        pending.task?.cancel()
+        pending.continuation.resume(throwing: error)
     }
 
     /// Fails every outstanding band exchange. Called from every path that
@@ -1294,8 +1349,9 @@ public actor BluetoothAdoptionRuntime {
         let pending = pendingBandExchanges
         pendingBandExchanges.removeAll(keepingCapacity: true)
         Self.debugLog("band exchanges failed; count=\(pending.count) reason=\(error)")
-        for continuation in pending.values {
-            continuation.resume(throwing: error)
+        for exchange in pending.values {
+            exchange.task?.cancel()
+            exchange.continuation.resume(throwing: error)
         }
     }
 
@@ -1312,12 +1368,14 @@ public actor BluetoothAdoptionRuntime {
         return generation
     }
 
-    private func nextBandExchangeSequence() -> UInt8 {
-        let value = bandExchangeCursor
-        bandExchangeCursor = value == BandExchangeSequences.last
-            ? BandExchangeSequences.first
-            : value &+ 1
-        return value
+    private func nextBandExchangeSequence() throws -> UInt8 {
+        for _ in BandExchangeSequences.first...BandExchangeSequences.last {
+            let value = bandExchangeCursor
+            bandExchangeCursor = value == BandExchangeSequences.last
+                ? BandExchangeSequences.first : value &+ 1
+            if !pendingBandExchanges.keys.contains(where: { $0.sequence == value }) { return value }
+        }
+        throw BandCommandError.rejected("Too many band commands are waiting for a response.")
     }
 
     private func removeBandEventStream(id: UUID) {
@@ -1340,6 +1398,9 @@ public actor BluetoothAdoptionRuntime {
             return
         }
         Self.debugLog("band event id=\(packet.eventID) generation=\(generation)")
+        // The event can carry the old or new RTC time. Neither can safely be
+        // translated with a correlation from before the change.
+        if packet.eventID == 16 { bandActionClock = nil }
         if let value = packet.batteryPercentage { batteryPercentage = value }
         if let value = packet.charging { charging = value }
         if let value = packet.onWrist { onWrist = value }
@@ -1349,7 +1410,11 @@ public actor BluetoothAdoptionRuntime {
             generation: generation,
             receivedAt: clock.now(),
             bandEpochSeconds: packet.bandEpochSeconds,
-            batteryPercentage: batteryPercentage, charging: charging, onWrist: onWrist
+            batteryPercentage: batteryPercentage, charging: charging, onWrist: onWrist,
+            occurredAt: packet.bandEpochSeconds.flatMap { epoch in
+                guard let cached = bandActionClock, cached.generation == generation else { return nil }
+                return Date(timeIntervalSince1970: TimeInterval(epoch) + cached.correlation.offsetSeconds)
+            }
         )
         for continuation in bandEventContinuations.values {
             continuation.yield(envelope)
@@ -1564,6 +1629,7 @@ public actor BluetoothAdoptionRuntime {
             writeTimeoutCount = 0
             rollingCorruption.reset()
             clockDiscipline.disconnect()
+            bandActionClock = nil
             pendingClockGet = nil
             // A band action pinned to the previous generation can never be
             // answered on this one, so wake its caller here rather than
@@ -1834,6 +1900,7 @@ public actor BluetoothAdoptionRuntime {
                 wallDate: wallDate
             )
             setupFirstWritePending = true
+            bandActionClock = nil
             _ = try await clockExchange.send(
                 wallDate: wallDate,
                 generation: generation,
@@ -1949,6 +2016,7 @@ public actor BluetoothAdoptionRuntime {
         onWrist = nil
         failBandExchanges()
         clockDiscipline.disconnect()
+        bandActionClock = nil
         setupCompleteGeneration = nil
         setHistoryOffloadActive(false, reason: "disconnect")
         historyBufferedItems = 0
@@ -2563,9 +2631,12 @@ public actor BluetoothAdoptionRuntime {
                     sequence: payload[2],
                     opcode: payload[1]
                 )
-                if let continuation = pendingBandExchanges.removeValue(forKey: key) {
+                if let pending = pendingBandExchanges.removeValue(forKey: key) {
                     Self.debugLog("band command response; opcode=0x\(String(key.opcode, radix: 16)) outcome=ok")
-                    continuation.resume(returning: inner)
+                    // A response can precede the GATT write callback. Let
+                    // that write finish; only cancel a timer already started.
+                    if pending.hasWritten { pending.task?.cancel() }
+                    pending.continuation.resume(returning: inner)
                 }
             }
             if payload.count >= 2 {
@@ -2643,6 +2714,11 @@ public actor BluetoothAdoptionRuntime {
             )
             switch decision {
             case .accepted, .rejectedFuture, .rejectedPreEpoch:
+                if case .accepted(let correlation) = decision {
+                    bandActionClock = (generation, correlation)
+                } else {
+                    bandActionClock = nil
+                }
                 if case .rejectedFuture = decision {
                     lastError = "GET_CLOCK response is too far in the future"
                     await record(.error, generation: generation, label: "Clock error", detail: lastError)
@@ -2651,6 +2727,7 @@ public actor BluetoothAdoptionRuntime {
                     await record(.error, generation: generation, label: "Clock error", detail: lastError)
                 }
             case .requiresCorrection(let correlation):
+                bandActionClock = nil
                 guard clockDiscipline.recordCorrection() else {
                     lastError = "GET_CLOCK correction budget exhausted"
                     await record(.error, generation: generation, label: "Clock error", detail: lastError)
@@ -2677,6 +2754,7 @@ public actor BluetoothAdoptionRuntime {
                     await record(.error, generation: generation, label: "Clock error", detail: lastError)
                 }
             case .correctionLimitReached:
+                bandActionClock = nil
                 lastError = "GET_CLOCK correction budget exhausted"
                 await record(.error, generation: generation, label: "Clock error", detail: lastError)
             }

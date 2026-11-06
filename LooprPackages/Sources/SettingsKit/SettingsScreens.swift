@@ -599,7 +599,8 @@ public struct SettingsDestinationScreen: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openURL) private var openURL
     @Environment(\.profileAgeFocusRequested) private var profileAgeFocusRequested
-    @FocusState private var ageFieldFocused: Bool
+    /// The profile row with the keyboard, by its identifier.
+    @FocusState private var focusedProfileField: String?
     public let destination: SettingsRouteDestination
     public let snapshot: SettingsSnapshot
     public let versions: VersionRegistry
@@ -623,6 +624,7 @@ public struct SettingsDestinationScreen: View {
     @State private var form: SettingsFormState
     @State private var aiEnabled = false
     @State private var localNotificationPreferences: [NotificationPreferenceSetting]
+    @State private var isWhatsNewPresented = false
 
     /// The unit the form is currently set to, not the saved one, so the height
     /// and weight fields follow the picker as soon as it moves.
@@ -672,6 +674,9 @@ public struct SettingsDestinationScreen: View {
         .toolbarColorScheme(LooprAppearance.isDark(colorScheme) ? .dark : .light, for: .navigationBar)
         .tint(Color.loopr(.brand))
         .accessibilityIdentifier("settings-destination-\(String(describing: destination))")
+        .sheet(isPresented: $isWhatsNewPresented) {
+            WhatsNewSheet { isWhatsNewPresented = false }
+        }
         .confirmationDialog("Reset profile and goals?", isPresented: $isResetConfirmationPresented, titleVisibility: .visible) {
             Button("Reset profile", role: .destructive, action: onResetProfile)
             Button("Cancel", role: .cancel) {}
@@ -695,7 +700,7 @@ public struct SettingsDestinationScreen: View {
         }
         .task {
             if destination == .profile && profileAgeFocusRequested {
-                ageFieldFocused = true
+                focusedProfileField = Self.birthYearIdentifier
             }
         }
     }
@@ -831,6 +836,11 @@ public struct SettingsDestinationScreen: View {
                     }
                 }
             }
+            LooprMenuGroup(title: "This version", rows: [
+                LooprMenuItem(title: WhatsNewCopy.settingsRow, accessibilityIdentifier: "settings-whats-new") {
+                    isWhatsNewPresented = true
+                }
+            ])
         case .legal:
             LooprMenuGroup(title: "Documents", rows: SettingsLegalDocuments.all.map { document in
                 LooprMenuItem(
@@ -844,7 +854,7 @@ public struct SettingsDestinationScreen: View {
             LooprSectionGroup(title: "About") {
                 LooprFormCard {
                     LooprText(
-                        "Support is local-first. Export a diagnostics bundle from Device Center before contacting support.",
+                        "Support is local-first. Export a diagnostics bundle from Settings, then Band, before contacting support.",
                         style: .prose,
                         color: .inkSecondary
                     )
@@ -897,7 +907,7 @@ public struct SettingsDestinationScreen: View {
         case .goals: "Goals"
         case .privacy: "Widgets and Watch"
         case .surfacePrivacy: "Widgets and Watch"
-        case .deviceCenter: "Device Center"
+        case .deviceCenter: "Band"
         case .healthKit: "Apple Health"
         case .notifications: "Notifications"
         case .cycle: "Cycle tracking"
@@ -936,46 +946,49 @@ public struct SettingsDestinationScreen: View {
         }
     }
 
+    /// The profile: one card of labelled rows on the tabs' card surface, the label on the left and what was typed on the
+    /// right in ink, as onboarding's About you shows them. Birth year is the stored field; the age it gives is shown
+    /// beside it, so "your birth year in Profile" names a field that is here (R2-UPG-2).
     private var profile: some View {
         VStack(alignment: .leading, spacing: LooprSpacing.sm) {
             LooprFormCard(padding: 0) {
                 VStack(spacing: 0) {
-                    TextField("Display name", text: Binding(
+                    profileRow("Name", placeholder: "Optional", identifier: "settings-profile-name", text: Binding(
                         get: { form.snapshot.profile.displayName ?? "" },
                         set: { newValue in form.edit { $0.profile.displayName = newValue.isEmpty ? nil : newValue } }
                     ))
-                    .looprTypography(.settingsRow)
-                    .foregroundStyle(Color.loopr(.ink))
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 17)
-                    .padding(.vertical, 13)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("settings-profile-name")
 
                     LooprHairline()
 
-                    TextField("Age", text: Binding(
-                        get: { form.snapshot.profile.age.map(String.init) ?? "" },
-                        set: { newValue in form.edit { $0.profile.age = Int(newValue) } }
+                    profileRow("Birth year", placeholder: "e.g. 1990", unit: birthYearAgeCaption,
+                               identifier: Self.birthYearIdentifier, keyboard: .number, text: Binding(
+                        get: { form.snapshot.profile.birthYear.map(String.init) ?? "" },
+                        set: { newValue in
+                            let digits = String(newValue.filter(\.isNumber).prefix(4))
+                            form.edit { $0.profile.birthYear = Int(digits) }
+                        }
                     ))
-                    .focused($ageFieldFocused)
-                    #if canImport(UIKit)
-                    .keyboardType(.numberPad)
-                    #endif
-                    .looprTypography(.settingsRow)
-                    .foregroundStyle(Color.loopr(.ink))
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 17)
-                    .padding(.vertical, 13)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("settings-profile-age")
+
+                    if let birthYearProblem {
+                        LooprText(birthYearProblem, style: .caption, color: .warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, LooprSpacing.formCardPadding)
+                            .padding(.bottom, LooprSpacing.xs)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("settings-profile-birth-year-problem")
+                    }
+
+                    LooprHairline()
+
+                    profileSexRow
 
                     LooprHairline()
 
                     // Active energy cannot be computed without height and
                     // weight, and onboarding was the only place that ever
                     // asked for them. Anyone who skipped it had no way back.
-                    TextField(LooprUnitFormatter.heightFieldLabel(measurementSystem), text: Binding(
+                    profileRow(LooprUnitFormatter.heightFieldLabel(measurementSystem), placeholder: "Optional",
+                               identifier: "settings-profile-height", keyboard: .decimal, text: Binding(
                         get: {
                             LooprUnitFormatter.heightFieldText(
                                 centimeters: form.snapshot.profile.heightCentimeters,
@@ -991,20 +1004,11 @@ public struct SettingsDestinationScreen: View {
                             }
                         }
                     ))
-                    #if canImport(UIKit)
-                    .keyboardType(.decimalPad)
-                    #endif
-                    .looprTypography(.settingsRow)
-                    .foregroundStyle(Color.loopr(.ink))
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 17)
-                    .padding(.vertical, 13)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("settings-profile-height")
 
                     LooprHairline()
 
-                    TextField(LooprUnitFormatter.weightFieldLabel(measurementSystem), text: Binding(
+                    profileRow(LooprUnitFormatter.weightFieldLabel(measurementSystem), placeholder: "Optional",
+                               identifier: "settings-profile-weight", keyboard: .decimal, text: Binding(
                         get: {
                             LooprUnitFormatter.weightFieldText(
                                 kilograms: form.snapshot.profile.weightKilograms,
@@ -1020,16 +1024,6 @@ public struct SettingsDestinationScreen: View {
                             }
                         }
                     ))
-                    #if canImport(UIKit)
-                    .keyboardType(.decimalPad)
-                    #endif
-                    .looprTypography(.settingsRow)
-                    .foregroundStyle(Color.loopr(.ink))
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 17)
-                    .padding(.vertical, 13)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("settings-profile-weight")
 
                     if let canonicalGoalsRepository {
                         LooprHairline()
@@ -1044,6 +1038,110 @@ public struct SettingsDestinationScreen: View {
                 .buttonStyle(LooprDestructiveButtonStyle())
                 .accessibilityIdentifier("settings-reset-profile")
         }
+    }
+
+    /// Sex, with onboarding's four answers, stored in the same profile field About you writes. Cardio Age picks its
+    /// female or male curve from it, and someone who skipped it in onboarding had nowhere to set it (R3-UPG-4).
+    private var profileSexRow: some View {
+        let stored = form.snapshot.profile.biologicalSex.flatMap(BiologicalSex.init(rawValue:))
+        let selection = Binding<BiologicalSex?>(
+            get: { stored },
+            set: { value in form.edit { $0.profile.biologicalSex = value?.rawValue } }
+        )
+        let shown = stored?.title ?? "Not set"
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: LooprSpacing.sm) {
+                LooprText("Sex", style: .settingsRow)
+                    .layoutPriority(1)
+                Spacer(minLength: LooprSpacing.sm)
+                Menu {
+                    Picker("Sex", selection: selection) {
+                        Text("Not set").tag(BiologicalSex?.none)
+                        ForEach(BiologicalSex.allCases, id: \.self) { sex in
+                            Text(sex.title).tag(Optional(sex))
+                        }
+                    }
+                } label: {
+                    LooprText(shown, style: .settingsRow, color: stored == nil ? .inkMuted : .ink)
+                }
+                .accessibilityLabel("Sex")
+                .accessibilityValue(shown)
+                .accessibilityIdentifier("settings-profile-sex")
+            }
+            .padding(.horizontal, LooprSpacing.formCardPadding)
+            .padding(.vertical, LooprSpacing.formRowVerticalPadding)
+            .frame(maxWidth: .infinity, minHeight: LooprSpacing.interactiveRowHeight, alignment: .leading)
+
+            if stored != .female, stored != .male {
+                LooprText(Self.sexCurveNote, style: .caption, color: .inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, LooprSpacing.formCardPadding)
+                    .padding(.bottom, LooprSpacing.xs)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("settings-profile-sex-note")
+            }
+        }
+    }
+
+    static let sexCurveNote = "Cardio Age needs Female or Male to pick its curve."
+
+    private enum ProfileKeyboard { case text, number, decimal }
+    static let birthYearIdentifier = "settings-profile-birth-year"
+
+    /// "Age 36" beside a birth year Profile accepts.
+    private var birthYearAgeCaption: String? {
+        guard let year = form.snapshot.profile.birthYear,
+              ProfileSettings.acceptedBirthYears().contains(year), let age = form.snapshot.profile.age else { return nil }
+        return "Age \(age)"
+    }
+
+    /// A four-digit year outside ages 13 to 120 is named before Save, instead of failing there.
+    private var birthYearProblem: String? {
+        guard let year = form.snapshot.profile.birthYear, year >= 1_000 else { return nil }
+        let range = ProfileSettings.acceptedBirthYears()
+        guard !range.contains(year) else { return nil }
+        return "Enter a year from \(range.lowerBound) to \(range.upperBound)."
+    }
+
+    private var profileCanSave: Bool {
+        guard let year = form.snapshot.profile.birthYear else { return true }
+        return ProfileSettings.acceptedBirthYears().contains(year)
+    }
+
+    /// One labelled row: the label on the left, the field on the right in ink on the card.
+    private func profileRow(
+        _ title: String,
+        placeholder: String,
+        unit: String? = nil,
+        identifier: String,
+        keyboard: ProfileKeyboard = .text,
+        text: Binding<String>
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: LooprSpacing.sm) {
+            LooprText(title, style: .settingsRow)
+                .layoutPriority(1)
+            Spacer(minLength: LooprSpacing.sm)
+            TextField(placeholder, text: text)
+                .focused($focusedProfileField, equals: identifier)
+                #if canImport(UIKit)
+                .keyboardType(keyboard == .number ? .numberPad : keyboard == .decimal ? .decimalPad : .default)
+                #endif
+                .autocorrectionDisabled(keyboard != .text)
+                .looprTypography(.settingsRow)
+                .foregroundStyle(Color.loopr(.ink))
+                .tint(Color.loopr(.brand))
+                .multilineTextAlignment(.trailing)
+                .textFieldStyle(.plain)
+                .accessibilityLabel(title)
+                .accessibilityIdentifier(identifier)
+            if let unit {
+                LooprText(unit, style: .caption, color: .inkSecondary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.horizontal, LooprSpacing.formCardPadding)
+        .padding(.vertical, LooprSpacing.formRowVerticalPadding)
+        .frame(maxWidth: .infinity, minHeight: LooprSpacing.interactiveRowHeight, alignment: .leading)
     }
 
     private var privacy: some View {
@@ -1075,12 +1173,19 @@ public struct SettingsDestinationScreen: View {
                         get: { form.snapshot.surfacePrivacy.liveActivity },
                         set: { newValue in form.edit { $0.surfacePrivacy.liveActivity = newValue } }
                     ))
+
+                    LooprHairline()
+
+                    privacyToggle("Bedtime on the lock screen", isOn: Binding(
+                        get: { form.snapshot.surfacePrivacy.bedtimeLiveActivity },
+                        set: { newValue in form.edit { $0.surfacePrivacy.bedtimeLiveActivity = newValue } }
+                    ), identifier: "settings-bedtime-live-activity")
                 }
             }
 
             LooprFormCard {
                 LooprText(
-                    "Loopr stores health data on this iPhone. Apple Health saves what you allow. This build does not send AI requests. Database backups can include journal and route data.",
+                    "Loopr stores health data on this iPhone. Apple Health saves what you allow. The AI coach is off until you add your own OpenAI or Claude key. Then it sends only what you approve, straight to that provider. Exports and the weekly backup to Files copy everything, blood tests too, to the place you pick, and Loopr does not encrypt them.",
                     style: .prose,
                     color: .inkSecondary
                 )
@@ -1145,7 +1250,7 @@ public struct SettingsDestinationScreen: View {
                     LooprHairline()
 
                     LooprText(
-                        "AI suggestions are optional and must never write journal content without explicit review.",
+                        "AI requests go directly to your chosen provider with your permission. Food estimates can include a photo and notes; corrections include reviewed foods and nutrients. Providers may retain requests. Barcode lookups send the barcode and connection information to Open Food Facts. Nothing enters your food log until you tap Save.",
                         style: .prose,
                         color: .inkSecondary
                     )
@@ -1200,17 +1305,18 @@ public struct SettingsDestinationScreen: View {
             form.markSubmitted()
         }
             .buttonStyle(LooprPrimaryButtonStyle())
-            .disabled(isLoading)
+            .disabled(isLoading || (destination == .profile && !profileCanSave))
             .accessibilityIdentifier("settings-save")
     }
 
-    private func privacyToggle(_ title: String, isOn: Binding<Bool>) -> some View {
+    private func privacyToggle(_ title: String, isOn: Binding<Bool>, identifier: String? = nil) -> some View {
         Toggle(isOn: isOn) {
             LooprText(title, style: .settingsRow)
         }
         .tint(Color.loopr(.brand))
         .padding(.horizontal, 17)
         .padding(.vertical, 13)
+        .modifier(OptionalAccessibilityIdentifier(identifier: identifier))
     }
 
     private func settingsValueRow(_ title: String, value: String) -> some View {
@@ -1250,8 +1356,9 @@ public struct SettingsDestinationScreen: View {
 /// The Settings flow is already inside a presented sheet with its own card,
 /// corner radius, and toolbar. Drawing a second rounded panel inset below the
 /// toolbar stacked two sheet edges on top of each other and left the content
-/// floating under a seam. This is a plain background: one surface that runs the
-/// full height of the real sheet, with the brand glow behind the toolbar.
+/// floating under a seam. This is one surface that runs the full height of the
+/// real sheet: the same ground and glow the tabs stand on (`LooprAmbientBackground`),
+/// so Settings no longer reads as a second, older visual language (R2-UPG-5).
 private struct SettingsSheetSurface<Content: View>: View {
     let content: Content
 
@@ -1263,24 +1370,16 @@ private struct SettingsSheetSurface<Content: View>: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background {
-                backdrop.ignoresSafeArea()
+                LooprAmbientBackground(tint: .brand)
             }
     }
+}
 
-    private var backdrop: some View {
-        ZStack(alignment: .top) {
-            Color.loopr(.settingsBackground)
+/// Adds an identifier only when one is given, so the toggles that never had one keep their accessibility tree.
+private struct OptionalAccessibilityIdentifier: ViewModifier {
+    let identifier: String?
 
-            RadialGradient(
-                colors: [Color.loopr(.brand).opacity(0.08), .clear],
-                center: .top,
-                startRadius: 0,
-                endRadius: 360
-            )
-            .frame(height: 280)
-            .frame(maxWidth: .infinity)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .accessibilityHidden(true)
+    func body(content: Content) -> some View {
+        if let identifier { content.accessibilityIdentifier(identifier) } else { content }
     }
 }

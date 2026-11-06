@@ -1,4 +1,6 @@
 import Foundation
+import FoodKit
+import TrainKit
 
 public enum DataProvenance: String, Codable, CaseIterable, Sendable {
     case looprComputed = "Loopr-computed"
@@ -33,7 +35,33 @@ public struct DataRecord: Codable, Equatable, Sendable, Identifiable {
 public struct DataBackup: Codable, Equatable, Sendable {
     public let schemaVersion: Int
     public let records: [DataRecord]
-    public init(schemaVersion: Int = 1, records: [DataRecord]) { self.schemaVersion = schemaVersion; self.records = records.sorted { $0.id < $1.id } }
+    public let food: FoodArchive?
+    public let train: TrainArchive?
+    /// Version 1 carries records only, version 2 adds food, version 3 adds train.
+    /// An older backup restores without touching the domains it does not carry.
+    public init(schemaVersion: Int? = nil, records: [DataRecord], food: FoodArchive? = nil, train: TrainArchive? = nil) {
+        self.schemaVersion = schemaVersion ?? (train != nil ? 3 : food == nil ? 1 : 2)
+        self.records = records.sorted { $0.id < $1.id }; self.food = food; self.train = train
+    }
+
+    /// Validate before replacing a repository or constructing an ID lookup.
+    /// Decoding a Codable envelope alone does not establish these invariants.
+    public func validate() throws {
+        switch schemaVersion {
+        case 1: guard food == nil, train == nil else { throw DataError.invalidBackup }
+        case 2: guard food != nil, train == nil else { throw DataError.invalidBackup }
+        case 3: guard train != nil else { throw DataError.invalidBackup }
+        default: throw DataError.invalidBackup
+        }
+        if let food { try food.validate() }
+        if let train { try train.validate() }
+        var identifiers = Set<String>()
+        for record in records {
+            guard identifiers.insert(record.id).inserted else { throw DataError.invalidBackup }
+            do { try DataImportValidation.validate(record) }
+            catch { throw DataError.invalidBackup }
+        }
+    }
 }
 
 public enum ImportSource: String, Codable, Sendable { case looprBackup, edgeMerge, whoopCSV, noopRaw, legacyCloud }
@@ -259,6 +287,8 @@ public extension CheckedDataStore {
 
 public actor DataRepository: CheckedDataStore {
     private var rows: [String: DataRecord] = [:]
+    private var food: FoodArchive?
+    private var train: TrainArchive?
     private var receipts: [UUID: DataBackup] = [:]
     private var migrationState: LegacyMigrationState = .notAvailable
     private var inventory = DataStoreInventory()
@@ -267,7 +297,7 @@ public actor DataRepository: CheckedDataStore {
     public init() {}
     public func records() -> [DataRecord] { rows.values.sorted { $0.id < $1.id } }
     public func insert(_ record: DataRecord) throws { guard Self.isValidDay(record.day) else { throw DataError.invalidDay }; rows[record.id] = record; inventory.sqliteRows = rows.count }
-    public func exportBackup() -> DataBackup { DataBackup(records: records()) }
+    public func exportBackup() -> DataBackup { DataBackup(records: records(), food: food, train: train) }
     public func exportJSON() throws -> Data { try JSONEncoder.loopr.encode(exportBackup()) }
 
     public func preview(source: ImportSource, incoming: [DataRecord]) -> ImportPreview {
@@ -289,6 +319,7 @@ public actor DataRepository: CheckedDataStore {
 
     public func beginImport(_ preview: ImportPreview) throws -> ImportReceipt {
         guard preview.conflicts.isEmpty else { throw DataError.conflictRequiresResolution }
+        try DataBackup(records: preview.additions + preview.updates).validate()
         let backup = exportBackup(); let token = UUID(); receipts[token] = backup
         for row in preview.additions + preview.updates { rows[row.id] = row }
         inventory.sqliteRows = rows.count
@@ -301,12 +332,14 @@ public actor DataRepository: CheckedDataStore {
     }
 
     public func restore(_ backup: DataBackup) throws {
-        guard backup.schemaVersion == 1 else { throw DataError.invalidBackup }
+        try backup.validate()
         rows = Dictionary(uniqueKeysWithValues: backup.records.map { ($0.id, $0) }); inventory.sqliteRows = rows.count
+        if let food = backup.food { self.food = food }
+        if let train = backup.train { self.train = train }
     }
 
-    public func exportDay(_ day: String) -> DataBackup { DataBackup(records: records().filter { $0.day == day }) }
-    public func deleteDay(_ day: String) { rows = rows.filter { $0.value.day != day }; generations = generations.filter { $0.value.day != day }; inventory.sqliteRows = rows.count }
+    public func exportDay(_ day: String) -> DataBackup { DataBackup(records: records().filter { $0.day == day }, food: food?.selectingDays { $0 == day }, train: train?.selectingDays { $0 == day }) }
+    public func deleteDay(_ day: String) { rows = rows.filter { $0.value.day != day }; generations = generations.filter { $0.value.day != day }; inventory.sqliteRows = rows.count; food = food?.selectingDays(includingFavorites: true) { $0 != day }; train = train?.selectingDays(includingPlans: true) { $0 != day } }
     public func reanalyze(day: String, algorithmVersion: Int) async -> ReanalysisStatus {
         let status = ReanalysisStatus(day: day, algorithmVersion: algorithmVersion, state: "completed")
         generations[day] = status
@@ -330,7 +363,7 @@ public actor DataRepository: CheckedDataStore {
     public func inventorySnapshot() -> DataStoreInventory { inventory }
     /// Complete deletion intentionally leaves HealthKit samples for the
     /// separate, explicit HealthKit-removal action.
-    public func completeDeletion() { rows.removeAll(); receipts.removeAll(); generations.removeAll(); inventory.sqliteRows = 0; inventory.files = 0; inventory.appGroupSnapshots = 0; inventory.keychainItems = 0; inventory.notifications = 0; inventory.liveActivities = 0; inventory.ledgers = 0 }
+    public func completeDeletion() { rows.removeAll(); receipts.removeAll(); generations.removeAll(); food = nil; train = nil; inventory.sqliteRows = 0; inventory.files = 0; inventory.appGroupSnapshots = 0; inventory.keychainItems = 0; inventory.notifications = 0; inventory.liveActivities = 0; inventory.ledgers = 0 }
     public func removeHealthKitSamples() { inventory.healthKitSamples = 0 }
 
     public func setLegacyMigrationAvailable() { migrationState = .ready }
@@ -358,6 +391,7 @@ public actor DataRepository: CheckedDataStore {
             guard Self.isValidDay(row.day) else { throw DataError.invalidDay }
             if source == .noopRaw && row.payload.isEmpty { throw DataError.invalidImport }
         }
+        try DataBackup(records: incoming).validate()
     }
 
     private static func isValidDay(_ day: String) -> Bool {
